@@ -1,0 +1,4 @@
+This file was put here by PassMan-Setup.exe. While it is next to
+PassMan.exe, PassMan keeps your vaults and settings in
+%APPDATA%\PassMan instead of in this folder, so upgrading or
+uninstalling the program never touches them.

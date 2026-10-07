@@ -1,0 +1,37 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# PyInstaller scratch files
+build/
+dist/
+
+# ---------------------------------------------------------------
+# User data - NEVER commit these.
+# The vault lives in ./vault next to the executable ("data" was the
+# name used before; still honoured for existing installations), so
+# an unguarded `git add -A` would otherwise commit real user vaults.
+# ---------------------------------------------------------------
+vault/
+data/
+*.vault.enc
+*.vault.enc.bak
+*.vault.enc.base
+config.json
+
+# What the PassMan Builder writes here: the installer it packs from
+# installer\PassMan.iss, and the builder itself (py builder\build.py
+# --builder). Publish them as release assets rather than committing them.
+# PassMan.exe is the portable exe of 2.2 and earlier, no longer built; still
+# ignored in case an old copy is around.
+PassMan.exe
+PassMan-Client-Installer.exe
+PassMan-Builder.exe
+
+# Working notes, kept locally and out of the public repository.
+TODO.txt
