@@ -408,9 +408,14 @@ def generator_dialog(app):
 
 
 def settings_dialog(app):
-    top = app._modal("Settings", 460, 620)
-    wrap = ctk.CTkFrame(top, fg_color="transparent")
-    wrap.pack(fill="both", expand=True, padx=30, pady=26)
+    top = app._modal("Settings", 480, 620)
+    # The sections scroll and the Close row stays put: together they are
+    # taller than many screens (display scaling, Linux font metrics), and
+    # growing the window to fit pushed Close off the bottom of the screen.
+    foot = ctk.CTkFrame(top, fg_color="transparent")
+    foot.pack(fill="x", side="bottom", padx=30, pady=(10, 20))
+    wrap = ctk.CTkScrollableFrame(top, fg_color="transparent")
+    wrap.pack(fill="both", expand=True, padx=(30, 12), pady=(20, 0))
 
     ctk.CTkLabel(wrap, text="Settings", font=F(20, "bold"),
                  text_color=TEXT).pack(anchor="w", pady=(0, 16))
@@ -550,7 +555,7 @@ def settings_dialog(app):
                  text_color=DANGER).pack(anchor="w")
     danger = ctk.CTkFrame(wrap, fg_color="transparent", border_width=1,
                           border_color=DANGER, corner_radius=10)
-    danger.pack(fill="x", pady=(6, 0))
+    danger.pack(fill="x", pady=(6, 6))
     ctk.CTkLabel(danger, text=f"Permanently delete the vault for "
                  f"“{app.current_user}”.", font=F(12),
                  text_color=MUTED, wraplength=340, justify="left"
@@ -562,12 +567,9 @@ def settings_dialog(app):
         command=lambda: _delete_user_flow(app, top)).pack(
         anchor="w", padx=14, pady=(0, 14))
 
-    foot = ctk.CTkFrame(wrap, fg_color="transparent")
-    foot.pack(fill="x", side="bottom", pady=(14, 0))
     ctk.CTkLabel(foot, text=long_version_string(), font=F(11),
                  text_color=MUTED).pack(side="left")
     app._ghost_button(foot, "Close", top.destroy, width=120).pack(side="right")
-    app._fit_modal(top)
 
 
 def _backup_encrypted(app):
