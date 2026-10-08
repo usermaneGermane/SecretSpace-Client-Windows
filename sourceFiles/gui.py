@@ -28,7 +28,8 @@ from theme import (F, HEADER_BG, CARD, CARD_HOVER, INPUT_BG, BORDER, TEXT,
 from widgets import (Tooltip, ghost_button, accent_button, field,
                      strength_widget, modal, fit_modal, safe_grab, confirm)
 from vault import (load_vault, save_vault, needs_rekey, active_accounts,
-                   archive_account, sort_accounts, SORT_ORDERS)
+                   archive_account, sort_accounts, SORT_ORDERS,
+                   auto_purge_archive, archive_purge_days)
 from version import version_string
 
 CLIPBOARD_CLEAR_MS = 30_000     # auto-clear copied passwords after 30s
@@ -432,7 +433,16 @@ class PasswordManagerGUI:
         if needs_rekey(username):
             self._save()
 
+        # Archived entries past this vault's keep-for limit (Settings).
+        purged = auto_purge_archive(self.vault)
+        if purged:
+            self._save()
+
         self.show_main_window()
+        if purged:
+            self.toast(f"Deleted {purged} archived "
+                       f"entr{'y' if purged == 1 else 'ies'} older than "
+                       f"{archive_purge_days(self.vault)} days", "warn")
 
 
     # ==================================================================
