@@ -15,6 +15,7 @@ from tkinter import filedialog
 import appconfig
 import importers
 import sync_client
+import vault
 from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER, DANGER_HOVER,
                    INPUT_BG, BORDER, CARD_HOVER, ON_ACCENT, MONO)
 from vault import (add_account, create_new_user, delete_user, get_vault_path,
@@ -407,9 +408,14 @@ def generator_dialog(app):
 
 
 def settings_dialog(app):
-    top = app._modal("Settings", 460, 620)
-    wrap = ctk.CTkFrame(top, fg_color="transparent")
-    wrap.pack(fill="both", expand=True, padx=30, pady=26)
+    top = app._modal("Settings", 480, 620)
+    # The sections scroll and the Close row stays put: together they are
+    # taller than many screens (display scaling, Linux font metrics), and
+    # growing the window to fit pushed Close off the bottom of the screen.
+    foot = ctk.CTkFrame(top, fg_color="transparent")
+    foot.pack(fill="x", side="bottom", padx=30, pady=(10, 20))
+    wrap = ctk.CTkScrollableFrame(top, fg_color="transparent")
+    wrap.pack(fill="both", expand=True, padx=(30, 12), pady=(20, 0))
 
     ctk.CTkLabel(wrap, text="Settings", font=F(20, "bold"),
                  text_color=TEXT).pack(anchor="w", pady=(0, 16))
@@ -474,6 +480,54 @@ def settings_dialog(app):
                       lambda: (top.destroy(), app.sync_settings_dialog()),
                       width=210).pack(anchor="w", padx=14, pady=(0, 14))
 
+    # ---- archive ----
+    ctk.CTkLabel(wrap, text="Archive", font=F(13, "bold"),
+                 text_color=MUTED).pack(anchor="w")
+    arc = ctk.CTkFrame(wrap, fg_color="transparent", border_width=1,
+                       border_color=BORDER, corner_radius=10)
+    arc.pack(fill="x", pady=(6, 18))
+    purge_row = ctk.CTkFrame(arc, fg_color="transparent")
+    purge_row.pack(fill="x", padx=14, pady=(12, 6))
+    ctk.CTkLabel(purge_row, text="Delete archived entries", font=F(12),
+                 text_color=TEXT).pack(side="left")
+
+    def days_label(d):
+        return "Never" if d == 0 else f"After {d} days"
+
+    def set_purge(choice):
+        days = next(d for d in vault.ARCHIVE_PURGE_CHOICES
+                    if days_label(d) == choice)
+        due = (vault.archived_before(app.vault, vault.purge_cutoff(days))
+               if days else [])
+        if due and not app._confirm(
+                "Delete archived entries",
+                f"{len(due)} archived entr"
+                f"{'y is' if len(due) == 1 else 'ies are'} older than "
+                f"{days} days and will be deleted permanently now.\n\n"
+                "This cannot be undone."):
+            purge_menu.set(days_label(vault.archive_purge_days(app.vault)))
+            return
+        vault.set_archive_purge_days(app.vault, days)
+        purged = vault.auto_purge_archive(app.vault)
+        if app._save():
+            app.refresh_account_list()
+            if purged:
+                app.toast(f"Deleted {purged} archived "
+                          f"entr{'y' if purged == 1 else 'ies'}", "warn")
+
+    purge_menu = ctk.CTkOptionMenu(
+        purge_row, width=130, height=32, corner_radius=8,
+        values=[days_label(d) for d in vault.ARCHIVE_PURGE_CHOICES],
+        fg_color=INPUT_BG, button_color=BORDER, button_hover_color=CARD_HOVER,
+        text_color=TEXT, font=F(12), command=set_purge)
+    purge_menu.pack(side="right")
+    purge_menu.set(days_label(vault.archive_purge_days(app.vault)))
+    ctk.CTkLabel(arc, text="Counted from when an entry was archived, and "
+                 "applied each time you unlock. Deleted entries are gone for "
+                 "good, from your other PC too after its next sync.",
+                 font=F(12), text_color=MUTED, wraplength=340,
+                 justify="left").pack(anchor="w", padx=14, pady=(0, 12))
+
     # ---- backup & export ----
     ctk.CTkLabel(wrap, text="Backup & export", font=F(13, "bold"),
                  text_color=MUTED).pack(anchor="w")
@@ -501,7 +555,7 @@ def settings_dialog(app):
                  text_color=DANGER).pack(anchor="w")
     danger = ctk.CTkFrame(wrap, fg_color="transparent", border_width=1,
                           border_color=DANGER, corner_radius=10)
-    danger.pack(fill="x", pady=(6, 0))
+    danger.pack(fill="x", pady=(6, 6))
     ctk.CTkLabel(danger, text=f"Permanently delete the vault for "
                  f"“{app.current_user}”.", font=F(12),
                  text_color=MUTED, wraplength=340, justify="left"
@@ -513,8 +567,6 @@ def settings_dialog(app):
         command=lambda: _delete_user_flow(app, top)).pack(
         anchor="w", padx=14, pady=(0, 14))
 
-    foot = ctk.CTkFrame(wrap, fg_color="transparent")
-    foot.pack(fill="x", side="bottom", pady=(14, 0))
     ctk.CTkLabel(foot, text=long_version_string(), font=F(11),
                  text_color=MUTED).pack(side="left")
     app._ghost_button(foot, "Close", top.destroy, width=120).pack(side="right")

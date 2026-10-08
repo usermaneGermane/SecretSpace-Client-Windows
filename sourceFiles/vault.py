@@ -899,13 +899,72 @@ def purge_account(vault: dict, entry_id: str) -> bool:
     return False
 
 
+#: An archived_at this function trusts. Anything else -- hand-edited, from
+#: another program -- is never auto-purged: comparing it as a string could
+#: make it look ancient.
+_ARCHIVED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+
+
+def archived_before(vault: dict, cutoff: str) -> list:
+    """Archived entries whose archived_at is earlier than ``cutoff``."""
+    return [a for a in vault["accounts"]
+            if is_archived(a) and _ARCHIVED_AT.fullmatch(a["archived_at"])
+            and a["archived_at"] < cutoff]
+
+
 def purge_archived_before(vault: dict, cutoff: str) -> int:
     """
     Purge every entry archived before ``cutoff`` (a UTC ISO-8601 string).
     Returns how many went. Used by the optional auto-purge setting.
     """
-    doomed = [a["id"] for a in vault["accounts"]
-              if is_archived(a) and a["archived_at"] < cutoff]
+    doomed = [a["id"] for a in archived_before(vault, cutoff)]
     for entry_id in doomed:
         purge_account(vault, entry_id)
     return len(doomed)
+
+
+# ==============================
+# Auto-purge of the archive
+# ==============================
+#: How many days an archived entry is kept before it is deleted for good.
+#: Stored in the vault, not in config.json, so turning it on for one vault
+#: never deletes anything from another vault on the same PC. Absent or 0:
+#: archived entries stay until deleted by hand (the default).
+ARCHIVE_PURGE_KEY = "archive_purge_days"
+ARCHIVE_PURGE_CHOICES = (0, 30, 90, 180, 365)
+
+
+def archive_purge_days(vault: dict) -> int:
+    """The vault's keep-for limit in days; 0 means never purge."""
+    try:
+        days = int(vault.get(ARCHIVE_PURGE_KEY, 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    return days if 0 < days <= 3650 else 0
+
+
+def set_archive_purge_days(vault: dict, days: int) -> None:
+    days = int(days)
+    if days > 0:
+        vault[ARCHIVE_PURGE_KEY] = days
+    else:
+        vault.pop(ARCHIVE_PURGE_KEY, None)
+
+
+def purge_cutoff(days: int, now=None) -> str:
+    """The archived_at before which an entry is older than ``days``."""
+    now = now or datetime.now(timezone.utc)
+    return (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def auto_purge_archive(vault: dict, now=None) -> int:
+    """
+    Apply the vault's keep-for limit; returns how many entries went. Run at
+    unlock and when the setting changes. Like any purge it is a local act
+    that sync passes on: the other PC drops the entries at its next sync,
+    unless it edited them meanwhile, which shows as a conflict.
+    """
+    days = archive_purge_days(vault)
+    if not days:
+        return 0
+    return purge_archived_before(vault, purge_cutoff(days, now))

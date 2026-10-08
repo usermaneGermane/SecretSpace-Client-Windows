@@ -254,7 +254,16 @@ the app at a network share.
 The ✕ on an entry moves it to the **Archive** (bottom of the window) instead
 of destroying it. Archived entries keep their passwords and can be restored
 with one click. *Delete permanently*, inside the archive, is the only action
-that really destroys a password.
+that really destroys a password — apart from the optional clean-up below.
+
+**Deleting archived entries automatically.** Settings → *Archive* → *Delete
+archived entries*: Never (the default), or after 30, 90, 180 or 365 days,
+counted from when each entry was archived. It is checked every time you
+unlock, and choosing a limit that some entries already exceed asks first and
+says how many will go. The setting belongs to the vault, not the PC: another
+vault on the same PC keeps its own, and so does your other PC. A deleted
+entry also disappears from the other PC at its next sync, unless it was
+edited there meanwhile, which shows up as a sync conflict.
 
 This is not only an undo. A removal has to be distinguishable from an
 addition when two vaults merge, or every entry you delete on one PC comes
