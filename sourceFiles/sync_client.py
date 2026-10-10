@@ -128,6 +128,42 @@ def note_password_change(vault_data: dict) -> int:
     return generation
 
 
+def _same_server(a: str, b: str) -> bool:
+    return (a or "").rstrip("/").lower() == (b or "").rstrip("/").lower()
+
+
+def base_origin_for(url: str, revision: int) -> dict:
+    """What save_base records: the server and revision a base was agreed at."""
+    return {"url": (url or "").rstrip("/"), "revision": int(revision)}
+
+
+def base_matches(base, url: str, revision: int) -> bool:
+    """
+    Whether ``base`` describes the copy now on the server at ``url``.
+
+    The merge reads every difference from the base as a change made on one
+    side. Against another server -- or this one restored from an older
+    backup -- those differences are only two copies that drifted apart, and
+    trusting the base would quietly delete entries the other server never
+    had and revert edits it never saw. So the base is trusted only when it
+    was agreed with this same address and the server has not gone back to an
+    earlier revision than the one recorded.
+
+    A base from before origins were recorded has none and is trusted, as it
+    always was -- refusing it would turn the first sync after the update into a
+    review of every entry.
+    """
+    origin = vault.base_origin(base)
+    if not origin:
+        return True
+    if origin.get("url") and not _same_server(origin["url"], url):
+        return False
+    try:
+        return int(revision) >= int(origin.get("revision", 0))
+    except (TypeError, ValueError):
+        return True
+
+
 def is_configured(vault_data) -> bool:
     settings = get_settings(vault_data)
     return bool(settings.get("url") and settings.get("token"))
@@ -271,6 +307,9 @@ class SyncSession:
         self.revision = 0
         self.result = None
         self._fingerprint = None
+        # Set by prepare() when the base was agreed with another server (or
+        # an earlier state of this one) and so was left out of the merge.
+        self.base_ignored = False
         # Set by prepare() when the server's copy is under another password.
         self.adopt_password = None       # server is newer: switch to this
         self.upgrade = False             # server is older: re-upload ours
@@ -294,9 +333,14 @@ class SyncSession:
         entries often match exactly, yet this PC still has to switch password
         or the server's copy still has to be re-encrypted -- skipping the
         commit there would leave sync failing on every attempt.
+
+        The same goes for a base left out because it came from another
+        server: even with nothing to merge, the commit has to record this
+        server as the new base, or every later sync would merge without one.
         """
         return (self.result is not None and self.result.changed) \
-            or self.upgrade or self.adopt_password is not None
+            or self.upgrade or self.adopt_password is not None \
+            or self.base_ignored
 
     @staticmethod
     def _open(blob: bytes, password: str):
@@ -364,10 +408,19 @@ class SyncSession:
         # real deletion on another PC always arrives inside an uploaded vault,
         # never as an empty server, so ignoring the base here loses nothing:
         # this PC's vault is simply uploaded again.
+        #
+        # A base agreed with another server is ignored for the same reason:
+        # see base_matches. Without it nothing is deleted or reverted -- the
+        # differences come up as additions and conflicts instead.
+        self.base_ignored = False
         if blob is None:
             base = None
         else:
             base = vault.load_base(self.master_password, self.username)
+            if base is not None and not base_matches(
+                    base, self.client.url, self.revision):
+                base = None
+                self.base_ignored = True
         self.result = merge_vaults(base, local_vault, remote)
         return self.result
 
@@ -439,23 +492,30 @@ class SyncSession:
         # Only now do both sides agree, so only now is this the base. Written
         # last: a base recorded before a failed push would claim agreement
         # that never happened, and the next merge would trust it.
-        vault.save_base(password, merged, self.username)
+        vault.save_base(password, merged, self.username,
+                        origin=base_origin_for(self.client.url, self.revision))
         return merged
 
 
-def fetch_vault(client: SyncClient, username: str, master_password: str):
+def download_vault(client: SyncClient, username: str, master_password: str):
     """
     Pull a vault from the server without merging -- the first-run path on a
     new PC, where there is nothing local to merge against.
 
-    Returns the decrypted vault, or None if the server holds nothing for this
-    user. The caller writes it out and records it as the base.
+    Returns (decrypted vault, revision), or (None, 0) if the server holds
+    nothing for this user. The caller writes it out and records it as the
+    base, with base_origin_for(client.url, revision).
     """
-    blob, _revision = client.pull(username)
+    blob, revision = client.pull(username)
     if blob is None:
-        return None
+        return None, 0
     try:
-        return vault.validate_vault(decrypt(master_password, blob))
+        return vault.validate_vault(decrypt(master_password, blob)), revision
     except ValueError as e:
         raise SyncError("That master password does not open the vault stored "
                         "on the server.") from e
+
+
+def fetch_vault(client: SyncClient, username: str, master_password: str):
+    """download_vault without the revision."""
+    return download_vault(client, username, master_password)[0]

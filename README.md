@@ -221,6 +221,21 @@ PC — once per vault, because the address is stored inside each vault. Keep
 the token as it is. A DHCP reservation for the server in your router stops
 this happening by surprise.
 
+**Syncing one vault with more than one server** (say a Windows and a Linux
+server) works, but the two hold separate copies. From 2.5.0, the first sync
+after you switch the address is treated like a first sync: nothing on this PC
+is deleted or reverted because the other server has an older copy. Anything
+it lacks is uploaded to it, and an entry that differs between the two comes
+up in the conflict dialog for you to choose. The same happens if a server is
+restored from an older backup. (Up to 2.4.0, such a switch could silently
+remove entries the other server never had, and bring back older passwords.)
+
+**A live entry that is missing from the server** is never removed without
+asking. Deleting goes through the Archive (below), so an entry that is still
+in use here but gone from the server means the server holds an older or
+different copy. The conflict dialog shows it; keeping it (the default)
+uploads it again, and choosing the server's side moves it to the Archive.
+
 ### Changing the master password of a vault you sync
 
 Change it as usual in Settings → *Change master password*. On that PC:
@@ -263,7 +278,8 @@ unlock, and choosing a limit that some entries already exceed asks first and
 says how many will go. The setting belongs to the vault, not the PC: another
 vault on the same PC keeps its own, and so does your other PC. A deleted
 entry also disappears from the other PC at its next sync, unless it was
-edited there meanwhile, which shows up as a sync conflict.
+edited there meanwhile, or that PC still has it live because it never synced
+the archiving -- both show up as a sync conflict.
 
 This is not only an undo. A removal has to be distinguishable from an
 addition when two vaults merge, or every entry you delete on one PC comes
@@ -330,7 +346,7 @@ they are next to the program instead.
 | --- | --- |
 | `vault/<user>.vault.enc` | your encrypted vault |
 | `vault/<user>.vault.enc.bak` | the previous version, kept automatically |
-| `vault/<user>.vault.enc.base` | what the server held at the last sync; only if you sync |
+| `vault/<user>.vault.enc.base` | what the server held at the last sync, and which server that was; only if you sync |
 | `config.json` | non-secret preferences (last username, auto-lock delay) |
 
 The `.base` file is how merging tells a deletion apart from an addition. It

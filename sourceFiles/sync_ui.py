@@ -111,6 +111,10 @@ def _commit(app, session, result, choices, attempt):
                        "on your other PC")
         elif session.upgrade:
             summary = "Synced — the server now has your new master password"
+        elif session.base_ignored:
+            # The first sync with this server: nothing was deleted or
+            # reverted, so say why entries may have come up for review.
+            summary += " (first sync with this server)"
         app.refresh_account_list()
         _finish(app, summary)
 
@@ -286,8 +290,9 @@ def _conflict_row(parent, index, conflict, answers):
     ctk.CTkLabel(header, text=f"   {_kind_note(conflict)}", font=F(12),
                  text_color=WARN).pack(side="left")
 
-    _version_panel(card, 1, 0, "On this PC", conflict.local)
-    _version_panel(card, 1, 1, "On the server", conflict.remote)
+    gone = "not on the server" if conflict.kind == "missing" else "deleted"
+    _version_panel(card, 1, 0, "On this PC", conflict.local, gone)
+    _version_panel(card, 1, 1, "On the server", conflict.remote, gone)
 
     choice_row = ctk.CTkFrame(card, fg_color="transparent")
     choice_row.grid(row=2, column=0, columnspan=2, sticky="ew",
@@ -322,11 +327,17 @@ def _kind_note(conflict):
         return "archived on one side, edited on the other"
     if conflict.kind == "purge":
         return "permanently deleted on one side, edited on the other"
+    if conflict.kind == "missing":
+        return ("still in use here, missing from the server — "
+                "keep it unless you deleted it on purpose")
     return "edited on both sides"
 
 
-def _version_panel(parent, row, column, title, entry):
-    """One side of a conflict. Passwords are masked until the user asks."""
+def _version_panel(parent, row, column, title, entry, gone="deleted"):
+    """
+    One side of a conflict. Passwords are masked until the user asks.
+    ``gone`` is what an absent side says.
+    """
     panel = ctk.CTkFrame(parent, fg_color="transparent")
     panel.grid(row=row, column=column, sticky="nsew", padx=14, pady=8)
 
@@ -334,7 +345,7 @@ def _version_panel(parent, row, column, title, entry):
                  text_color=MUTED).pack(anchor="w")
 
     if entry is None:
-        ctk.CTkLabel(panel, text="deleted", font=F(13), text_color=DANGER,
+        ctk.CTkLabel(panel, text=gone, font=F(13), text_color=DANGER,
                      anchor="w").pack(anchor="w", pady=(4, 0))
         return
 
@@ -793,7 +804,8 @@ def restore_from_server_dialog(app):
 
         def work():
             client = sync_client.SyncClient(url, token, timeout=20)
-            fetched = sync_client.fetch_vault(client, username, password)
+            fetched, revision = sync_client.download_vault(client, username,
+                                                           password)
             if fetched is None:
                 raise sync_client.SyncError(
                     f"The server holds no vault for \u201c{username}\u201d.")
@@ -802,7 +814,8 @@ def restore_from_server_dialog(app):
             vault.save_vault(password, fetched, username)
             # Both sides agree right now, so this download is the base for
             # every later merge.
-            vault.save_base(password, fetched, username)
+            vault.save_base(password, fetched, username,
+                            origin=sync_client.base_origin_for(url, revision))
             return fetched
 
         def done(fetched):

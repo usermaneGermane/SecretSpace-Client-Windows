@@ -167,9 +167,11 @@ def test_an_out_of_order_clock_does_not_change_the_outcome():
 
 
 # --- purge (the one destructive operation) -------------------------------
-def test_a_purge_on_the_server_removes_an_untouched_local_entry():
-    base = vlt(entry("a"))
-    local = vlt(entry("a"))
+def test_a_purge_on_the_server_removes_an_untouched_archived_entry():
+    """Purging is offered from the Archive only, so that is what it hits."""
+    gone = entry("a", archived_at="2026-01-02T00:00:00Z")
+    base = vlt(gone)
+    local = vlt(dict(gone))
     remote = vlt()
 
     result = sync.merge_vaults(base, local, remote)
@@ -177,6 +179,46 @@ def test_a_purge_on_the_server_removes_an_untouched_local_entry():
     assert result.clean
     assert ids(result.accounts) == set()
     assert result.stats["removed"] == 1
+
+
+def test_a_live_entry_missing_from_the_server_asks_rather_than_dropping():
+    """
+    Regression (Windows 2.4.0, Linux 0.3.0): a vault synced with one server, then with another
+    holding an older copy. The entry the older copy lacked looked "purged on
+    the server, untouched here" and vanished without a word.
+    """
+    base = vlt(entry("a"), entry("b"))
+    local = vlt(entry("a"), entry("b"))
+    remote = vlt(entry("a"))
+
+    result = sync.merge_vaults(base, local, remote)
+
+    assert [c.kind for c in result.conflicts] == ["missing"]
+    assert result.conflicts[0].id == "b"
+    assert result.stats["removed"] == 0
+    assert result.needs_push
+
+
+def test_by_default_a_missing_entry_is_kept_and_uploaded_again():
+    base = vlt(entry("a"), entry("b"))
+    result = sync.merge_vaults(base, vlt(entry("a"), entry("b")),
+                               vlt(entry("a")))
+
+    final = sync.resolve(result)
+
+    assert ids(final) == {"a", "b"}
+    assert not vault.is_archived(by_id(final, "b"))
+
+
+def test_agreeing_a_missing_entry_is_gone_archives_it_rather_than_destroying():
+    base = vlt(entry("a"), entry("b", site="kept"))
+    result = sync.merge_vaults(base, vlt(entry("a"), entry("b", site="kept")),
+                               vlt(entry("a")))
+
+    final = sync.resolve(result, {"b": sync.KEEP_REMOTE})
+
+    archived = [a for a in final if vault.is_archived(a)]
+    assert [a["site"] for a in archived] == ["kept"]
 
 
 def test_purged_there_but_edited_here_asks_rather_than_dropping():

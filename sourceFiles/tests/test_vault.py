@@ -503,6 +503,37 @@ def test_the_base_round_trips():
     assert [a["site"] for a in base["accounts"]] == ["github"]
 
 
+def test_the_base_records_its_server_but_the_vault_does_not():
+    vault.create_new_user("gwen", "pw")
+    data = vault.load_vault("pw", "gwen")
+    origin = {"url": "http://10.0.0.1:8787", "revision": 4}
+
+    vault.save_base("pw", data, "gwen", origin=origin)
+
+    assert vault.base_origin(vault.load_base("pw", "gwen")) == origin
+    assert vault.BASE_ORIGIN_KEY not in data
+    assert vault.BASE_ORIGIN_KEY not in vault.load_vault("pw", "gwen")
+
+
+def test_a_base_from_before_origins_reports_none():
+    vault.create_new_user("gail", "pw")
+    vault.save_base("pw", vault.load_vault("pw", "gail"), "gail")
+
+    assert vault.base_origin(vault.load_base("pw", "gail")) == {}
+
+
+def test_a_password_change_keeps_the_bases_origin():
+    vault.create_new_user("gemma", "old-pw")
+    data = vault.load_vault("old-pw", "gemma")
+    vault.save_base("old-pw", data, "gemma",
+                    origin={"url": "http://s:1", "revision": 2})
+
+    vault.change_master_password(data, "gemma", "old-pw", "new-pw")
+
+    assert vault.base_origin(vault.load_base("new-pw", "gemma")) == {
+        "url": "http://s:1", "revision": 2}
+
+
 def test_a_missing_base_is_not_an_error():
     vault.create_new_user("hana", "pw")
     assert vault.load_base("pw", "hana") is None
