@@ -6,7 +6,7 @@ in step with the vault container version in crypto_utils.py when the on-disk
 format changes.
 """
 
-__version__ = "2.4.0"
+__version__ = "2.5.0"
 
 #: Container version PassMan writes today (see crypto_utils.MAGIC).
 VAULT_FORMAT = "PMV2"

@@ -17,6 +17,8 @@ BACKUP_SUFFIX = ".bak"
 #: sync has run. merge_vaults needs it as the common ancestor -- without it a
 #: deletion on one PC is indistinguishable from an addition on the other.
 BASE_SUFFIX = ".base"
+#: Key inside a sync base recording which server it was agreed with.
+BASE_ORIGIN_KEY = "base_origin"
 
 #: Fields an account may carry beyond site/username/password. Kept optional so
 #: older vaults stay valid and entries without them stay small.
@@ -417,16 +419,31 @@ def load_base(master_password: str, username: str):
         return None
 
 
-def save_base(master_password: str, vault_data: dict, username: str) -> None:
+def save_base(master_password: str, vault_data: dict, username: str,
+              origin=None) -> None:
     """
     Record the state both sides agreed on, at the END of a successful sync.
 
     Encrypted with the same master password as the vault itself -- it holds
     the same passwords, so it gets the same protection. It is rewritten on a
     master-password change for the same reason save_vault rewrites .bak.
+
+    ``origin`` says which server and revision this state was agreed with
+    (see sync_client.base_matches). It is stored in the base only, never in
+    the vault: the vault is the same whichever server it syncs with.
     """
+    data = dict(vault_data)
+    if origin is not None:
+        data[BASE_ORIGIN_KEY] = dict(origin)
     _write_file_atomic(get_base_path(username),
-                       encrypt(master_password, validate_vault(vault_data)))
+                       encrypt(master_password, validate_vault(data)))
+
+
+def base_origin(base) -> dict:
+    """The server and revision a base was agreed with; {} for a base from
+    before origins were recorded."""
+    origin = (base or {}).get(BASE_ORIGIN_KEY)
+    return dict(origin) if isinstance(origin, dict) else {}
 
 
 def clear_base(username: str) -> None:

@@ -155,11 +155,13 @@ class PC:
         """The first-run path on a second PC: no local vault at all."""
         with self.at_keyboard():
             client = sync_client.SyncClient(self.url, TOKEN)
-            fetched = sync_client.fetch_vault(client, self.username,
-                                              self.password)
+            fetched, revision = sync_client.download_vault(
+                client, self.username, self.password)
             vault.create_new_user(self.username, self.password)
             vault.save_vault(self.password, fetched, self.username)
-            vault.save_base(self.password, fetched, self.username)
+            vault.save_base(self.password, fetched, self.username,
+                            origin=sync_client.base_origin_for(self.url,
+                                                               revision))
             self.vault = fetched
         return self
 
@@ -883,15 +885,195 @@ def test_moving_to_a_brand_new_server_uploads_the_vault(synced, tmp_path):
         httpd.server_close()
 
 
+def _purge(pc, entry_id):
+    with pc.at_keyboard():
+        vault.purge_account(pc.vault, entry_id)
+        vault.save_vault(pc.password, pc.vault, pc.username)
+
+
 def test_a_real_deletion_still_reaches_the_other_pc(synced):
-    """The fix must not stop genuine deletions from propagating."""
+    """
+    The fix must not stop genuine deletions from propagating. A real one
+    goes through the Archive: archived, synced, then purged.
+    """
     pc1, pc2 = synced
     eid = pc1.vault["accounts"][0]["id"]
-    with pc1.at_keyboard():
-        vault.purge_account(pc1.vault, eid)
-        vault.save_vault(pc1.password, pc1.vault, pc1.username)
+    pc1.archive(eid)
+    pc1.sync()
+    pc2.sync()
+    _purge(pc1, eid)
     pc1.sync()
 
-    pc2.sync()
+    result = pc2.sync()
 
-    assert pc2.sites() == []
+    assert result.clean and result.stats["removed"] == 1
+    assert pc2.vault["accounts"] == []
+
+
+def test_a_live_entry_purged_elsewhere_is_put_to_the_user(synced):
+    """
+    Purged on one PC while the other still had it live -- not something the
+    app offers, but if it happens the other PC asks, and keeps it by default.
+    """
+    pc1, pc2 = synced
+    _purge(pc1, pc1.vault["accounts"][0]["id"])
+    pc1.sync()
+
+    _session, result = pc2.prepare()
+    assert [c.kind for c in result.conflicts] == ["missing"]
+
+    pc2.sync()
+    assert pc2.sites() == ["github"]
+
+
+# ==========================================================================
+# One vault, two servers
+# ==========================================================================
+@contextlib.contextmanager
+def another_server(path):
+    """A second, independent server -- the Ubuntu box beside the Windows one."""
+    httpd = passman_server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), passman_server.Handler)
+    httpd.store = passman_server.Store(str(path))
+    httpd.token = TOKEN
+    os.makedirs(httpd.store.root, exist_ok=True)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{httpd.server_address[1]}"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+def _switch(pc, url):
+    """What editing the address in Settings -> Sync does."""
+    pc.url = url
+    sync_client.set_settings(pc.vault, url, TOKEN)
+
+
+def test_switching_to_a_server_with_an_older_copy_deletes_nothing(
+        synced, tmp_path):
+    """
+    Regression (Windows 2.4.0, Linux 0.3.0): the owner's vault held two entries on the Windows
+    server; the Ubuntu server still had the one from days earlier. Syncing
+    with Ubuntu removed the second entry from the PC without a word.
+    """
+    pc1, _ = synced
+    windows = pc1.url
+    with another_server(tmp_path / "ubuntu") as ubuntu:
+        _switch(pc1, ubuntu)
+        pc1.sync()                                  # Ubuntu: github only
+        _switch(pc1, windows)
+        pc1.add("second")
+        pc1.sync()                                  # Windows: both
+
+        _switch(pc1, ubuntu)
+        session, result = pc1.prepare()
+
+        assert session.base_ignored
+        assert result.stats["removed"] == 0 and result.clean
+        pc1.sync()
+        assert pc1.sites() == ["github", "second"]
+
+        _switch(pc1, windows)                       # and back: still both
+        pc1.sync()
+        assert pc1.sites() == ["github", "second"]
+
+
+def test_switching_servers_does_not_revert_an_edit(synced, tmp_path):
+    """
+    The case the deletion prompt cannot catch: the other server's copy of an
+    entry is simply older. With the Windows base it read as "changed on the
+    server" and silently replaced the newer password.
+    """
+    pc1, _ = synced
+    windows = pc1.url
+    eid = pc1.vault["accounts"][0]["id"]
+    with another_server(tmp_path / "ubuntu") as ubuntu:
+        _switch(pc1, ubuntu)
+        pc1.sync()                                  # Ubuntu: password "p"
+        _switch(pc1, windows)
+        pc1.edit(eid, "newer")
+        pc1.sync()                                  # Windows: "newer"
+
+        _switch(pc1, ubuntu)
+        _session, result = pc1.prepare()
+
+        assert [c.kind for c in result.conflicts] == ["edit"]
+        pc1.sync({eid: sync.KEEP_LOCAL})
+        assert vault.find_entry(pc1.vault, eid)["password"] == "newer"
+
+
+def test_after_a_switch_the_new_server_becomes_the_base(synced, tmp_path):
+    """Once agreed with the new server, merges there trust the base again."""
+    pc1, _ = synced
+    with another_server(tmp_path / "ubuntu") as ubuntu:
+        _switch(pc1, ubuntu)
+        pc1.sync()
+        session, _result = pc1.prepare()
+
+        assert not session.base_ignored
+        assert not session.has_work()
+
+
+def test_a_switch_with_nothing_to_merge_still_records_the_new_server(
+        synced, tmp_path):
+    pc1, _ = synced
+    windows = pc1.url
+    with another_server(tmp_path / "ubuntu") as ubuntu:
+        _switch(pc1, ubuntu)
+        pc1.sync()
+        _switch(pc1, windows)
+        session, _result = pc1.prepare()
+
+        assert session.base_ignored and session.has_work()
+        pc1.sync()
+        with pc1.at_keyboard():
+            origin = vault.base_origin(vault.load_base(pc1.password, "alice"))
+        assert origin["url"] == windows
+
+
+def test_a_server_restored_from_an_older_backup_is_not_trusted(
+        synced, tmp_path):
+    """Same address, but the revision went backwards: the base is newer
+    than anything the server now holds."""
+    import shutil
+    pc1, _ = synced
+    store = tmp_path / "store" / "alice"
+    saved = tmp_path / "server-backup"
+    shutil.copytree(store, saved)
+    pc1.add("second")
+    pc1.sync()
+    pc1.add("third")
+    pc1.sync()
+    shutil.rmtree(store)
+    shutil.copytree(saved, store)                   # back to one entry
+
+    session, result = pc1.prepare()
+
+    assert session.base_ignored
+    assert result.stats["removed"] == 0
+
+
+def test_a_restored_pc_records_where_it_restored_from(synced):
+    _pc1, pc2 = synced
+    with pc2.at_keyboard():
+        origin = vault.base_origin(vault.load_base(pc2.password, "alice"))
+    assert origin == {"url": pc2.url, "revision": 1}
+
+
+@pytest.mark.parametrize("origin,url,revision,trusted", [
+    ({}, "http://b", 1, True),                                 # pre-2.5.0 base
+    ({"url": "http://a", "revision": 3}, "http://a", 3, True),
+    ({"url": "http://a", "revision": 3}, "http://a/", 5, True),
+    ({"url": "http://A", "revision": 3}, "http://a", 3, True),
+    ({"url": "http://a", "revision": 3}, "http://b", 3, False),
+    ({"url": "http://a", "revision": 3}, "http://a", 2, False),
+])
+def test_base_matches(origin, url, revision, trusted):
+    base = {"accounts": []}
+    if origin:
+        base[vault.BASE_ORIGIN_KEY] = origin
+    assert sync_client.base_matches(base, url, revision) is trusted

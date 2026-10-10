@@ -93,6 +93,9 @@ class Conflict:
     ``edit``    both sides edited the entry
     ``archive`` one side archived it while the other edited it
     ``purge``   one side purged it outright while the other edited it
+    ``missing`` live and untouched here, but gone from the server -- which a
+                purge from the Archive never produces, so the server's copy
+                is likely an older or different one
     """
 
     def __init__(self, entry_id, base, local, remote, kind="edit"):
@@ -265,10 +268,16 @@ def merge_vaults(base, local, remote) -> MergeResult:
         if r is None:
             if b is None:
                 keep_local(l)                        # added here, not pushed yet
-            elif same(l, b):
+            elif not same(l, b):
+                conflicts.append(Conflict(entry_id, b, l, None, kind="purge"))
+            elif is_archived(l):
                 stats["removed"] += 1                # purged there, untouched here
             else:
-                conflicts.append(Conflict(entry_id, b, l, None, kind="purge"))
+                # Purging is only offered from the Archive, so a live entry
+                # that is simply gone from the server was not deleted there
+                # by the user: the server holds an older or different copy
+                # (another server, a restored backup). Ask, never drop.
+                conflicts.append(Conflict(entry_id, b, l, None, kind="missing"))
             continue
 
         # Both have it. Whichever fields win, history is the union of both.
