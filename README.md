@@ -10,7 +10,7 @@ PassMan lives in four repositories:
 | Repository | What it holds |
 |---|---|
 | **PassMan-Client-Windows** (this one) | the app for Windows, and its installer |
-| [PassMan-Client-Linux](https://github.com/usermaneGermane/PassMan-Client-Linux) | the app for Linux — not written yet |
+| [PassMan-Client-Linux](https://github.com/usermaneGermane/PassMan-Client-Linux) | the app for Linux — from source or a .deb package |
 | [PassMan-Server-Windows](https://github.com/usermaneGermane/PassMan-Server-Windows) | the sync server for Windows, and its installer |
 | [PassMan-Server-Linux](https://github.com/usermaneGermane/PassMan-Server-Linux) | the sync server for Linux (systemd) |
 
