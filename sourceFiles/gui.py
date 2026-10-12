@@ -29,7 +29,8 @@ from widgets import (Tooltip, ghost_button, accent_button, field,
                      strength_widget, modal, fit_modal, safe_grab, confirm)
 from vault import (load_vault, save_vault, needs_rekey, active_accounts,
                    archive_account, sort_accounts, SORT_ORDERS,
-                   auto_purge_archive, archive_purge_days)
+                   auto_purge_archive, archive_purge_days,
+                   window_title)
 from version import version_string
 
 CLIPBOARD_CLEAR_MS = 30_000     # auto-clear copied passwords after 30s
@@ -61,7 +62,7 @@ def _row_signature(acc):
 class PasswordManagerGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("PassMan - Password Manager")
+        self.root.title(window_title())
         self.root.geometry("980x660")
         self.root.minsize(840, 580)
 

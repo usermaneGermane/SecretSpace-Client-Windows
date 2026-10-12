@@ -129,6 +129,43 @@ your logins across, use *Restore from server* if you sync, or copy
 use Settings → *Save encrypted backup* and copy that file over. The backup is still protected by
 your master password.
 
+## A lab copy for testing
+
+The installed copy is your production PassMan: its vaults are in
+`%APPDATA%\PassMan`. Only one copy can be installed — a second run of the
+installer upgrades the first — so a copy for trying things out runs
+*without* the installer, and keeps its vaults and `config.json` in its own
+folder instead:
+
+1. Build (`py builder\build.py`, or PassMan Builder).
+2. Copy the folder `build\installer\PassMan` somewhere of its own, e.g.
+   `D:\PassMan-Lab`, and run `PassMan.exe` from there.
+
+That folder has no `installed` file, so it never touches
+`%APPDATA%\PassMan`. Its window title says
+`[LAB - <its vault folder>]`; the installed copy's title never does. Do not
+copy the `installed` file into it.
+
+To update the lab copy after a new build, close it and copy the new program
+files over the old ones, leaving its `vault` folder and `config.json` alone:
+
+```
+robocopy build\installer\PassMan D:\PassMan-Lab /E /XD vault /XF config.json
+```
+
+(`/E` adds and replaces files but deletes nothing.)
+
+**Syncing a lab copy.** A lab copy can use the same server as production.
+The server keeps one vault per username, so lab vaults must have **names
+your real vaults do not use** (e.g. `test`, `lab-alice`): a lab vault with
+the same name as a real one would sync into it.
+
+**Moving test vaults out of production.** Uninstalling keeps the vaults, so
+`%APPDATA%\PassMan\vault` may still hold vaults you made while testing. With
+PassMan closed, move each `<user>.vault.enc` together with its `.bak` and
+`.base` into the lab copy's `vault` folder (and `config.json` too, if it
+names a test vault as the last user).
+
 ## Project layout
 
 ```
