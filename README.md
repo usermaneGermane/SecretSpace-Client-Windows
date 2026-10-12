@@ -18,10 +18,12 @@ PassMan lives in four repositories:
 
 ## Running it
 
-The repository does not contain the app itself. Build it with the
-[PassMan Builder](#building-it-yourself-windows), or take it from the
-[Releases](https://github.com/usermaneGermane/PassMan-Client-Windows/releases) page when one
-has been published.
+The repository does not contain the app itself. Download
+`PassMan-Client-Installer.exe` from the
+[Releases](https://github.com/usermaneGermane/PassMan-Client-Windows/releases) page, or build it
+yourself with the [PassMan Builder](#building-it-yourself-windows). The
+installer is all you need: it brings Python and every library with it, so
+installing needs no source code and no Python.
 
 **`PassMan-Client-Installer.exe`** installs it. Run it and choose a folder
 (by default `%LOCALAPPDATA%\Programs\PassMan`) and whether you want a
@@ -51,10 +53,12 @@ python sourceFiles/gui.py
 
 ## Building it yourself (Windows)
 
-Run **`PassMan-Builder.exe`** from the project folder. It is on the
-[Releases](https://github.com/usermaneGermane/PassMan-Client-Windows/releases) page, or
-can be built from the source, see below. It shows a checklist of what the
-build needs:
+Building needs a checkout of this repository: the builder looks for the
+source next to itself and builds from it. Run **`PassMan-Builder.exe`**
+from the project folder. It is not on the Releases page (it is only useful
+inside a checkout); make it once with
+`py builder\build.py --builder`, see below. It shows a checklist of what
+the build needs:
 
 - the PassMan source files
 - Python 3 and its `tkinter`
@@ -171,7 +175,7 @@ names a test vault as the last user).
 ```
 PassMan-Client-Windows/
 ├── builder/            PassMan Builder: build.py, its window, its spec
-├── PassMan-Builder.exe  the builder (not committed; see Releases)
+├── PassMan-Builder.exe  the builder (built, not committed)
 ├── PassMan-Client-Installer.exe  installs the app (built, not committed)
 ├── vault/               vaults when running from source - never committed
 ├── installer/           the Inno Setup script for the installer
