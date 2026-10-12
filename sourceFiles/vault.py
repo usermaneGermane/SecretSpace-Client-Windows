@@ -122,6 +122,21 @@ def get_home_dir() -> str:
     return get_app_dir()
 
 
+APP_TITLE = "PassMan - Password Manager"
+
+
+def window_title() -> str:
+    """
+    The main window's title. The installed copy is the production one and
+    keeps the plain title. Anything else -- a lab copy (the app folder from
+    the build, copied without the installer) or a source run -- says LAB and
+    where its vaults are, so it cannot be mistaken for production.
+    """
+    if is_installed():
+        return APP_TITLE
+    return f"{APP_TITLE}  [LAB - {get_data_dir()}]"
+
+
 def get_data_dir() -> str:
     """
     The vault directory: ``vault`` inside get_home_dir(). This is

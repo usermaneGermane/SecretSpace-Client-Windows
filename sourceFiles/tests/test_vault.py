@@ -847,3 +847,26 @@ def test_edit_after_clear_survives_a_coarse_clock(monkeypatch):
     vault.clear_history(acc)
     vault.update_entry(acc, password="v3")
     assert [r["password"] for r in acc["history"]] == ["v2"]
+
+
+def test_installed_copy_has_the_plain_title(tmp_path, monkeypatch):
+    """The installed copy is production: no LAB in its title."""
+    monkeypatch.setattr(vault, "get_app_dir", lambda: str(tmp_path))
+    (tmp_path / vault.INSTALLED_MARKER).write_text("")
+    assert vault.window_title() == vault.APP_TITLE
+
+
+def test_copy_without_the_marker_says_lab_and_where(tmp_path, monkeypatch):
+    """A lab copy or a source run names itself LAB, with its vault folder."""
+    monkeypatch.delenv("PASSMAN_DATA_DIR", raising=False)
+    monkeypatch.setattr(vault, "get_app_dir", lambda: str(tmp_path))
+    title = vault.window_title()
+    assert title.startswith(vault.APP_TITLE)
+    assert "LAB" in title
+    assert str(tmp_path / "vault") in title
+
+
+def test_lab_title_follows_the_data_dir_override(tmp_path, monkeypatch):
+    monkeypatch.setattr(vault, "get_app_dir", lambda: str(tmp_path))
+    monkeypatch.setenv("PASSMAN_DATA_DIR", str(tmp_path / "elsewhere"))
+    assert str(tmp_path / "elsewhere") in vault.window_title()
