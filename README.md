@@ -493,3 +493,7 @@ how).
 GitHub Actions runs the same tests on Windows with Python 3.12 and 3.13 for
 every pull request and every push to `main`
 (`.github/workflows/tests.yml`).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
