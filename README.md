@@ -180,12 +180,12 @@ PassMan-Client-Windows/
 ├── vault/               vaults when running from source - never committed
 ├── installer/           the Inno Setup script for the installer
 └── sourceFiles/         the program itself
-    ├── gui.py           app shell: login, account list, lifecycle
+    ├── gui.py           app shell: login, account list + details, lifecycle
     ├── dialogs.py       the modal dialogs
     ├── sync.py          three-way merge; pure functions, no I/O
     ├── sync_client.py   talking to the sync server
     ├── sync_ui.py       the sync, conflict and archive screens
-    ├── history_ui.py    the revision history drop-down on each entry
+    ├── history_ui.py    the revision history section of the entry details
     ├── widgets.py       reusable widgets and modal plumbing
     ├── theme.py         palette, fonts, asset lookup
     ├── vault.py         atomic file handling, schema validation, export
@@ -307,8 +307,8 @@ the app at a network share.
 
 ### Deleting is archiving
 
-The ✕ on an entry moves it to the **Archive** (bottom of the window) instead
-of destroying it. Archived entries keep their passwords and can be restored
+**Archive** on the selected entry moves it to the **Archive** (the button
+next to the *All* count, above the list) instead of destroying it. Archived entries keep their passwords and can be restored
 with one click. *Delete permanently*, inside the archive, is the only action
 that really destroys a password — apart from the optional clean-up below.
 
@@ -328,8 +328,9 @@ back from the other on the next sync.
 
 ### Revision history
 
-Every edit keeps the version it replaces. **History** on an entry opens its
-earlier versions, newest first, with the date and what changed:
+Every edit keeps the version it replaces. The **History** section of the
+selected entry lists its earlier versions, newest first, with the date and
+what changed:
 
 - **Show** / **Copy** an earlier password — handy when a site still has the
   old one. Copies clear from the clipboard after 30 seconds, as usual.
@@ -354,8 +355,12 @@ needs no update for this.
 
 - AES-256-GCM encryption with a PBKDF2-HMAC-SHA256 derived key
 - Sync between machines through a server you host, with per-entry merging
-- Sort the list by date modified or by name (the *Sort* menu, bottom right);
-  the choice is remembered
+- A black-and-green two-pane window: the entry list on the left, the
+  selected entry's details (copy buttons, strength, notes, history) on the
+  right; the login screen shows one tile per vault on this PC
+- Search with Ctrl+F
+- Sort the list by date modified or by name (the *Sort* menu above the
+  list); the choice is remembered
 - Archive with restore, so a deletion is recoverable
 - Revision history per entry: the last 10 versions, with show, copy and revert
 - Password generator with adjustable length and character classes

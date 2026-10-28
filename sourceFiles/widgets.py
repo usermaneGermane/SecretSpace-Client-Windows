@@ -9,7 +9,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
-from theme import (F, FONT, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
+from theme import (F, FONT, BG, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    DANGER_HOVER, INPUT_BG, BORDER, CARD_HOVER, ON_ACCENT)
 from password_generator import estimate_strength
 
@@ -130,7 +130,7 @@ def safe_grab(root, top, icon_path=None):
 
 
 def modal(root, title, w, h, icon_path=None):
-    top = ctk.CTkToplevel(root)
+    top = ctk.CTkToplevel(root, fg_color=BG)
     top.title(title)
     top.resizable(False, False)
     root.update_idletasks()
