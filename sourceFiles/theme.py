@@ -20,26 +20,35 @@ ctk.set_default_color_theme("green")
 from customtkinter.windows.widgets.core_rendering import DrawEngine
 DrawEngine.preferred_drawing_method = "polygon_shapes"
 
-HEADER_BG = "#202022"
-CARD = "#2A2A2D"
-CARD_HOVER = "#34343A"
-INPUT_BG = "#2A2A2D"
-BORDER = "#3A3A40"
-TEXT = "#ECECEC"
-MUTED = "#9B9BA3"
-GREEN = "#67C090"
-GREEN_HOVER = "#4EA877"
+BG = "#0A0C0B"                 # the window itself
+HEADER_BG = "#101311"          # top bar, history panel
+CARD = "#131715"               # cards and panels on top of BG
+CARD_HOVER = "#1C231F"
+SELECTED = "#18271E"           # the selected row in the account list
+INPUT_BG = "#1A1F1C"
+BORDER = "#27302A"
+TEXT = "#E6EDE8"
+MUTED = "#8E9A92"
+GREEN = "#2BD47D"
+GREEN_HOVER = "#22B169"
 DANGER = "#E5534B"
 DANGER_HOVER = "#C23B34"
-ON_ACCENT = "#0E1A13"          # text drawn on top of the green accent
-WARN = "#E0A030"
+ON_ACCENT = "#06110B"          # text drawn on top of the green accent
+WARN = "#E3B341"
 
 FONT = "Segoe UI"
 MONO = "Consolas"
 
-# Avatar colors cycled per account for a bit of visual variety.
-AVATAR_PALETTE = ["#67C090", "#4F9DDE", "#E0A030", "#C97BD4",
-                  "#E5705B", "#54B7A8", "#7E83E8", "#D98AB0"]
+# Per-site tile colours: (tile, letter, header band). Dark tints with a light
+# letter, so entries are told apart without breaking the black-and-green look.
+TILE_PALETTE = [
+    ("#173A27", "#8FF0B9", "#10291B"),
+    ("#3A2C17", "#F2C27A", "#2A2213"),
+    ("#2A2340", "#CBB8FF", "#1E1A30"),
+    ("#3D1E22", "#FFA9B1", "#2D171A"),
+    ("#172B3D", "#9CCBFF", "#12223A"),
+    ("#222B35", "#B8C6D6", "#1A222B"),
+]
 
 
 def F(size, weight="normal"):
@@ -47,11 +56,11 @@ def F(size, weight="normal"):
     return ctk.CTkFont(family=FONT, size=size, weight=weight)
 
 
-def avatar_color(s):
-    """Stable per-site avatar colour."""
+def tile_colors(s):
+    """Stable per-site (tile, letter, band) colours."""
     if not s:
-        return GREEN
-    return AVATAR_PALETTE[sum(ord(c) for c in s) % len(AVATAR_PALETTE)]
+        return TILE_PALETTE[0]
+    return TILE_PALETTE[sum(ord(c) for c in s) % len(TILE_PALETTE)]
 
 
 def asset_candidates(name):

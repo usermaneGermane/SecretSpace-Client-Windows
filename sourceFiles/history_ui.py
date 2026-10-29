@@ -1,5 +1,5 @@
 """
-The revision history drop-down under each account row.
+The revision history section of the entry details.
 
 Presentation only: recording, reverting and clearing revisions all live in
 vault.py (update_entry, revert_entry, clear_history), and merging them across
@@ -34,6 +34,28 @@ def local_time(stamp: str) -> str:
     return "unknown time"
 
 
+def short_when(stamp: str, now=None) -> str:
+    """
+    A stored UTC timestamp, short enough for a list row: the time for today,
+    the day and month for this year, else the month and year.
+    """
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            moment = datetime.strptime(stamp, fmt).replace(tzinfo=timezone.utc)
+            break
+        except (TypeError, ValueError):
+            continue
+    else:
+        return ""
+    moment = moment.astimezone()
+    now = (now or datetime.now(timezone.utc)).astimezone()
+    if moment.date() == now.date():
+        return moment.strftime("%H:%M")
+    if moment.year == now.year:
+        return f"{moment.day} {moment.strftime('%b')}"
+    return moment.strftime("%b %Y")
+
+
 def describe(rev: dict) -> str:
     """What the edit that replaced this version changed, in a few words."""
     changed = rev.get("changed") or []
@@ -64,47 +86,12 @@ def _small_button(parent, text, command, accent=False, danger=False, width=62):
                          font=F(11, "bold"))
 
 
-def attach(app, row, acc, buttons, column):
+def panel(app, parent, acc):
     """
-    Give an account row its History button (in ``buttons`` at ``column``)
-    and the drop-down beneath the row.
-
-    Which rows are open is remembered on the app, so the panel stays open
-    across the list refresh that a revert or a sync triggers.
+    Build the history of ``acc`` into ``parent`` and return the frame, for
+    the caller to place. Revert and Clear refresh the app, which rebuilds it.
     """
-    count = len(acc.get("history") or [])
-    toggle_btn = ctk.CTkButton(
-        buttons, text="History", width=70, height=34, corner_radius=8,
-        fg_color="transparent", border_width=1, border_color=BORDER,
-        hover_color=CARD_HOVER, text_color=TEXT if count else MUTED,
-        font=F(13, "bold"))
-    toggle_btn.grid(row=0, column=column, padx=4)
-    Tooltip(toggle_btn,
-            f"History — {count} earlier version{'s' if count != 1 else ''}"
-            if count else "History — no earlier versions yet")
-
-    state = {"panel": None}
-
-    def open_panel():
-        state["panel"] = _build_panel(app, row, acc)
-        app._history_open.add(acc["id"])
-
-    def close_panel():
-        if state["panel"] is not None:
-            state["panel"].destroy()
-            state["panel"] = None
-        app._history_open.discard(acc["id"])
-
-    toggle_btn.configure(
-        command=lambda: close_panel() if state["panel"] else open_panel())
-    if acc["id"] in app._history_open:
-        open_panel()
-
-
-def _build_panel(app, row, acc):
-    panel = ctk.CTkFrame(row, fg_color=HEADER_BG, corner_radius=10)
-    panel.grid(row=1, column=0, columnspan=5, sticky="ew",
-               padx=14, pady=(0, 12))
+    panel = ctk.CTkFrame(parent, fg_color=HEADER_BG, corner_radius=14)
     panel.grid_columnconfigure(1, weight=1)
 
     history = acc.get("history") or []
@@ -138,11 +125,13 @@ def _revision_line(app, panel, line, acc, rev):
     ctk.CTkLabel(panel, text=local_time(rev.get("replaced_at", "")), width=150,
                  anchor="w", font=F(12), text_color=TEXT).grid(
         row=line, column=0, sticky="w", padx=(12, 8), pady=3)
+    # Wrapped: the details pane is narrower than the old full-width row.
     ctk.CTkLabel(panel, text=describe(rev), anchor="w", font=F(11),
-                 text_color=MUTED).grid(row=line, column=1, sticky="w", pady=3)
+                 text_color=MUTED, wraplength=170, justify="left").grid(
+        row=line, column=1, sticky="w", pady=3)
 
     secret = rev.get("password", "")
-    pwd = ctk.CTkLabel(panel, text="•" * 8, width=140, anchor="e",
+    pwd = ctk.CTkLabel(panel, text="•" * 8, width=110, anchor="e",
                        font=ctk.CTkFont(family=MONO, size=13),
                        text_color=MUTED)
     pwd.grid(row=line, column=2, padx=(8, 8), pady=3)
