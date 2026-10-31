@@ -431,6 +431,9 @@ Worth knowing about, in the interest of not overselling this:
   without breaking anyone's vault.
 - **The unlocked vault lives in memory in the clear**, and Python strings
   cannot be reliably wiped. Auto-lock limits the window; it does not close it.
+- **Locking does not clear a copied password.** It stays pasteable until
+  the 30-second auto-clear, so you can lock and then paste. Closing PassMan
+  still clears it at once, since nothing would be left to clear it later.
 - **Clipboard auto-clear only clears the live clipboard.** Windows clipboard
   history (Win+V) and cloud clipboard sync keep copies no application can
   reach. Turn them off if that matters to you.
