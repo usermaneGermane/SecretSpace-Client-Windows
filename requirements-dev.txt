@@ -1,3 +1,4 @@
 # Development / test dependencies (the app itself needs only requirements.txt)
 -r requirements.txt
 pytest>=8
+argon2-cffi>=21.1    # only so the tests can check it agrees with cryptography's Argon2id (Ubuntu uses it)
