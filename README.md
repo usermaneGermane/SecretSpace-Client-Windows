@@ -245,7 +245,14 @@ your master password.
 - **Second PC:** *Restore from server* on the login screen pulls the vault
   down. After that, Sync on either machine.
 
-Sync is manual and merges per entry. A change made on only one PC is taken
+**Sync when I unlock.** Sync is manual unless you switch this on, in
+Settings → Sync once sync is set up (off by default). With it on, PassMan
+syncs right after you unlock; a conflict still waits for your choice, and a
+server that cannot be reached only shows a warning — the vault opens either
+way. The switch is per vault and per PC: a merge keeps this PC's choice,
+and a vault restored onto a new PC starts with it off.
+
+Sync merges per entry. A change made on only one PC is taken
 silently — there is nothing to decide. Only when the **same entry changed on
 both** PCs since they last synced do you get a dialog showing both versions
 side by side, and **whichever side you do not keep is saved in that entry's
@@ -354,7 +361,8 @@ needs no update for this.
 ## Features
 
 - AES-256-GCM encryption with a PBKDF2-HMAC-SHA256 derived key
-- Sync between machines through a server you host, with per-entry merging
+- Sync between machines through a server you host, with per-entry merging;
+  by hand, or each time you unlock if you switch that on
 - A black-and-green two-pane window: the entry list on the left, the
   selected entry's details (copy buttons, strength, notes, history) on the
   right; the login screen shows one tile per vault on this PC. Every dialog
