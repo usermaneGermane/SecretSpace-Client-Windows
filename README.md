@@ -279,7 +279,7 @@ uploads it again, and choosing the server's side moves it to the Archive.
 
 ### Changing the master password of a vault you sync
 
-Change it as usual in Settings → *Change master password*. On that PC:
+Change it as usual in Settings → *Master password* → *Change…*. On that PC:
 
 - the vault, its backup and its sync state are re-encrypted, and
 - **the server is updated straight away**, merging anything your other PCs
@@ -357,7 +357,9 @@ needs no update for this.
 - Sync between machines through a server you host, with per-entry merging
 - A black-and-green two-pane window: the entry list on the left, the
   selected entry's details (copy buttons, strength, notes, history) on the
-  right; the login screen shows one tile per vault on this PC
+  right; the login screen shows one tile per vault on this PC. Every dialog
+  shares the look: a header band (with the site's tile when it is about an
+  entry), settings grouped in cards, and the buttons in a bar at the bottom
 - Search with Ctrl+F
 - Sort the list by date modified or by name (the *Sort* menu above the
   list); the choice is remembered
