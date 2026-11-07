@@ -130,7 +130,7 @@ Your passwords do **not** travel with the installer. The vault lives in
 `%APPDATA%\PassMan`, so a fresh install on a new PC starts empty. To bring
 your logins across, use *Restore from server* if you sync, or copy
 `vault\<user>.vault.enc` into `%APPDATA%\PassMan\vault` on the new PC, or
-use Settings → *Save encrypted backup* and copy that file over. The backup is still protected by
+use Settings → *Encrypted backup* → *Save backup…* and copy that file over. The backup is still protected by
 your master password.
 
 ## A lab copy for testing
@@ -379,7 +379,7 @@ The master password *is* the encryption key. Nobody — including whoever wrote
 this app — can decrypt your vault without it, and there is no reset, no
 recovery code and no backdoor. If you forget it, the passwords are gone.
 
-**Make backups.** Settings → *Save encrypted backup* writes a copy that is
+**Make backups.** Settings → *Encrypted backup* → *Save backup…* writes a copy that is
 still protected by your master password, so it is safe to keep on another
 drive or in cloud storage.
 
