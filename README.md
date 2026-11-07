@@ -364,6 +364,9 @@ needs no update for this.
 - Sort the list by date modified or by name (the *Sort* menu above the
   list); the choice is remembered
 - Archive with restore, so a deletion is recoverable
+- 2FA codes: paste the secret (or the `otpauth://` link) a site gives you,
+  and the entry shows its 6-digit code with a countdown. Every look at a
+  code asks for your master password; leaving the entry or locking hides it
 - Revision history per entry: the last 10 versions, with show, copy and revert
 - Password generator with adjustable length and character classes
 - Strength meter that accounts for repetition, sequences and common passwords
@@ -439,11 +442,13 @@ Worth knowing about, in the interest of not overselling this:
 - **Clipboard auto-clear only clears the live clipboard.** Windows clipboard
   history (Win+V) and cloud clipboard sync keep copies no application can
   reach. Turn them off if that matters to you.
-- **TOTP secrets are stored, not used.** An imported 2FA seed is kept so a
-  migration does not lose it, but PassMan does not generate codes from it —
-  keep using your authenticator app. Card details, custom fields and
-  attachments in an export are still not imported; PassMan warns when it
-  sees them.
+- **A 2FA code next to its password is one factor, not two.** Anyone who
+  opens your vault has both. That is the trade-off for convenience; keep
+  your most important accounts (email, bank) on a phone authenticator. The
+  codes are made on this PC (RFC 6238); scanning a QR code is not supported
+  yet, so paste the secret shown under it.
+- **Card details, custom fields and attachments** in an export are not
+  imported; PassMan warns when it sees them.
 - **The unlock delay is a speed bump, not a boundary.** It slows guessing at
   the login screen and survives a restart, but anyone who can copy the vault
   file can attack it offline with no limit at all. Deleting `config.json`

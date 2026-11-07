@@ -31,9 +31,13 @@ class FakeApp:
         self._clip_text = "s3cret"
         self._clip_job = "clear-job"
         self.cleared = []
+        self.totp_hidden = False
 
     def _cancel_idle_timer(self):
         pass
+
+    def _cancel_totp(self):
+        self.totp_hidden = True
 
     def show_login_screen(self):
         pass
@@ -55,3 +59,11 @@ def test_lock_keeps_the_copied_password_and_its_timer(auto):
     assert app.root.cancelled == []
     assert app._clip_job == "clear-job"
     assert app._clip_text == "s3cret"
+
+
+def test_lock_hides_a_shown_2fa_code():
+    app = FakeApp()
+
+    app.lock_vault()
+
+    assert app.totp_hidden

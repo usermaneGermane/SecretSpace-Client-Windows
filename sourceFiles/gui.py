@@ -23,6 +23,7 @@ import dialogs
 import history_ui
 import lockout
 import sync_ui
+import totp
 from theme import (F, BG, HEADER_BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    ON_ACCENT, WARN, MONO,
@@ -117,6 +118,8 @@ class PasswordManagerGUI:
         # being rebuilt after an edit, a revert or a sync.
         self._selected_id = None
         self._reveal_job = None
+        # The ticking 2FA code, while one is shown.
+        self._totp_job = None
         self._login_user = ""
         self.search_entry = None
 
@@ -903,7 +906,18 @@ class PasswordManagerGUI:
                 return acc
         return None
 
+    def _cancel_totp(self):
+        if self._totp_job:
+            try:
+                self.root.after_cancel(self._totp_job)
+            except Exception:
+                pass
+            self._totp_job = None
+
     def _cancel_reveal(self):
+        # A shown 2FA code goes with it: leaving the entry hides the code,
+        # and the next look asks for the master password again.
+        self._cancel_totp()
         if self._reveal_job:
             try:
                 self.root.after_cancel(self._reveal_job)
@@ -969,10 +983,7 @@ class PasswordManagerGUI:
         self._strength_row(scroll, acc.get("password", ""))
 
         if acc.get("totp"):
-            ctk.CTkLabel(scroll, text="  2FA seed stored with this entry  ",
-                         height=28, corner_radius=14, fg_color=INPUT_BG,
-                         text_color=MUTED, font=F(12, "bold")).pack(
-                anchor="w", padx=8, pady=(14, 0))
+            self._totp_box(scroll, acc).pack(fill="x", padx=8, pady=(14, 0))
 
         self._section_title(scroll, "Notes")
         ctk.CTkLabel(scroll, text=acc.get("notes") or "No notes.",
@@ -1049,6 +1060,79 @@ class PasswordManagerGUI:
         Tooltip(copy_pw, "Copy password — cleared after "
                          f"{CLIPBOARD_CLEAR_MS // 1000}s, but Windows "
                          "clipboard history (Win+V) may keep its own copy")
+        return box
+
+    def _totp_box(self, parent, acc):
+        """
+        The entry's 2FA code: hidden until asked for, and every Show asks
+        for the master password (owner, 2026-11-06). Once shown it ticks
+        over with the period until the entry is left or the vault locks.
+        """
+        box = self._field_box(parent, "2FA code")
+        problem = totp.check(acc.get("totp", ""))
+        if problem:
+            ctk.CTkLabel(box, text="No codes from this secret: " + problem,
+                         font=F(12), text_color=WARN, wraplength=440,
+                         justify="left", anchor="w").grid(
+                row=1, column=0, columnspan=2, sticky="w", padx=16,
+                pady=(2, 12))
+            return box
+
+        params = totp.parse(acc["totp"])
+        masked = totp.spaced("•" * params.digits)
+        hint = "Hidden — Show asks for your master password"
+        shown = ctk.CTkLabel(box, text=masked, anchor="w",
+                             font=ctk.CTkFont(family=MONO, size=20,
+                                              weight="bold"),
+                             text_color=TEXT)
+        shown.grid(row=1, column=0, sticky="w", padx=16, pady=(2, 0))
+        status = ctk.CTkLabel(box, text=hint, font=F(11), text_color=MUTED,
+                              anchor="w")
+        status.grid(row=2, column=0, sticky="w", padx=16, pady=(0, 12))
+        buttons = ctk.CTkFrame(box, fg_color="transparent")
+        buttons.grid(row=0, column=1, rowspan=3, padx=(4, 12))
+
+        def tick():
+            now = time.time()
+            left = totp.seconds_left(params, now)
+            shown.configure(text=totp.spaced(totp.code(params, now)))
+            status.configure(text=f"Changes in {left} s",
+                             text_color=GREEN if left > 5 else WARN)
+            # Wake just after the next whole second, so the count is exact.
+            self._totp_job = self.root.after(
+                max(1, 1000 - int((now % 1) * 1000)), tick)
+
+        def hide():
+            self._cancel_totp()
+            shown.configure(text=masked)
+            status.configure(text=hint, text_color=MUTED)
+            show.configure(text="Show")
+            copy.pack_forget()
+
+        def toggle():
+            if show.cget("text") == "Hide":
+                return hide()
+            if not dialogs.ask_master_password(
+                    self, "Show 2FA code",
+                    f"Enter your master password to see the code for "
+                    f"“{_clip(acc['site'], 40)}”. PassMan asks every time.",
+                    action="Show code"):
+                return
+            if not shown.winfo_exists():
+                return                      # the entry changed meanwhile
+            show.configure(text="Hide")
+            copy.pack(side="left", padx=(6, 0))
+            tick()
+
+        def copy_code():
+            if self._totp_job is not None:          # only while shown
+                self._copy(totp.code(params), "2FA code copied",
+                           sensitive=True)
+
+        show = self._small_button(buttons, "Show", toggle)
+        show.pack(side="left")
+        Tooltip(show, "Asks for your master password each time")
+        copy = self._small_button(buttons, "Copy", copy_code, accent=True)
         return box
 
     def _strength_row(self, parent, password):
@@ -1135,6 +1219,7 @@ class PasswordManagerGUI:
     # ==================================================================
     def lock_vault(self, auto=False):
         self._cancel_idle_timer()
+        self._cancel_totp()
         if self.master_password and self.current_user:
             self._save()
         # A copied password outlives the lock: the usual auto-clear timer
