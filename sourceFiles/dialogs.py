@@ -18,6 +18,7 @@ from tkinter import filedialog
 import appconfig
 import importers
 import sync_client
+import totp
 import vault
 from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, INPUT_BG, BORDER,
                    CARD_HOVER, ON_ACCENT, MONO, tile_colors)
@@ -27,7 +28,7 @@ from vault import (add_account, create_new_user, delete_user, get_vault_path,
                    find_duplicate)
 from widgets import (dialog_shell, section, setting_row, option_menu, note,
                      error_label, check, field_label, entry, danger_button)
-from crypto_utils import decrypt
+from crypto_utils import decrypt, password_matches
 from password_generator import generate_password
 from version import long_version_string
 
@@ -250,8 +251,8 @@ def account_dialog(app, acc):
     bar, label, update_strength = app._strength_widget(wrap)
 
     totp_entry = app._field(
-        wrap, "TOTP secret (optional)",
-        placeholder="stored for safekeeping — codes are not generated")
+        wrap, "2FA secret (optional)",
+        placeholder="the secret or otpauth:// link the site shows")
 
     field_label(wrap, "Notes (optional)")
     notes_box = ctk.CTkTextbox(wrap, height=76, corner_radius=12,
@@ -301,7 +302,11 @@ def account_dialog(app, acc):
         if not password:
             err.configure(text="Password is required."); return
         notes = notes_box.get("1.0", "end").strip()
-        totp = totp_entry.get().strip()
+        totp_secret = totp_entry.get().strip()
+        problem = totp.check(totp_secret)
+        if problem:
+            # Refused here rather than discovered when a code is needed.
+            err.configure(text="2FA secret: " + problem); return
         username = user_entry.get().strip()
         # Ask before the same login is stored twice -- on add, or when an
         # edit would turn this entry into a copy of another one.
@@ -319,10 +324,10 @@ def account_dialog(app, acc):
             # nothing. It also stamps updated_at -- shown in the conflict
             # dialog, never used by the merge, which goes by the sync base.
             update_entry(acc, site=site, username=username,
-                         password=password, notes=notes, totp=totp)
+                         password=password, notes=notes, totp=totp_secret)
         else:
             add_account(app.vault, site, username,
-                        password, notes=notes, totp=totp)
+                        password, notes=notes, totp=totp_secret)
         app._save()
         top.destroy()
         app.refresh_account_list()
@@ -590,7 +595,7 @@ def _change_master_dialog(app, parent_top):
     err = error_label(wrap, shell.text_width)
 
     def change():
-        if cur_entry.get() != app.master_password:
+        if not password_matches(cur_entry.get(), app.master_password):
             err.configure(text="Current master password is incorrect."); return
         new = new_entry.get()
         if not new:
@@ -641,6 +646,37 @@ def _change_master_dialog(app, parent_top):
     cur_entry.focus()
 
 
+def ask_master_password(app, title, subtitle, action="Continue"):
+    """
+    Ask for the master password again while the vault is open -- before a
+    2FA code is shown, every time. True once it is typed right; False if the
+    dialog is closed.
+    """
+    top = app._modal(title, 460, 300)
+    shell = dialog_shell(top, title, subtitle)
+    pw = app._field(shell.body, "Master password", show="•")
+    err = error_label(shell.body, shell.text_width)
+    outcome = {"ok": False}
+
+    def go():
+        if not password_matches(pw.get(), app.master_password):
+            pw.delete(0, "end")
+            err.configure(text="Incorrect master password.")
+            return
+        outcome["ok"] = True
+        top.destroy()
+
+    app._ghost_button(shell.buttons, "Cancel", top.destroy,
+                      width=110).pack(side="left")
+    app._accent_button(shell.buttons, action, go,
+                       width=150).pack(side="right")
+    pw.bind("<Return>", lambda e: go())
+    top.bind("<Escape>", lambda e: top.destroy())
+    top.after(200, pw.focus)
+    app.root.wait_window(top)
+    return outcome["ok"]
+
+
 def _delete_user_flow(app, parent_top):
     top = app._modal("Delete user", 440, 300)
     shell = dialog_shell(top, f"Delete “{app.current_user}”",
@@ -650,7 +686,7 @@ def _delete_user_flow(app, parent_top):
     err = error_label(shell.body, shell.text_width)
 
     def do_delete():
-        if pw.get() != app.master_password:
+        if not password_matches(pw.get(), app.master_password):
             err.configure(text="Incorrect master password."); return
         try:
             delete_user(app.current_user, app.master_password)

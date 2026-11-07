@@ -139,6 +139,17 @@ def decrypt(master_password: str, encrypted_data: bytes) -> dict:
         raise ValueError("Decryption failed. Wrong password or corrupted data.") from e
 
 
+def password_matches(typed: str, actual: str) -> bool:
+    """
+    Compare a typed master password with the one in memory, in constant
+    time, so how long a wrong guess takes says nothing about how much of it
+    was right.
+    """
+    import hmac
+    return hmac.compare_digest((typed or "").encode("utf-8"),
+                               (actual or "").encode("utf-8"))
+
+
 def blob_iterations(encrypted_data: bytes):
     """
     Iteration count a stored blob was written with, or ``None`` if it cannot

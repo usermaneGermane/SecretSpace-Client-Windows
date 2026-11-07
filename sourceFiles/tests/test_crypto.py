@@ -86,3 +86,13 @@ def test_ciphertext_tampering_is_detected():
 def test_garbage_input_raises_valueerror_not_indexerror(junk):
     with pytest.raises(ValueError):
         C.decrypt("pw", junk)
+
+
+def test_password_matches_only_the_exact_password():
+    from crypto_utils import password_matches
+    assert password_matches("correct horse", "correct horse")
+    assert not password_matches("correct hors", "correct horse")
+    assert not password_matches("correct horse ", "correct horse")
+    assert not password_matches("", "correct horse")
+    assert not password_matches(None, "correct horse")
+    assert password_matches("pässwörd ✓", "pässwörd ✓")
