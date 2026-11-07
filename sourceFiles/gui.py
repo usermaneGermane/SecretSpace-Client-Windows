@@ -28,7 +28,8 @@ from theme import (F, BG, HEADER_BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    ON_ACCENT, WARN, MONO,
                    tile_colors, asset_candidates)
 from widgets import (Tooltip, ghost_button, accent_button, field,
-                     strength_widget, modal, fit_modal, safe_grab, confirm)
+                     strength_widget, modal, fit_modal, safe_grab, confirm,
+                     STRENGTH_SEGMENTS)
 from password_generator import estimate_strength
 from vault import (load_vault, save_vault, needs_rekey, active_accounts,
                    archive_account, sort_accounts, SORT_ORDERS,
@@ -44,7 +45,6 @@ SEARCH_DEBOUNCE_MS = 150        # wait for a pause in typing before filtering
 ROW_SLICE_SECONDS = 0.1         # list work per step before redrawing the window
 
 LOGIN_TILES_PER_ROW = 3
-STRENGTH_SEGMENTS = 5
 
 #: What the Sort menu shows for each of vault.SORT_ORDERS.
 SORT_LABELS = {

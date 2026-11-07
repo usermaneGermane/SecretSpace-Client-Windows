@@ -31,6 +31,7 @@ TEXT = "#E6EDE8"
 MUTED = "#8E9A92"
 GREEN = "#2BD47D"
 GREEN_HOVER = "#22B169"
+ACCENT_DEEP = "#177A49"         # a selected choice under light text
 DANGER = "#E5534B"
 DANGER_HOVER = "#C23B34"
 ON_ACCENT = "#06110B"          # text drawn on top of the green accent
