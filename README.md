@@ -16,6 +16,39 @@ PassMan lives in four repositories:
 
 ![PassMan](sourceFiles/PassMan-logo.png)
 
+## PassMan 3 — a test version, for the lab only
+
+`main` is now **3.0.0-alpha.1**, the first step of PassMan 3. **For your real
+passwords keep using [2.11.0](https://github.com/usermaneGermane/PassMan-Client-Windows/releases/tag/v2.11.0)**,
+which the rest of this README describes. Do not install the test version
+over it: it opens PassMan 3 accounts only, so your 2.x vaults would not
+show up (they are not changed or deleted — 2.11.0 opens them again).
+
+What the test version has:
+
+- **Accounts instead of vault files.** *Create an account* asks for a name
+  and a master password, then shows your **Emergency Kit** (a *Secret Key*,
+  `A3-XXXXX-…`) and a **12-word recovery phrase**, which you type three
+  words of back. Nothing is written until that last step.
+- **A stronger lock.** The key comes from your master password *and* the
+  Secret Key, through Argon2id (64 MiB, memory-hard) instead of PBKDF2. A
+  stolen copy of the account folder cannot be opened by guessing the
+  password alone on another PC.
+- **The Secret Key is typed once per PC.** This PC keeps it, protected by
+  Windows (DPAPI) for your Windows user. Copy the account folder to another
+  PC and that PC asks for the Secret Key once, from the Emergency Kit.
+- **Importing a 2.x vault.** *Import* lists the 2.x vaults on this PC (or
+  takes a `.vault.enc` file) and copies every entry with its history and
+  archive state. The 2.x file is only read; its sync settings stay with it.
+- Everything else in the window — entries, archive, history, 2FA codes,
+  generator, plain export — works as in 2.11.
+
+Not in this test version yet: **sync** (the next one adds server accounts),
+recovering an account with the 12-word phrase (the phrase is made and
+checked now; the screen that uses it comes later), and sharing a vault with
+other people. PassMan for Linux has the same test version, 1.0.0-alpha.1.
+The plan is in the 3.0 design document.
+
 ## Running it
 
 The repository does not contain the app itself. Download
@@ -170,6 +203,19 @@ PassMan closed, move each `<user>.vault.enc` together with its `.bak` and
 `.base` into the lab copy's `vault` folder (and `config.json` too, if it
 names a test vault as the last user).
 
+### PassMan 3 (test version)
+
+```
+keyset.pmk:  base64( "PMK3" || ver(1) || kdf(1) || memory_kib(4) || passes(1) || lanes(1) || salt(16) || nonce(12) || ciphertext )
+vault .pmv3: base64( "PMV3" || ver(1) || vault_id(16) || key_generation(4) || nonce(12) || ciphertext )
+```
+
+Both headers are AES-GCM associated data. The keyset key is HKDF over
+Argon2id(master password), with the Secret Key as its salt; the keyset holds the
+account's X25519 key and its vault's key, and the vault's entries are the
+same JSON as in 2.x. A vault file is bound to its id, so one account's file
+cannot be swapped in for another's.
+
 ## Project layout
 
 ```
@@ -189,7 +235,11 @@ PassMan-Client-Windows/
     ├── widgets.py       reusable widgets and modal plumbing
     ├── theme.py         palette, fonts, asset lookup
     ├── vault.py         atomic file handling, schema validation, export
-    ├── crypto_utils.py  container format, key derivation, encrypt/decrypt
+    ├── crypto_utils.py  the 2.x container (PMV2), key derivation, encrypt/decrypt
+    ├── account_crypto.py  3.0: Argon2id, Secret Key, keyset, PMV3, recovery phrase
+    ├── accounts.py      3.0: account folders, unlock, password change, Emergency Kit
+    ├── secret_store.py  3.0: how this PC keeps the Secret Key (DPAPI)
+    ├── bip39_words.py   the BIP39 word list for the recovery phrase
     ├── importers.py     CSV/JSON parsing from other password managers
     ├── appconfig.py     non-secret preferences
     ├── lockout.py       rate limiting of master-password attempts
@@ -386,6 +436,10 @@ needs no update for this.
 
 ## Important: your master password cannot be recovered
 
+*(2.11.)* In the 3.0 test version, the 12-word recovery phrase opens an
+account without its master password — the screen for that arrives in a
+later test version.
+
 The master password *is* the encryption key. Nobody — including whoever wrote
 this app — can decrypt your vault without it, and there is no reset, no
 recovery code and no backdoor. If you forget it, the passwords are gone.
@@ -408,6 +462,19 @@ they are next to the program instead.
 | `vault/<user>.vault.enc.base` | what the server held at the last sync, and which server that was; only if you sync |
 | `config.json` | non-secret preferences (last username, auto-lock delay) |
 
+The 3.0 test version adds an `accounts` folder beside `vault`, and only
+reads `vault`:
+
+| File | What it is |
+| --- | --- |
+| `accounts/<name>/account.json` | nothing secret: the account's public key, its vault's id, the Secret Key as this PC keeps it (DPAPI) |
+| `accounts/<name>/keyset.pmk` | the account's keys, under your master password + Secret Key (Argon2id, AES-256-GCM) |
+| `accounts/<name>/recovery.pmk` | the same keys, under the 12-word recovery phrase |
+| `accounts/<name>/vaults/<id>.pmv3` | your entries (+ `.bak`, the previous save) |
+
+To back an account up, copy its folder (Settings → *Backup* → *Open
+folder*); the copy opens only with the master password and the Secret Key.
+
 The `.base` file is how merging tells a deletion apart from an addition. It
 is encrypted with the same master password as the vault. Deleting it is safe
 — the next sync just asks more questions than it needs to. Changing your
@@ -423,6 +490,8 @@ place, so an interrupted save (full disk, power cut) cannot corrupt the vault.
 If the main file is ever damaged, PassMan falls back to the `.bak` copy.
 
 ## Vault format
+
+*(2.x; the 3.0 container is below.)*
 
 ```
 base64( "PMV2" || kdf_id(1) || iterations(4) || salt(16) || nonce(12) || ciphertext )

@@ -11,12 +11,12 @@ from PyInstaller.utils.win32.versioninfo import (
     FixedFileInfo, StringFileInfo, StringStruct, StringTable, VarFileInfo,
     VarStruct, VSVersionInfo)
 
-from version import __version__
+from version import __version__, file_version
 
 
 def version_info(description="PassMan password manager",
                  filename="PassMan.exe") -> VSVersionInfo:
-    numbers = tuple(int(part) for part in __version__.split(".")) + (0,)
+    numbers = file_version()
     return VSVersionInfo(
         ffi=FixedFileInfo(filevers=numbers, prodvers=numbers),
         kids=[

@@ -18,6 +18,7 @@ import tkinter as tk
 import customtkinter as ctk
 import pyperclip
 
+import accounts
 import appconfig
 import dialogs
 import history_ui
@@ -33,9 +34,9 @@ from widgets import (Tooltip, ghost_button, accent_button, field,
                      strength_widget, modal, fit_modal, safe_grab, confirm,
                      STRENGTH_SEGMENTS)
 from password_generator import estimate_strength
-from vault import (load_vault, save_vault, needs_rekey, active_accounts,
-                   archive_account, sort_accounts, SORT_ORDERS,
-                   auto_purge_archive, archive_purge_days, list_users,
+from account_crypto import CryptoError
+from vault import (active_accounts, archive_account, sort_accounts,
+                   SORT_ORDERS, auto_purge_archive, archive_purge_days,
                    window_title)
 from version import version_string
 
@@ -95,6 +96,8 @@ class PasswordManagerGUI:
         self.vault = None
         self.master_password = None
         self.current_user = None
+        # The unlocked 3.0 account (accounts.Account): its keys, its files.
+        self.account = None
 
         self.search_query = ""
         self.sort_order = appconfig.sort_order()
@@ -253,8 +256,7 @@ class PasswordManagerGUI:
 
     def _save(self, rekey=False):
         try:
-            save_vault(self.master_password, self.vault, self.current_user,
-                       rekey=rekey)
+            self.account.save_vault(self.vault)
             return True
         except Exception as e:
             self.toast(f"Save failed: {e}", "error")
@@ -356,10 +358,11 @@ class PasswordManagerGUI:
         self._logo(pad).pack()
         ctk.CTkLabel(pad, text="Welcome back", font=F(26, "bold"),
                      text_color=TEXT).pack(pady=(12, 0))
-        ctk.CTkLabel(pad, text="Pick your vault and enter its master password.",
+        ctk.CTkLabel(pad, text="Pick your account and enter its master "
+                              "password.",
                      font=F(13), text_color=MUTED).pack(pady=(4, 20))
 
-        users = list_users()
+        users = accounts.list_accounts()
         last = appconfig.load_config().get("last_username", "")
         self._login_user = last if last in users else (users[0] if users else "")
         self._login_tiles = ctk.CTkFrame(pad, fg_color="transparent")
@@ -402,16 +405,13 @@ class PasswordManagerGUI:
 
         links = ctk.CTkFrame(pad, fg_color="transparent")
         links.pack(fill="x")
-        # The second PC's starting point: there is no vault here yet, so there
-        # is nothing to unlock and nothing to merge -- just a download.
-        for text, command, side in (
-                ("Create a new user", self.create_user_dialog, "left"),
-                ("Restore from server", self.restore_from_server_dialog,
-                 "right")):
-            ctk.CTkButton(links, text=text, command=command, width=10,
-                          height=32, fg_color="transparent",
-                          hover_color=CARD_HOVER, text_color=GREEN,
-                          font=F(13, "bold")).pack(side=side)
+        # 3.0 phase 1 is local only; "Restore from server" returns with the
+        # server accounts of phase 2. 2.x vaults come in through Import once
+        # an account is open.
+        ctk.CTkButton(links, text="Create an account",
+                      command=self.create_user_dialog, width=10, height=32,
+                      fg_color="transparent", hover_color=CARD_HOVER,
+                      text_color=GREEN, font=F(13, "bold")).pack(side="left")
         ctk.CTkLabel(pad, text=version_string(), font=F(11),
                      text_color=MUTED).pack(pady=(14, 0))
 
@@ -447,15 +447,16 @@ class PasswordManagerGUI:
                                fill="#1F3A2A", outline="")
 
     def _draw_login_tiles(self, users):
-        """One tile per vault on this PC, plus one to create another."""
+        """One tile per account on this PC, plus one to create another."""
         for w in self._login_tiles.winfo_children():
             w.destroy()
         for c in range(LOGIN_TILES_PER_ROW):
             self._login_tiles.grid_columnconfigure(c, weight=1, uniform="tile")
         if not users:
             ctk.CTkLabel(self._login_tiles,
-                         text="There is no vault on this PC yet. Create one, "
-                              "or restore one from your server.",
+                         text="There is no PassMan 3 account on this PC yet. "
+                              "Create one, then import your 2.x vaults into "
+                              "it.",
                          font=F(13), text_color=MUTED, wraplength=360).grid(
                 row=0, column=0, columnspan=LOGIN_TILES_PER_ROW)
             return
@@ -475,7 +476,7 @@ class PasswordManagerGUI:
         if name is None:
             avatar, letters = self._circle(tile, "+", 50, INPUT_BG, MUTED,
                                            F(22, "bold"))
-            label = "Add vault"
+            label = "Add account"
             command = self.create_user_dialog
         else:
             bg, ink, _ = tile_colors(name)
@@ -495,7 +496,7 @@ class PasswordManagerGUI:
 
     def _pick_login_user(self, name):
         self._login_user = name
-        self._draw_login_tiles(list_users())
+        self._draw_login_tiles(accounts.list_accounts())
         self._cancel_lockout_timer()
         wait = lockout.remaining(name)
         if wait:
@@ -548,12 +549,11 @@ class PasswordManagerGUI:
     def _login_error(self, msg):
         self.login_error.configure(text=msg)
 
-    def unlock_vault(self):
+    def unlock_vault(self, secret_key_text=None):
         username = self._login_user
         master_password = self.password_entry.get()
         if not username:
-            self._login_error("Create a vault or restore one from your "
-                              "server first.")
+            self._login_error("Create an account first.")
             return
         if not master_password:
             self._login_error("Enter the master password.")
@@ -568,21 +568,33 @@ class PasswordManagerGUI:
         # the handler below, which then wrote to a login widget that
         # show_main_window()'s _clear() had already destroyed.
         try:
-            loaded = load_vault(master_password, username)
+            account = accounts.unlock(username, master_password,
+                                      secret_key_text)
+            loaded = account.load_vault()
+        except accounts.SecretKeyNeeded:
+            # A new PC, or another Windows user: the Secret Key is asked for
+            # once, from the Emergency Kit, then kept on this device.
+            typed = dialogs.ask_secret_key(self, username)
+            if typed:
+                self.unlock_vault(secret_key_text=typed)
+            return
         except FileNotFoundError:
-            self._login_error("No vault found for that username.")
+            self._login_error("No account found with that name.")
             return
         except ValueError as e:
             msg = str(e)
-            if "Decryption failed" not in msg:
-                self._login_error(msg)       # a real vault problem, not a typo
+            if not (isinstance(e, CryptoError)
+                    and msg.startswith("Wrong master password")):
+                self._login_error(msg)    # a real file problem, not a typo
                 return
             wait = lockout.record_failure(username)
             if wait:
                 self._begin_lockout(username, wait)
             else:
                 left = lockout.FREE_ATTEMPTS - lockout.failures(username)
-                self._login_error("Incorrect master password." +
+                self._login_error(("Incorrect master password or Secret Key."
+                                   if secret_key_text else
+                                   "Incorrect master password.") +
                                   (f" {left} attempt(s) before a delay."
                                    if left else ""))
             return
@@ -591,15 +603,19 @@ class PasswordManagerGUI:
             return
 
         lockout.reset(username)
+        self.open_account(account, loaded, master_password)
+        if secret_key_text:
+            self.toast("Secret Key saved on this PC — it won't be asked "
+                       "for again here")
+
+    def open_account(self, account, loaded, master_password):
+        """After an unlock or a new account: the main window."""
         self._session += 1
+        self.account = account
         self.vault = loaded
         self.master_password = master_password
-        self.current_user = username
-        appconfig.save_config(last_username=username)
-
-        # Silently bring an older vault up to the current KDF cost.
-        if needs_rekey(username):
-            self._save()
+        self.current_user = account.username
+        appconfig.save_config(last_username=account.username)
 
         # Archived entries past this vault's keep-for limit (Settings).
         purged = auto_purge_archive(self.vault)
@@ -664,7 +680,8 @@ class PasswordManagerGUI:
         ctk.CTkLabel(chip, text=_clip(self.current_user, 24),
                      font=F(13, "bold"), text_color=TEXT).pack(
             side="left", padx=(0, 14))
-        Tooltip(chip, "The vault you unlocked. Lock to switch to another.")
+        Tooltip(chip, "The account you unlocked. Lock to switch to "
+                      "another.")
 
         self.search_entry = ctk.CTkEntry(
             bar, height=44, corner_radius=22, fg_color=INPUT_BG,
@@ -675,12 +692,10 @@ class PasswordManagerGUI:
 
         controls = ctk.CTkFrame(bar, fg_color="transparent")
         controls.grid(row=0, column=3, padx=(0, 24))
-        sync_btn = self._ghost_button(controls, "Sync", self.sync_now, width=74)
-        sync_btn.pack(side="left", padx=(0, 8))
-        Tooltip(sync_btn, "Merge this vault with the one on your server")
+        # No Sync button in 3.0 phase 1: accounts sync from phase 2 on.
         imp = self._ghost_button(controls, "Import", self.import_dialog, width=80)
         imp.pack(side="left", padx=(0, 8))
-        Tooltip(imp, "Import accounts from a CSV or JSON file")
+        Tooltip(imp, "Import a PassMan 2.x vault, or a CSV or JSON file")
         gen = self._ghost_button(controls, "Generate", self.generator_dialog,
                                  width=92)
         gen.pack(side="left", padx=(0, 8))
@@ -690,7 +705,7 @@ class PasswordManagerGUI:
         Tooltip(gear, "Settings")
         lock = self._ghost_button(controls, "Lock", self.lock_vault, width=70)
         lock.pack(side="left")
-        Tooltip(lock, "Lock the vault and sign out")
+        Tooltip(lock, "Lock the account and sign out")
 
         # ---- body: the list on the left, the selected entry on the right ----
         body = ctk.CTkFrame(self.root, fg_color="transparent")
@@ -1256,11 +1271,12 @@ class PasswordManagerGUI:
         # A copied password outlives the lock: the usual auto-clear timer
         # keeps running, so it can still be pasted until that fires.
         self.vault = self.master_password = self.current_user = None
+        self.account = None
         self._selected_id = None
         self.search_query = ""
         self.show_login_screen()
         if auto:
-            self.toast("Vault locked after inactivity", "warn")
+            self.toast("Locked after inactivity", "warn")
 
     def _on_close(self):
         self._cancel_idle_timer()

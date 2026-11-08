@@ -11,24 +11,25 @@ body, and the buttons in a footer bar.
 """
 
 import os
+import subprocess
+import sys
 
 import customtkinter as ctk
 from tkinter import filedialog
 
+import account_crypto
+import accounts
 import appconfig
 import importers
-import sync_client
 import totp
 import vault
 from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, INPUT_BG, BORDER,
-                   CARD_HOVER, ON_ACCENT, MONO, tile_colors)
-from vault import (add_account, create_new_user, delete_user, get_vault_path,
-                   validate_username, export_encrypted, export_csv,
-                   export_json, update_entry, change_master_password,
-                   find_duplicate)
+                   CARD, CARD_HOVER, ON_ACCENT, MONO, tile_colors)
+from vault import (add_account, validate_username, export_csv, export_json,
+                   update_entry, find_duplicate)
 from widgets import (dialog_shell, section, setting_row, option_menu, note,
                      error_label, check, field_label, entry, danger_button)
-from crypto_utils import decrypt, password_matches
+from crypto_utils import password_matches
 from password_generator import generate_password
 from version import long_version_string
 
@@ -38,14 +39,24 @@ def _site_tile(site):
     return (site[:1].upper() or "?"), bg, ink
 
 
+#: The words typed back after the phrase is shown, to prove it was written down.
+CHECK_WORDS = (3, 7, 11)
+
+
 def create_user_dialog(app):
-    top = app._modal("Create new user", 460, 560)
-    shell = dialog_shell(top, "Create new user",
-                         "Your master password encrypts the vault and "
-                         "cannot be recovered.")
+    """
+    A new PassMan 3 account, in three steps: name and master password, the
+    Emergency Kit (Secret Key), the 12-word recovery phrase. Nothing is
+    written until the last step, so closing a window half-way leaves no
+    account behind.
+    """
+    top = app._modal("Create an account", 460, 600)
+    shell = dialog_shell(top, "Create an account",
+                         "Step 1 of 3 · Your master password opens this "
+                         "account on this PC. Nobody can reset it for you.")
     wrap = shell.body
 
-    user_entry = app._field(wrap, "Username", placeholder="e.g. alex")
+    user_entry = app._field(wrap, "Account name", placeholder="e.g. alex")
     pw_entry = app._field(wrap, "Master password", show="•")
     bar, label, update_strength = app._strength_widget(wrap)
     confirm_entry = app._field(wrap, "Confirm password", show="•")
@@ -75,53 +86,280 @@ def create_user_dialog(app):
             err.configure(text="Master password is required."); return
         if p != c:
             err.configure(text="Passwords do not match."); return
-        if os.path.exists(get_vault_path(u)):
-            err.configure(text="That user already exists."); return
+        if accounts.account_exists(u):
+            err.configure(text="There is already an account with that "
+                               "name."); return
         if len(p) < 8:
-            err.configure(text="Use at least 8 characters — this password "
-                               "cannot be recovered or reset."); return
+            err.configure(text="Use at least 8 characters — nobody can "
+                               "reset this password for you."); return
         try:
-            create_new_user(u, p)
-        except FileExistsError:
-            err.configure(text="That user already exists."); return
-        except Exception as e:
+            new = accounts.prepare_account(u, p)
+        except (ValueError, FileExistsError) as e:
             err.configure(text=str(e)); return
-        app.vault = {"accounts": []}
-        app.master_password = p
-        app.current_user = u
-        appconfig.save_config(last_username=u)
         top.destroy()
-        app.show_main_window()
-        app.toast(f"Welcome, {u}!")
+        _emergency_kit_dialog(app, new, p)
 
     app._ghost_button(shell.buttons, "Cancel", top.destroy,
                       width=120).pack(side="left")
-    app._accent_button(shell.buttons, "Create user", create,
+    app._accent_button(shell.buttons, "Next", create,
                        width=150).pack(side="right")
     for e in (user_entry, pw_entry, confirm_entry):
         e.bind("<Return>", lambda ev: create())
     user_entry.focus()
 
 
+def _save_kit_file(app, username, secret_key_text):
+    """Save Emergency Kit… -- True once a file is written."""
+    path = filedialog.asksaveasfilename(
+        parent=app.root, title="Save Emergency Kit",
+        defaultextension=".txt",
+        initialfile=f"PassMan Emergency Kit - {username}.txt",
+        filetypes=[("Text file", "*.txt"), ("All files", "*.*")])
+    if not path:
+        return False
+    try:
+        accounts.write_emergency_kit(path, username, secret_key_text)
+    except OSError as e:
+        app.toast(f"Could not save the kit: {e}", "error")
+        return False
+    app.toast("Emergency Kit saved — print it or keep it offline")
+    return True
+
+
+def _secret_key_box(parent, text):
+    box = entry(parent, height=52, font=ctk.CTkFont(family=MONO, size=15))
+    box.pack(fill="x")
+    box.insert(0, text)
+    box.configure(state="readonly")
+    return box
+
+
+def _emergency_kit_dialog(app, new, password):
+    top = app._modal("Emergency Kit", 500, 600)
+    shell = dialog_shell(top, "Your Emergency Kit",
+                         "Step 2 of 3 · With your master password, this "
+                         "Secret Key opens your account on another PC. "
+                         "PassMan keeps a copy on this PC only.")
+    wrap = shell.body
+
+    field_label(wrap, "Account")
+    ctk.CTkLabel(wrap, text=new.username, font=F(15, "bold"),
+                 text_color=TEXT, anchor="w").pack(anchor="w")
+    field_label(wrap, "Secret Key")
+    _secret_key_box(wrap, new.secret_key_text)
+
+    row = ctk.CTkFrame(wrap, fg_color="transparent")
+    row.pack(fill="x", pady=(10, 0))
+    app._accent_button(row, "Save Emergency Kit…",
+                       lambda: _save_kit_file(app, new.username,
+                                              new.secret_key_text),
+                       width=190).pack(side="left")
+    app._ghost_button(row, "Copy", lambda: app._copy(
+        new.secret_key_text, "Secret Key copied", sensitive=True),
+        width=90).pack(side="left", padx=(8, 0))
+
+    note(wrap, "Print the kit, or keep the file somewhere offline — not next "
+         "to your master password. Without the Secret Key, a stolen copy "
+         "of your account cannot be opened by guessing the password.",
+         shell.text_width, pady=(14, 0))
+    saved = check(wrap, "I have saved my Emergency Kit", shell.text_width)
+    err = error_label(wrap, shell.text_width)
+
+    def next_step():
+        if not saved.get():
+            err.configure(text="Save or print the kit, then tick the box."); return
+        top.destroy()
+        _phrase_dialog(app, new, password)
+
+    app._ghost_button(shell.buttons, "Cancel", top.destroy,
+                      width=120).pack(side="left")
+    app._accent_button(shell.buttons, "Next", next_step,
+                       width=150).pack(side="right")
+
+
+def _phrase_dialog(app, new, password):
+    top = app._modal("Recovery phrase", 520, 600)
+    shell = dialog_shell(top, "Your recovery phrase",
+                         "Step 3 of 3 · These 12 words open your account if "
+                         "you forget your master password. Write them on "
+                         "paper, in order.")
+    wrap = shell.body
+
+    grid = ctk.CTkFrame(wrap, fg_color=CARD, corner_radius=16,
+                        border_width=1, border_color=BORDER)
+    grid.pack(fill="x", pady=(14, 0))
+    for c in range(3):
+        grid.grid_columnconfigure(c, weight=1, uniform="word")
+    for i, word in enumerate(new.recovery_phrase.split()):
+        cell = ctk.CTkFrame(grid, fg_color="transparent")
+        cell.grid(row=i // 3, column=i % 3, sticky="w", padx=16, pady=8)
+        ctk.CTkLabel(cell, text=f"{i + 1:>2}", font=F(12), text_color=MUTED,
+                     width=22, anchor="e").pack(side="left")
+        ctk.CTkLabel(cell, text=word, text_color=TEXT,
+                     font=ctk.CTkFont(family=MONO, size=15, weight="bold")
+                     ).pack(side="left", padx=(8, 0))
+
+    note(wrap, "Anyone with these words can open everything in this account. "
+         "Keep them like a passport: not in a file or a photo, and not with "
+         "the Emergency Kit. PassMan does not show them again.",
+         shell.text_width, pady=(14, 0))
+
+    def next_step():
+        top.destroy()
+        _phrase_check_dialog(app, new, password)
+
+    app._ghost_button(shell.buttons, "Cancel", top.destroy,
+                      width=120).pack(side="left")
+    app._accent_button(shell.buttons, "I wrote them down", next_step,
+                       width=170).pack(side="right")
+
+
+def phrase_mismatches(phrase, typed):
+    """The word numbers in ``typed`` ({n: text}) that do not match ``phrase``."""
+    words = phrase.split()
+    return [n for n, text in sorted(typed.items())
+            if text.strip().lower() != words[n - 1]]
+
+
+def _phrase_check_dialog(app, new, password):
+    top = app._modal("Check your phrase", 460, 460)
+    shell = dialog_shell(top, "Check your phrase",
+                         "Type words " + ", ".join(map(str, CHECK_WORDS[:-1]))
+                         + f" and {CHECK_WORDS[-1]} from your paper copy.")
+    wrap = shell.body
+    boxes = {n: app._field(wrap, f"Word {n}") for n in CHECK_WORDS}
+    err = error_label(wrap, shell.text_width)
+
+    def finish():
+        wrong = phrase_mismatches(new.recovery_phrase,
+                                  {n: b.get() for n, b in boxes.items()})
+        if wrong:
+            err.configure(text="Word " + ", ".join(map(str, wrong)) +
+                               (" does" if len(wrong) == 1 else " do") +
+                               " not match. Look at your paper copy again.")
+            return
+        try:
+            account = new.save()
+            loaded = account.load_vault()
+        except Exception as e:
+            err.configure(text=str(e)); return
+        top.destroy()
+        app.open_account(account, loaded, password)
+        app.toast(f"Welcome, {account.username}! Import brings in your 2.x "
+                  "vaults.")
+
+    def back():
+        top.destroy()
+        _phrase_dialog(app, new, password)
+
+    app._ghost_button(shell.buttons, "Show the words again", back,
+                      width=170).pack(side="left")
+    app._accent_button(shell.buttons, "Create account", finish,
+                       width=150).pack(side="right")
+    for b in boxes.values():
+        b.bind("<Return>", lambda ev: finish())
+    boxes[CHECK_WORDS[0]].focus()
+
+
+def ask_secret_key(app, username):
+    """
+    The Secret Key, for a PC that has not opened this account before. The
+    text typed (checked for typos), or None if the dialog is closed.
+    """
+    top = app._modal("Secret Key", 480, 360)
+    shell = dialog_shell(top, "Enter your Secret Key",
+                         f"This PC does not hold the Secret Key of "
+                         f"“{username}” — it is new here, or it can no "
+                         "longer read the copy it kept. It is on your "
+                         "Emergency Kit and starts with A3-.")
+    box = app._field(shell.body, "Secret Key", placeholder="A3-XXXXX-XXXXX-…")
+    box.configure(font=ctk.CTkFont(family=MONO, size=14))
+    err = error_label(shell.body, shell.text_width)
+    out = {"text": None}
+
+    def go():
+        try:
+            account_crypto.parse_secret_key(box.get())
+        except ValueError as e:
+            err.configure(text=str(e)); return
+        out["text"] = box.get()
+        top.destroy()
+
+    app._ghost_button(shell.buttons, "Cancel", top.destroy,
+                      width=110).pack(side="left")
+    app._accent_button(shell.buttons, "Unlock", go,
+                       width=150).pack(side="right")
+    box.bind("<Return>", lambda e: go())
+    top.bind("<Escape>", lambda e: top.destroy())
+    top.after(200, box.focus)
+    app.root.wait_window(top)
+    return out["text"]
+
+
 def import_dialog(app):
+    """Where to import from: a 2.x vault (whole entries) or a CSV/JSON file."""
+    top = app._modal("Import", 520, 560)
+    shell = dialog_shell(top, "Import",
+                         f"Bring logins into “{app.current_user}”. What you "
+                         "import from is only read, never changed.",
+                         scroll=True)
+    wrap = shell.body
+    hint = shell.text_width - 190
+
+    def go(action):
+        top.destroy()
+        action()
+
+    two = section(wrap, "PassMan 2.x vaults on this PC", first=True)
+    names = vault.list_users()
+    if not names:
+        setting_row(two, "None found",
+                    f"No 2.x vault in {vault.get_data_dir()}.", hint,
+                    first=True)
+    for i, name in enumerate(names):
+        app._ghost_button(
+            setting_row(two, name, "With its history and archive.", hint,
+                        first=i == 0),
+            "Import…", lambda n=name: go(lambda: _import_2x(
+                app, vault.get_vault_path(n), n)), width=130).pack()
+
+    other = section(wrap, "From a file")
+    app._ghost_button(
+        setting_row(other, "A 2.x vault file",
+                    "A backup (.vault.enc) or a copy from another PC.", hint,
+                    first=True),
+        "Choose…", lambda: go(lambda: _import_2x_file(app)), width=130).pack()
+    app._ghost_button(
+        setting_row(other, "CSV or JSON",
+                    "Exported from another password manager or a browser.",
+                    hint),
+        "Choose…", lambda: go(lambda: _import_plain_file(app)),
+        width=130).pack()
+
+    app._ghost_button(shell.buttons, "Close", top.destroy,
+                      width=120).pack(side="right")
+    top.bind("<Escape>", lambda e: top.destroy())
+
+
+def _import_2x_file(app):
+    path = filedialog.askopenfilename(
+        parent=app.root, title="Import a PassMan 2.x vault",
+        filetypes=[("PassMan vault", "*.enc *.vault *.bak"),
+                   ("All files", "*.*")])
+    if path:
+        _import_2x(app, path, os.path.basename(path))
+
+
+def _import_plain_file(app):
     path = filedialog.askopenfilename(
         parent=app.root, title="Import accounts from file",
         filetypes=[
-            ("All supported", "*.csv *.json *.vault *.enc"),
+            ("All supported", "*.csv *.json"),
             ("CSV files", "*.csv"),
             ("JSON files", "*.json"),
-            ("Encrypted vault", "*.vault *.enc"),
             ("All files", "*.*")])
     if not path:
         return
-
-    # Encrypted PassMan vault files (.vault / .vault.enc / .enc) must be
-    # decrypted with their own master password before we can read accounts.
-    ext = os.path.splitext(path)[1].lower()
-    if ext in (".vault", ".enc"):
-        _import_encrypted_vault(app, path)
-        return
-
     try:
         parsed = importers.parse_import_file(path)
     except Exception as e:
@@ -130,40 +368,54 @@ def import_dialog(app):
     _finish_import(app, parsed, path)
 
 
-def _import_encrypted_vault(app, path):
-    try:
-        with open(path, "rb") as f:
-            blob = f.read()
-    except Exception as e:
-        app.toast(f"Could not read file: {e}", "error")
-        return
-
-    top = app._modal("Unlock vault file", 460, 280)
-    shell = dialog_shell(top, "Unlock vault file",
-                         f"“{os.path.basename(path)}” is encrypted. Enter its "
-                         "master password to import the accounts inside.")
-    pw = app._field(shell.body, "Master password of the file", show="•")
+def _import_2x(app, path, label):
+    """
+    A 2.x vault into the open account, entries whole (ids, history, archive).
+    The 2.x file is read once and left as it was; its sync settings stay
+    with it.
+    """
+    top = app._modal("Import a 2.x vault", 460, 300)
+    shell = dialog_shell(top, f"Import “{label}”",
+                         "Enter the master password of that 2.x vault. "
+                         "Its file is only read.")
+    pw = app._field(shell.body, "Its master password", show="•")
     err = error_label(shell.body, shell.text_width)
 
     def unlock():
         try:
-            data = decrypt(pw.get(), blob)
-        except Exception:
-            err.configure(text="Wrong password or not a valid vault file.")
+            data = vault.read_vault_file(path, pw.get())
+        except OSError as e:
+            err.configure(text=f"Could not read the file: {e}"); return
+        except ValueError:
+            err.configure(text="Wrong password, or not a PassMan vault file.")
             return
-        result = importers.accounts_from_vault(data)
+        import copy
+        trial = copy.deepcopy(app.vault)
+        added, skipped = vault.import_entries(trial, data)
         top.destroy()
-        if not result.rows:
-            app.toast("That vault file has no accounts", "warn")
+        if not added:
+            app.toast("Everything in that vault is already here", "warn")
             return
-        _finish_import(app, result, path)
+        msg = (f"Import {added} entr{'y' if added == 1 else 'ies'} from "
+               f"“{label}”, with their history and archive state?")
+        if skipped:
+            msg += (f"\n\n{skipped} already in this account will be "
+                    "skipped.")
+        msg += ("\n\nThe 2.x vault is not changed, and its sync settings "
+                "stay with it.")
+        if not app._confirm("Import a 2.x vault", msg, danger=False):
+            return
+        app.vault = trial
+        if app._save():
+            app.refresh_account_list()
+            app.toast(f"Imported {added} entr{'y' if added == 1 else 'ies'}")
 
     app._ghost_button(shell.buttons, "Cancel", top.destroy,
                       width=110).pack(side="left")
-    app._accent_button(shell.buttons, "Unlock & import", unlock,
-                       width=170).pack(side="right")
+    app._accent_button(shell.buttons, "Import", unlock,
+                       width=150).pack(side="right")
     pw.bind("<Return>", lambda e: unlock())
-    pw.focus()
+    top.after(200, pw.focus)
 
 
 def _finish_import(app, parsed, path):
@@ -410,7 +662,7 @@ def settings_dialog(app):
     # metrics), and growing the window to fit pushed Close off the screen.
     top = app._modal("Settings", 540, 660)
     shell = dialog_shell(top, "Settings",
-                         f"For the vault “{app.current_user}” on this PC.",
+                         f"For the account “{app.current_user}” on this PC.",
                          scroll=True)
     wrap = shell.body
     hint = shell.text_width - 210
@@ -419,9 +671,15 @@ def settings_dialog(app):
     sec = section(wrap, "Security", first=True)
     app._ghost_button(
         setting_row(sec, "Master password",
-                    "Re-encrypts your vault with a new one.", hint, first=True),
+                    "Your Secret Key and recovery phrase stay the same.",
+                    hint, first=True),
         "Change…", lambda: _change_master_dialog(app, top),
         width=150).pack()
+    app._ghost_button(
+        setting_row(sec, "Emergency Kit",
+                    "Your Secret Key again — needed to open this account on "
+                    "another PC.", hint),
+        "Save kit…", lambda: _save_kit_again(app), width=150).pack()
 
     def label_for(m):
         return "Never" if m == 0 else f"{m} minute{'s' if m != 1 else ''}"
@@ -442,39 +700,15 @@ def settings_dialog(app):
     lock_menu.set(label_for(appconfig.autolock_minutes()))
 
     # ---- sync ----
+    # PassMan 3 accounts sync from phase 2 (server accounts) on.
     syn = section(wrap, "Sync")
-    configured = sync_client.is_configured(app.vault)
-    app._ghost_button(
-        setting_row(syn, "Syncing" if configured else "Not set up",
-                    (f"With {sync_client.get_settings(app.vault)['url']}"
-                     if configured else
-                     "Keep this vault in step with another PC through your "
-                     "own server. It is encrypted before it is sent."),
-                    hint, first=True),
-        "Sync settings" if configured else "Set up sync",
-        lambda: (top.destroy(), app.sync_settings_dialog()),
-        width=150).pack()
-
-    if configured:
-        def set_on_unlock():
-            on = on_unlock.get() == 1
-            sync_client.set_sync_on_unlock(app.vault, on)
-            if app._save():
-                app.toast("This vault now syncs each time you unlock it" if on
-                          else "Sync on unlock is off — press Sync yourself")
-
-        on_unlock = ctk.CTkSwitch(
-            setting_row(syn, "Sync when I unlock",
-                        "Off: nothing is sent until you press Sync. On: "
-                        "PassMan syncs right after you unlock; a conflict "
-                        "still waits for your choice.", hint),
-            text="", width=46, switch_width=42, switch_height=22,
-            progress_color=GREEN, button_color=TEXT,
-            button_hover_color=TEXT, fg_color=BORDER,
-            command=set_on_unlock)
-        on_unlock.pack()
-        if sync_client.sync_on_unlock(app.vault):
-            on_unlock.select()
+    # The control slot gets a label: an empty CTkFrame is 200 px tall.
+    ctk.CTkLabel(setting_row(syn, "Not in this test version",
+                             "Accounts sync from the next 3.0 test version "
+                             "on. Your 2.x vaults keep syncing in PassMan "
+                             "2.x.", hint, first=True),
+                 text="Next version", font=F(12, "bold"),
+                 text_color=MUTED).pack()
 
     # ---- archive ----
     arc = section(wrap, "Archive")
@@ -517,10 +751,10 @@ def settings_dialog(app):
     # ---- backup & export ----
     exp = section(wrap, "Backup & export")
     app._ghost_button(
-        setting_row(exp, "Encrypted backup",
-                    "Stays protected by your master password, so it is safe "
-                    "on a USB stick or in cloud storage.", hint, first=True),
-        "Save backup…", lambda: _backup_encrypted(app), width=150).pack()
+        setting_row(exp, "Backup",
+                    "Copy this account's folder. The copy opens only with "
+                    "your master password and Secret Key.", hint, first=True),
+        "Open folder", lambda: _open_account_folder(app), width=150).pack()
     app._ghost_button(
         setting_row(exp, "Plain export",
                     "Readable by anyone who opens the file.", hint),
@@ -530,9 +764,10 @@ def settings_dialog(app):
     # ---- danger zone ----
     danger = section(wrap, "Danger zone", danger=True)
     danger_button(
-        setting_row(danger, "Delete this user",
-                    f"Permanently deletes the vault for "
-                    f"“{app.current_user}” on this PC.", hint, first=True),
+        setting_row(danger, "Delete this account",
+                    f"Permanently deletes “{app.current_user}” and its vault "
+                    "on this PC. 2.x vaults are not touched.", hint,
+                    first=True),
         "Delete…", lambda: _delete_user_flow(app, top), width=150).pack()
     ctk.CTkFrame(wrap, height=8, fg_color="transparent").pack()
 
@@ -543,23 +778,22 @@ def settings_dialog(app):
     top.bind("<Escape>", lambda e: top.destroy())
 
 
-def _backup_encrypted(app):
-    path = filedialog.asksaveasfilename(
-        parent=app.root, title="Save encrypted backup",
-        defaultextension=".vault.enc",
-        initialfile=f"{app.current_user}-backup.vault.enc",
-        filetypes=[("Encrypted vault", "*.enc"), ("All files", "*.*")])
-    if not path:
-        return
+def _save_kit_again(app):
+    if ask_master_password(app, "Emergency Kit",
+                           "Enter your master password to save your Secret "
+                           "Key again.", action="Continue"):
+        _save_kit_file(app, app.current_user, app.account.secret_key_text)
+
+
+def _open_account_folder(app):
+    folder = accounts.account_dir(app.current_user)
     try:
-        # Save first so the backup includes anything not yet written.
-        if not app._save():
-            return
-        export_encrypted(app.current_user, path)
-    except Exception as e:
-        app.toast(f"Backup failed: {e}", "error")
-        return
-    app.toast("Encrypted backup saved")
+        if sys.platform == "win32":
+            os.startfile(folder)                # Explorer
+        else:
+            subprocess.Popen(["xdg-open", folder])  # the desktop's file manager
+    except OSError as e:
+        app.toast(f"The folder is {folder} ({e})", "warn")
 
 
 def _export_plaintext(app):
@@ -589,10 +823,10 @@ def _export_plaintext(app):
 
 
 def _change_master_dialog(app, parent_top):
-    top = app._modal("Change master password", 460, 560)
+    top = app._modal("Change master password", 460, 520)
     shell = dialog_shell(top, "Change master password",
-                         "The vault is re-encrypted immediately. The new "
-                         "password cannot be recovered if forgotten.")
+                         "Takes effect at once. Your Secret Key and recovery "
+                         "phrase stay the same.")
     wrap = shell.body
 
     cur_entry = app._field(wrap, "Current master password", show="•")
@@ -600,19 +834,6 @@ def _change_master_dialog(app, parent_top):
     bar, label, update_strength = app._strength_widget(wrap)
     confirm_entry = app._field(wrap, "Confirm new password", show="•")
     new_entry.bind("<KeyRelease>", lambda e: update_strength(new_entry.get()))
-
-    syncing = sync_client.is_configured(app.vault)
-    drop = None
-    if syncing:
-        note(wrap, "This vault syncs. Your server is updated straight away, "
-             "and your other PCs ask for the new password on their next "
-             "sync.", shell.text_width, pady=(14, 0))
-        # Checked by default: a master password is usually changed because
-        # the old one may be exposed, and these copies still open with it.
-        drop = check(wrap, "Also delete the older copies on the server — "
-                     "they still open with the old password",
-                     shell.text_width, checked=True)
-
     err = error_label(wrap, shell.text_width)
 
     def change():
@@ -625,38 +846,18 @@ def _change_master_dialog(app, parent_top):
             err.configure(text="New passwords do not match."); return
         if new == app.master_password:
             err.configure(text="That is already your master password."); return
-        old = app.master_password
-
-        # The generation is stored inside the vault, so it is bumped before
-        # the save that writes it. Other PCs compare it with the server's to
-        # tell "the server is ahead" from "the server is behind".
-        generation = sync_client.key_generation(app.vault)
-        if syncing:
-            sync_client.note_password_change(app.vault)
+        if len(new) < 8:
+            err.configure(text="Use at least 8 characters."); return
         try:
-            # Re-encrypts the vault, its .bak and the sync base together.
-            # The base matters: dropping it would turn the next sync into a
-            # merge with no common ancestor and a wall of needless conflicts.
-            change_master_password(app.vault, app.current_user, old, new)
+            # The keyset is resealed; the vault file is not touched.
+            app.account.change_password(new)
         except Exception:
-            if syncing:
-                sync_client.set_key_generation(app.vault, generation)
-            err.configure(text="Could not save the vault. Password unchanged.")
+            err.configure(text="Could not save. Password unchanged.")
             return
         app.master_password = new
         top.destroy()
         parent_top.destroy()
-
-        if not syncing:
-            return app.toast("Master password changed")
-        app.toast("Master password changed — updating the server…")
-        # The old password is handed over rather than asked for again: it is
-        # what the server's copy is still under.
-        app.sync_now(
-            server_password=old, drop_history=bool(drop.get()),
-            offline_hint="Master password changed. The server could not be "
-                         "reached — the next Sync will ask for your previous "
-                         "password once to update it.")
+        app.toast("Master password changed")
 
     app._ghost_button(shell.buttons, "Cancel", top.destroy,
                       width=110).pack(side="left")
@@ -699,10 +900,11 @@ def ask_master_password(app, title, subtitle, action="Continue"):
 
 
 def _delete_user_flow(app, parent_top):
-    top = app._modal("Delete user", 440, 300)
+    top = app._modal("Delete account", 440, 300)
     shell = dialog_shell(top, f"Delete “{app.current_user}”",
                          "Re-enter your master password to confirm. This "
-                         "deletes the vault file permanently.", danger=True)
+                         "deletes the account and its vault on this PC "
+                         "permanently.", danger=True)
     pw = app._field(shell.body, "Master password", show="•")
     err = error_label(shell.body, shell.text_width)
 
@@ -710,13 +912,14 @@ def _delete_user_flow(app, parent_top):
         if not password_matches(pw.get(), app.master_password):
             err.configure(text="Incorrect master password."); return
         try:
-            delete_user(app.current_user, app.master_password)
+            accounts.delete_account(app.current_user)
         except Exception as e:
             err.configure(text=str(e)); return
         top.destroy(); parent_top.destroy()
         app.vault = app.master_password = app.current_user = None
+        app.account = None
         app.show_login_screen()
-        app.toast("User deleted")
+        app.toast("Account deleted")
 
     app._ghost_button(shell.buttons, "Cancel", top.destroy,
                       width=110).pack(side="left")
