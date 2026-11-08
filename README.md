@@ -593,8 +593,8 @@ License v3.0 only** (GPL-3.0-only) — see [LICENSE](LICENSE). You may use,
 study, change and share it; if you distribute a changed version, it must stay
 under the same licence, with its source.
 
-The PassMan sync server is a separate product with its own licence; it is not
-part of this repository and not covered by the GPL here.
+The other PassMan repositories (the Windows and Linux clients and sync servers)
+are free software under the same licence.
 
 The 12-word recovery phrase uses the BIP39 English word list from
 [bitcoin/bips](https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt).

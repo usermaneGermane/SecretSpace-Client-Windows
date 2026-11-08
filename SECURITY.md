@@ -23,5 +23,5 @@ Please give a reasonable time for a fix before you publish anything.
 
 The client in this repository: vault encryption, the master password,
 Secret Key and recovery phrase handling, the clipboard, the installer and the
-sync client. The sync server is a separate product; report issues with it the
-same way, here.
+sync client. Server issues go to the PassMan-Server-Windows or
+PassMan-Server-Linux repository, the same way.
