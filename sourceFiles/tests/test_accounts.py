@@ -361,6 +361,27 @@ def test_emergency_kit_has_the_key_but_not_the_phrase():
     assert PW not in kit
 
 
+def test_write_emergency_kit(tmp_path):
+    new, acc = make()
+    path = tmp_path / "kit.txt"
+    path.write_text("old")
+    accounts.write_emergency_kit(str(path), "alice", new.secret_key_text)
+    assert new.secret_key_text in path.read_text(encoding="utf-8")
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Unix permissions")
+def test_account_folders_are_private():
+    new, acc = make()
+    for d in (accounts.accounts_dir(), accounts.account_dir("alice"),
+              os.path.dirname(acc.vault_path)):
+        assert os.stat(d).st_mode & 0o777 == 0o700, d
+    for name in ("account.json", "keyset.pmk", "recovery.pmk"):
+        path = os.path.join(accounts.account_dir("alice"), name)
+        assert os.stat(path).st_mode & 0o777 == 0o600, name
+
+
 # ---------------------------------------------------------------------------
 # Importing a 2.x vault
 # ---------------------------------------------------------------------------

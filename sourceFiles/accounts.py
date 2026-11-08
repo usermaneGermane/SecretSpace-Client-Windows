@@ -238,7 +238,10 @@ class NewAccount:
             "server": None,
             "fingerprints_seen": {},
         }
-        os.makedirs(folder)
+        # This user's only, as the 2.x vault folder is on Linux: the other
+        # users of the machine cannot even list whose accounts are here.
+        os.makedirs(accounts_dir(), mode=0o700, exist_ok=True)
+        os.mkdir(folder, 0o700)
         try:
             _write_text(os.path.join(folder, KEYSET_FILE), made["sealed_keyset"])
             _write_text(os.path.join(folder, RECOVERY_FILE),
@@ -318,6 +321,17 @@ def delete_account(username: str) -> None:
 # ---------------------------------------------------------------------------
 # Emergency Kit
 # ---------------------------------------------------------------------------
+def write_emergency_kit(path: str, username: str, secret_key_text: str) -> None:
+    """Save the kit readable by this user only: it holds the Secret Key."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.chmod(path, 0o600)             # an existing file keeps its mode
+    except OSError:
+        pass
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(emergency_kit_text(username, secret_key_text))
+
+
 def emergency_kit_text(username: str, secret_key_text: str, created: str = "") -> str:
     """The Emergency Kit as a text file (Save Emergency Kit…)."""
     return "\n".join([

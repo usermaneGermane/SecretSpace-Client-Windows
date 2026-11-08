@@ -118,8 +118,7 @@ def _save_kit_file(app, username, secret_key_text):
     if not path:
         return False
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(accounts.emergency_kit_text(username, secret_key_text))
+        accounts.write_emergency_kit(path, username, secret_key_text)
     except OSError as e:
         app.toast(f"Could not save the kit: {e}", "error")
         return False
