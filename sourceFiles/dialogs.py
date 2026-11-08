@@ -11,6 +11,8 @@ body, and the buttons in a footer bar.
 """
 
 import os
+import subprocess
+import sys
 
 import customtkinter as ctk
 from tkinter import filedialog
@@ -268,7 +270,7 @@ def ask_secret_key(app, username):
     top = app._modal("Secret Key", 480, 360)
     shell = dialog_shell(top, "Enter your Secret Key",
                          f"This PC does not hold the Secret Key of "
-                         f"“{username}” — it is new here, or Windows can no "
+                         f"“{username}” — it is new here, or it can no "
                          "longer read the copy it kept. It is on your "
                          "Emergency Kit and starts with A3-.")
     box = app._field(shell.body, "Secret Key", placeholder="A3-XXXXX-XXXXX-…")
@@ -787,8 +789,11 @@ def _save_kit_again(app):
 def _open_account_folder(app):
     folder = accounts.account_dir(app.current_user)
     try:
-        os.startfile(folder)                    # Windows Explorer
-    except (AttributeError, OSError) as e:
+        if sys.platform == "win32":
+            os.startfile(folder)                # Explorer
+        else:
+            subprocess.Popen(["xdg-open", folder])  # the desktop's file manager
+    except OSError as e:
         app.toast(f"The folder is {folder} ({e})", "warn")
 
 
