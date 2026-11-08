@@ -352,8 +352,12 @@ def test_emergency_kit_has_the_key_but_not_the_phrase():
     new, acc = make()
     kit = accounts.emergency_kit_text("alice", new.secret_key_text)
     assert new.secret_key_text in kit and "alice" in kit
-    for word in set(new.recovery_phrase.split()):
-        assert f" {word} " not in f" {kit} "
+    # Not word by word: the kit is plain English, and the BIP39 list has
+    # "account", "page", "file"... -- no two phrase words in a row, though.
+    text = " ".join(kit.lower().split())
+    words = new.recovery_phrase.split()
+    for a, b in zip(words, words[1:]):
+        assert f"{a} {b}" not in text
     assert PW not in kit
 
 
