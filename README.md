@@ -1,7 +1,7 @@
 # PassMan for Windows
 
 A local desktop password manager for Windows. Your vault is a single
-AES-256-GCM encrypted file. There is no account and no service behind it: it
+AES-256-GCM encrypted file. There is no online account and no service behind it: it
 works entirely offline, and if you want two PCs in step you run the sync
 server yourself, on your own hardware.
 
@@ -16,7 +16,7 @@ PassMan lives in four repositories:
 
 ![PassMan](sourceFiles/PassMan-logo.png)
 
-## PassMan 3 — a test version, for the lab only
+## PassMan 3 — a test version, not for real passwords yet
 
 `main` is now **3.0.0-alpha.1**, the first step of PassMan 3. **For your real
 passwords keep using [2.11.0](https://github.com/usermaneGermane/PassMan-Client-Windows/releases/tag/v2.11.0)**,
@@ -47,13 +47,16 @@ Not in this test version yet: **sync** (the next one adds server accounts),
 recovering an account with the 12-word phrase (the phrase is made and
 checked now; the screen that uses it comes later), and sharing a vault with
 other people. PassMan for Linux has the same test version, 1.0.0-alpha.1.
-The plan is in the 3.0 design document.
+Coming next, in this order: sync with accounts on the server, several
+vaults per account, sharing a vault with family or colleagues, and
+recovering an account with the 12-word phrase.
 
 ## Running it
 
 The repository does not contain the app itself. Download
-`PassMan-Client-Installer.exe` from the
-[Releases](https://github.com/usermaneGermane/PassMan-Client-Windows/releases) page, or build it
+`PassMan-Client-Installer.exe` from the release marked **Latest** on the
+[Releases](https://github.com/usermaneGermane/PassMan-Client-Windows/releases) page (a
+*Pre-release* is a test version and has the same file name), or build it
 yourself with the [PassMan Builder](#building-it-yourself-windows). The
 installer is all you need: it brings Python and every library with it, so
 installing needs no source code and no Python.
