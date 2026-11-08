@@ -169,6 +169,29 @@ def is_configured(vault_data) -> bool:
     return bool(settings.get("url") and settings.get("token"))
 
 
+#: The switch in Settings -> Sync. Off unless the user turns it on (owner,
+#: 2026-11-06): pressing Sync is deliberate, and a conflict dialog nobody
+#: asked for is worse than a button.
+ON_UNLOCK_KEY = "on_unlock"
+
+
+def sync_on_unlock(vault_data) -> bool:
+    """Whether this vault syncs by itself right after it is unlocked."""
+    return (is_configured(vault_data)
+            and get_settings(vault_data).get(ON_UNLOCK_KEY) is True)
+
+
+def set_sync_on_unlock(vault_data: dict, on: bool) -> None:
+    """
+    Kept with the other sync settings, so it is per vault and per PC: a
+    merge keeps this PC's own settings (``sync.merged_vault``), and a vault
+    restored onto a new PC starts with it off.
+    """
+    settings = get_settings(vault_data)
+    settings[ON_UNLOCK_KEY] = bool(on)
+    vault_data[SETTINGS_KEY] = settings
+
+
 # ==============================
 # Transport
 # ==============================

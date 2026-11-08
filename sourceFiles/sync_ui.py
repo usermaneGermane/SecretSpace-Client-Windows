@@ -63,7 +63,26 @@ def run_sync(app, server_password=None, drop_history=False, offline_hint=""):
     app.toast("Syncing…")
     _sync_step(app, {"retry_allowed": True, "server_password": server_password,
                      "drop_history": drop_history, "from_prompt": False,
-                     "offline_hint": offline_hint})
+                     "offline_hint": offline_hint,
+                     "session": getattr(app, "_session", 0)})
+
+
+def _still_open(app, attempt) -> bool:
+    """
+    Whether the vault this sync started on is still the one open.
+
+    The network work takes seconds, and the vault can be locked (by hand or
+    after inactivity) in the meantime -- most likely with sync on unlock,
+    which starts one the moment the vault opens. A late result must then do
+    nothing: putting the merged vault back into ``app.vault`` would hold it in
+    memory behind the login screen, or hand it to another vault unlocked
+    since. The merge itself is already saved and pushed by then, so the next
+    unlock reads it from disk.
+    """
+    if app.vault is not None and getattr(app, "_session", 0) == attempt["session"]:
+        return True
+    app._syncing = False
+    return False
 
 
 def _sync_step(app, attempt):
@@ -81,6 +100,8 @@ def _sync_step(app, attempt):
         return session, session.prepare(app.vault, attempt["server_password"])
 
     def done(payload):
+        if not _still_open(app, attempt):
+            return
         session, result = payload
         if not session.has_work():
             return _finish(app, "Already up to date")
@@ -102,6 +123,8 @@ def _commit(app, session, result, choices, attempt):
         return session.commit(app.vault, choices, attempt["drop_history"])
 
     def done(merged):
+        if not _still_open(app, attempt):
+            return
         app.vault = merged
         summary = f"Synced — {result.summary()}"
         if session.password_changed:
@@ -136,6 +159,8 @@ def _sync_failed(app, error, attempt):
     not yet the other. Ask for the server's password and go again; the
     session works out from there which way to catch up.
     """
+    if not _still_open(app, attempt):
+        return
     if isinstance(error, sync_client.Conflict409) and attempt["retry_allowed"]:
         app.toast("The server moved on — merging again")
         return _sync_step(app, dict(attempt, retry_allowed=False))
@@ -734,6 +759,16 @@ def sync_settings_dialog(app):
 # ==========================================================================
 # First run on a second PC
 # ==========================================================================
+def _settings_for_restored(fetched, url, token):
+    """
+    The sync settings a vault restored onto this PC starts with: the address
+    and token just typed, and sync on unlock off -- the vault carries the
+    other PC's choice, and a new PC decides for itself.
+    """
+    sync_client.set_settings(fetched, url, token)
+    sync_client.set_sync_on_unlock(fetched, False)
+
+
 def restore_from_server_dialog(app):
     """
     Pull a vault down onto a PC that has none.
@@ -791,7 +826,7 @@ def restore_from_server_dialog(app):
             if fetched is None:
                 raise sync_client.SyncError(
                     f"The server holds no vault for \u201c{username}\u201d.")
-            sync_client.set_settings(fetched, url, token)
+            _settings_for_restored(fetched, url, token)
             vault.create_new_user(username, password)
             vault.save_vault(password, fetched, username)
             # Both sides agree right now, so this download is the base for

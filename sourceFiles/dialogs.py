@@ -455,6 +455,27 @@ def settings_dialog(app):
         lambda: (top.destroy(), app.sync_settings_dialog()),
         width=150).pack()
 
+    if configured:
+        def set_on_unlock():
+            on = on_unlock.get() == 1
+            sync_client.set_sync_on_unlock(app.vault, on)
+            if app._save():
+                app.toast("This vault now syncs each time you unlock it" if on
+                          else "Sync on unlock is off — press Sync yourself")
+
+        on_unlock = ctk.CTkSwitch(
+            setting_row(syn, "Sync when I unlock",
+                        "Off: nothing is sent until you press Sync. On: "
+                        "PassMan syncs right after you unlock; a conflict "
+                        "still waits for your choice.", hint),
+            text="", width=46, switch_width=42, switch_height=22,
+            progress_color=GREEN, button_color=TEXT,
+            button_hover_color=TEXT, fg_color=BORDER,
+            command=set_on_unlock)
+        on_unlock.pack()
+        if sync_client.sync_on_unlock(app.vault):
+            on_unlock.select()
+
     # ---- archive ----
     arc = section(wrap, "Archive")
 

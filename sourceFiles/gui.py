@@ -22,6 +22,7 @@ import appconfig
 import dialogs
 import history_ui
 import lockout
+import sync_client
 import sync_ui
 import totp
 from theme import (F, BG, HEADER_BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
@@ -114,6 +115,9 @@ class PasswordManagerGUI:
         self._last_activity = time.monotonic()
         self._autolock_seconds = appconfig.DEFAULT_AUTOLOCK_MINUTES * 60
         self._syncing = False
+        # Counts unlocks and locks, so a sync that finishes after its
+        # vault was locked can tell (sync_ui._still_open).
+        self._session = 0
         # The entry shown in the details pane, by id, so it survives the list
         # being rebuilt after an edit, a revert or a sync.
         self._selected_id = None
@@ -587,6 +591,7 @@ class PasswordManagerGUI:
             return
 
         lockout.reset(username)
+        self._session += 1
         self.vault = loaded
         self.master_password = master_password
         self.current_user = username
@@ -606,6 +611,26 @@ class PasswordManagerGUI:
             self.toast(f"Deleted {purged} archived "
                        f"entr{'y' if purged == 1 else 'ies'} older than "
                        f"{archive_purge_days(self.vault)} days", "warn")
+        self._sync_after_unlock()
+
+    def _sync_after_unlock(self):
+        """
+        Settings -> Sync -> "Sync when I unlock", off by default. Started a
+        moment after the main window is up, so the window draws first; a
+        server that cannot be reached is a warning, not an error -- the vault
+        is open and usable either way.
+        """
+        if not sync_client.sync_on_unlock(self.vault):
+            return
+        session = self._session
+
+        def go():
+            if self._session == session and self.vault is not None:
+                self.sync_now(offline_hint="Not synced — the server can't be "
+                                           "reached. Press Sync once you "
+                                           "are connected.")
+
+        self.root.after(400, go)
 
 
     # ==================================================================
@@ -1220,7 +1245,13 @@ class PasswordManagerGUI:
     def lock_vault(self, auto=False):
         self._cancel_idle_timer()
         self._cancel_totp()
-        if self.master_password and self.current_user:
+        self._session += 1
+        # Every change is saved as it is made, so this save is only a safety
+        # net -- and while a sync runs it would be a hazard: it could land
+        # after the sync wrote the merged vault and put the pre-merge copy
+        # back on disk, which the next sync would read as edits undoing the
+        # other PC's changes.
+        if self.master_password and self.current_user and not self._syncing:
             self._save()
         # A copied password outlives the lock: the usual auto-clear timer
         # keeps running, so it can still be pasted until that fires.

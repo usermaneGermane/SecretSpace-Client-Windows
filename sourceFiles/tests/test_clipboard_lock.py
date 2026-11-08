@@ -32,6 +32,8 @@ class FakeApp:
         self._clip_job = "clear-job"
         self.cleared = []
         self.totp_hidden = False
+        self._session = 0
+        self._syncing = False
 
     def _cancel_idle_timer(self):
         pass
