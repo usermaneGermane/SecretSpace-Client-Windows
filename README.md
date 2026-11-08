@@ -45,8 +45,9 @@ What the test version has:
 
 Not in this test version yet: **sync** (the next one adds server accounts),
 recovering an account with the 12-word phrase (the phrase is made and
-checked now; the screen that uses it comes later), sharing a vault with
-other people, and the Linux app. The plan is in the 3.0 design document.
+checked now; the screen that uses it comes later), and sharing a vault with
+other people. PassMan for Linux has the same test version, 1.0.0-alpha.1.
+The plan is in the 3.0 design document.
 
 ## Running it
 
