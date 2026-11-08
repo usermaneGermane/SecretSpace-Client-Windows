@@ -17,6 +17,11 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+; Four plain numbers: a test version's AppVersion (3.0.0-alpha.1) is not
+; one, so the builder passes 3.0.0.1 here as well.
+#ifndef FileVersion
+  #define FileVersion "0.0.0.0"
+#endif
 
 [Setup]
 ; Never change AppId: it is how an upgrade finds the copy it replaces.
@@ -24,7 +29,7 @@ AppId={{2142690B-93AA-41F8-9056-BE62EE0426B4}
 AppName=PassMan
 AppVersion={#AppVersion}
 AppVerName=PassMan {#AppVersion}
-VersionInfoVersion={#AppVersion}
+VersionInfoVersion={#FileVersion}
 DefaultDirName={autopf}\PassMan
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest

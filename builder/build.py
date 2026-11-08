@@ -106,6 +106,19 @@ def app_version(project: str) -> str:
     return match.group(1)
 
 
+def file_version(version: str) -> str:
+    """
+    The four plain numbers Windows wants (Inno's VersionInfoVersion):
+    '3.0.0-alpha.1' -> '3.0.0.1', '2.11.0' -> '2.11.0.0'. The same rule as
+    version.file_version, which the exe's own version resource uses.
+    """
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-(?:alpha|beta|rc)\.(\d+))?",
+                     version)
+    if not m:
+        raise ValueError(f"Not a PassMan version: {version!r}")
+    return ".".join(g or "0" for g in m.groups())
+
+
 def iscc_candidates() -> list:
     """Where Inno Setup 6 installs its compiler, per-user first."""
     out = []
@@ -292,6 +305,7 @@ def build_steps(project: str, py: "Python", iscc: str, version: str) -> list:
                       "PassMan.exe")),
         ("Packing PassMan-Client-Installer.exe",
          [iscc, "/Q", f"/DAppVersion={version}",
+          f"/DFileVersion={file_version(version)}",
           os.path.join(project, "installer", "PassMan.iss")],
          os.path.join(project, "PassMan-Client-Installer.exe")),
     ]

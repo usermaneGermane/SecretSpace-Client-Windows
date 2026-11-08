@@ -1000,3 +1000,44 @@ def auto_purge_archive(vault: dict, now=None) -> int:
     if not days:
         return 0
     return purge_archived_before(vault, purge_cutoff(days, now))
+
+
+# ==============================
+# Moving from 2.x into a 3.0 account
+# ==============================
+def read_vault_file(path: str, master_password: str) -> dict:
+    """
+    A 2.x vault file anywhere on disk (a backup, another PC's copy), read
+    only. ValueError("Decryption failed ...") for a wrong password.
+    """
+    with open(path, "rb") as f:
+        return validate_vault(decrypt(master_password, f.read()))
+
+
+def import_entries(target: dict, source: dict) -> tuple:
+    """
+    Copy every entry of a 2.x vault into ``target`` whole: its id, history,
+    archive state and timestamps, which the CSV-style importers drop.
+    Returns (added, skipped). An entry is skipped when ``target`` already
+    has its id (imported before) or the same site, username and password.
+
+    Only entries are taken. The 2.x vault's settings -- its sync server and
+    token above all -- belong to 2.x and stay behind. ``source`` is not
+    changed.
+    """
+    import copy
+
+    validate_vault(target)
+    have_ids = {a["id"] for a in target["accounts"]}
+    have = {(a["site"], a["username"], a["password"]) for a in target["accounts"]}
+    added = skipped = 0
+    for entry in validate_vault(copy.deepcopy(source))["accounts"]:
+        key = (entry["site"], entry["username"], entry["password"])
+        if entry["id"] in have_ids or key in have:
+            skipped += 1
+            continue
+        target["accounts"].append(entry)
+        have_ids.add(entry["id"])
+        have.add(key)
+        added += 1
+    return added, skipped
