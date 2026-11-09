@@ -1,9 +1,9 @@
 """
-PassMan Builder: the window around build.py.
+SecretSpace Builder: the window around build.py.
 
 It shows every prerequisite as a checklist, offers to install what is
 missing (asking before each install), then builds
-PassMan-Client-Installer.exe with a live log. All the work happens in build.py, on a background thread, so the
+SecretSpace-Client-Installer.exe with a live log. All the work happens in build.py, on a background thread, so the
 window never freezes during a long build.
 """
 
@@ -13,7 +13,7 @@ import sys
 import threading
 from tkinter import filedialog, messagebox
 
-# Reuse PassMan's own look. When frozen, PyInstaller has bundled theme.py.
+# Reuse SecretSpace's own look. When frozen, PyInstaller has bundled theme.py.
 if not getattr(sys, "frozen", False):
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "sourceFiles"))
@@ -37,10 +37,10 @@ class BuilderApp:
         self.checks = []
         self.python = None
 
-        root.title("PassMan Builder")
+        root.title("SecretSpace Builder")
         root.geometry("760x640")
         root.minsize(640, 520)
-        for path in asset_candidates("PassMan-logo.ico"):
+        for path in asset_candidates("SecretSpace-logo.ico"):
             if os.path.exists(path):
                 try:
                     root.iconbitmap(path)
@@ -53,7 +53,7 @@ class BuilderApp:
 
         head = ctk.CTkFrame(root, fg_color=HEADER_BG, corner_radius=0)
         head.grid(row=0, column=0, sticky="ew")
-        ctk.CTkLabel(head, text="PassMan Builder", font=F(20, "bold"),
+        ctk.CTkLabel(head, text="SecretSpace Builder", font=F(20, "bold"),
                      text_color=GREEN).pack(anchor="w", padx=20, pady=(14, 0))
         self.where = ctk.CTkLabel(head, text="", font=F(12),
                                   text_color=MUTED, anchor="w")
@@ -236,7 +236,7 @@ class BuilderApp:
 
     def choose_folder(self):
         folder = filedialog.askdirectory(
-            parent=self.root, title="Choose the PassMan project folder",
+            parent=self.root, title="Choose the SecretSpace project folder",
             initialdir=self.project)
         if folder:
             self.project = os.path.normpath(folder)

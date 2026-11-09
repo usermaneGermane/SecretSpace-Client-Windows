@@ -1,5 +1,5 @@
 """
-PassMan - a modern desktop password manager.
+SecretSpace - a modern desktop password manager.
 
 Only the presentation layer lives here, and only the application shell: the
 login screen, the account list with its details pane and the session
@@ -143,7 +143,7 @@ class PasswordManagerGUI:
     # Branding (window icon + logo) - all optional / best effort
     # ------------------------------------------------------------------
     def _load_branding(self):
-        for p in asset_candidates("PassMan-logo.ico"):
+        for p in asset_candidates("SecretSpace-logo.ico"):
             if os.path.exists(p):
                 try:
                     self.root.iconbitmap(p)
@@ -153,7 +153,7 @@ class PasswordManagerGUI:
                     pass
 
         self.logo_image = self.logo_small = None
-        for p in asset_candidates("PassMan-logo.png"):
+        for p in asset_candidates("SecretSpace-logo.png"):
             if os.path.exists(p):
                 try:
                     from PIL import Image, ImageChops
@@ -454,7 +454,7 @@ class PasswordManagerGUI:
             self._login_tiles.grid_columnconfigure(c, weight=1, uniform="tile")
         if not users:
             ctk.CTkLabel(self._login_tiles,
-                         text="There is no PassMan 3 account on this PC yet. "
+                         text="There is no SecretSpace 3 account on this PC yet. "
                               "Create one, then import your 2.x vaults into "
                               "it.",
                          font=F(13), text_color=MUTED, wraplength=360).grid(
@@ -668,7 +668,7 @@ class PasswordManagerGUI:
         brand = ctk.CTkFrame(bar, fg_color="transparent")
         brand.grid(row=0, column=0, padx=(24, 14))
         self._logo(brand, small=True).pack(side="left")
-        ctk.CTkLabel(brand, text="PassMan", font=F(17, "bold"),
+        ctk.CTkLabel(brand, text="SecretSpace", font=F(17, "bold"),
                      text_color=TEXT).pack(side="left", padx=(10, 0))
 
         bg, ink, _ = tile_colors(self.current_user)
@@ -1155,7 +1155,7 @@ class PasswordManagerGUI:
             if not dialogs.ask_master_password(
                     self, "Show 2FA code",
                     f"Enter your master password to see the code for "
-                    f"“{_clip(acc['site'], 40)}”. PassMan asks every time.",
+                    f"“{_clip(acc['site'], 40)}”. SecretSpace asks every time.",
                     action="Show code"):
                 return
             if not shown.winfo_exists():

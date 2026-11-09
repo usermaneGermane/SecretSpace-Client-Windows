@@ -45,7 +45,7 @@ CHECK_WORDS = (3, 7, 11)
 
 def create_user_dialog(app):
     """
-    A new PassMan 3 account, in three steps: name and master password, the
+    A new SecretSpace 3 account, in three steps: name and master password, the
     Emergency Kit (Secret Key), the 12-word recovery phrase. Nothing is
     written until the last step, so closing a window half-way leaves no
     account behind.
@@ -113,7 +113,7 @@ def _save_kit_file(app, username, secret_key_text):
     path = filedialog.asksaveasfilename(
         parent=app.root, title="Save Emergency Kit",
         defaultextension=".txt",
-        initialfile=f"PassMan Emergency Kit - {username}.txt",
+        initialfile=f"SecretSpace Emergency Kit - {username}.txt",
         filetypes=[("Text file", "*.txt"), ("All files", "*.*")])
     if not path:
         return False
@@ -139,7 +139,7 @@ def _emergency_kit_dialog(app, new, password):
     shell = dialog_shell(top, "Your Emergency Kit",
                          "Step 2 of 3 · With your master password, this "
                          "Secret Key opens your account on another PC. "
-                         "PassMan keeps a copy on this PC only.")
+                         "SecretSpace keeps a copy on this PC only.")
     wrap = shell.body
 
     field_label(wrap, "Account")
@@ -201,7 +201,7 @@ def _phrase_dialog(app, new, password):
 
     note(wrap, "Anyone with these words can open everything in this account. "
          "Keep them like a passport: not in a file or a photo, and not with "
-         "the Emergency Kit. PassMan does not show them again.",
+         "the Emergency Kit. SecretSpace does not show them again.",
          shell.text_width, pady=(14, 0))
 
     def next_step():
@@ -344,7 +344,7 @@ def import_dialog(app):
 def _import_2x_file(app):
     path = filedialog.askopenfilename(
         parent=app.root, title="Import a PassMan 2.x vault",
-        filetypes=[("PassMan vault", "*.enc *.vault *.bak"),
+        filetypes=[("SecretSpace vault", "*.enc *.vault *.bak"),
                    ("All files", "*.*")])
     if path:
         _import_2x(app, path, os.path.basename(path))
@@ -387,7 +387,7 @@ def _import_2x(app, path, label):
         except OSError as e:
             err.configure(text=f"Could not read the file: {e}"); return
         except ValueError:
-            err.configure(text="Wrong password, or not a PassMan vault file.")
+            err.configure(text="Wrong password, or not a SecretSpace vault file.")
             return
         import copy
         trial = copy.deepcopy(app.vault)
@@ -452,7 +452,7 @@ def _finish_import(app, parsed, path):
         # Say so up front: silently losing data is how people get locked
         # out of their accounts after a migration.
         msg += ("\n\nThis file also contains " + ", ".join(parsed.dropped) +
-                ", which PassMan cannot store. Keep the original file "
+                ", which SecretSpace cannot store. Keep the original file "
                 "until you have checked you still have them.")
     msg += "\n\nAdd them to your vault?"
     if not app._confirm("Import accounts", msg, danger=False):
@@ -700,12 +700,12 @@ def settings_dialog(app):
     lock_menu.set(label_for(appconfig.autolock_minutes()))
 
     # ---- sync ----
-    # PassMan 3 accounts sync from phase 2 (server accounts) on.
+    # SecretSpace 3 accounts sync from phase 2 (server accounts) on.
     syn = section(wrap, "Sync")
     # The control slot gets a label: an empty CTkFrame is 200 px tall.
     ctk.CTkLabel(setting_row(syn, "Not in this test version",
                              "Accounts sync from the next 3.0 test version "
-                             "on. Your 2.x vaults keep syncing in PassMan "
+                             "on. Your 2.x vaults keep syncing in SecretSpace "
                              "2.x.", hint, first=True),
                  text="Next version", font=F(12, "bold"),
                  text_color=MUTED).pack()

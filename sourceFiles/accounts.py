@@ -1,5 +1,5 @@
 """
-PassMan 3.0 accounts on this device -- phase 1: local only, no server.
+SecretSpace 3.0 accounts on this device -- phase 1: local only, no server.
 
 An account replaces the 2.x "one vault file per user". It is a folder::
 
@@ -12,7 +12,7 @@ An account replaces the 2.x "one vault file per user". It is a folder::
         vaults/<id>.pmv3    the personal vault (+ .bak, the previous save)
 
 ``<home>`` is the folder that holds the 2.x ``vault`` folder (beside the app
-for a lab copy, %APPDATA%\\PassMan when installed). 2.x vault files are only
+for a lab copy, %APPDATA%\\SecretSpace when installed). 2.x vault files are only
 ever *read*, by the importer; nothing here writes to them.
 
 The cryptography is account_crypto; this module is files and lifecycle.
@@ -104,7 +104,7 @@ def _read_info(username: str) -> dict:
         raise ValueError(f"The account file of “{username}” is damaged.") from None
     if not isinstance(info, dict) or info.get("format") != ACCOUNT_FORMAT:
         raise ValueError(f"The account “{username}” was made by another "
-                         "PassMan version.")
+                         "SecretSpace version.")
     return info
 
 
@@ -335,7 +335,7 @@ def write_emergency_kit(path: str, username: str, secret_key_text: str) -> None:
 def emergency_kit_text(username: str, secret_key_text: str, created: str = "") -> str:
     """The Emergency Kit as a text file (Save Emergency Kit…)."""
     return "\n".join([
-        "PassMan Emergency Kit",
+        "SecretSpace Emergency Kit",
         "=====================",
         "",
         f"Account:      {username}",

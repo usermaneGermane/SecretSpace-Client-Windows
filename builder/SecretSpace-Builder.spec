@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 #
-# PassMan-Builder.exe: build.py + builder_gui.py frozen into one file that
-# checks the prerequisites and builds PassMan. Built with:
+# SecretSpace-Builder.exe: build.py + builder_gui.py frozen into one file that
+# checks the prerequisites and builds SecretSpace. Built with:
 #     py builder\build.py --builder
-# It borrows PassMan's theme and widgets from sourceFiles/ for its look.
+# It borrows SecretSpace's theme and widgets from sourceFiles/ for its look.
 import os
 import sys
 
@@ -14,8 +14,8 @@ SRC = os.path.join(os.path.dirname(HERE), 'sourceFiles')
 sys.path.insert(0, SRC)
 from build_version import version_info   # Properties > Details
 
-datas = [(os.path.join(SRC, 'PassMan-logo.png'), '.'),
-         (os.path.join(SRC, 'PassMan-logo.ico'), '.')]
+datas = [(os.path.join(SRC, 'SecretSpace-logo.png'), '.'),
+         (os.path.join(SRC, 'SecretSpace-logo.ico'), '.')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('customtkinter')
@@ -43,7 +43,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='PassMan-Builder',
+    name='SecretSpace-Builder',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -55,6 +55,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=[os.path.join(SRC, 'PassMan-logo.ico')],
-    version=version_info("PassMan Builder", "PassMan-Builder.exe"),
+    icon=[os.path.join(SRC, 'SecretSpace-logo.ico')],
+    version=version_info("SecretSpace Builder", "SecretSpace-Builder.exe"),
 )

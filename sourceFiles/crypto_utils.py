@@ -1,5 +1,5 @@
 """
-Vault encryption for PassMan.
+Vault encryption for SecretSpace.
 
 Container format (all vaults written by this version)::
 
@@ -99,7 +99,7 @@ def _decrypt_v2(master_password: str, raw: bytes) -> dict:
     kdf_id = header[len(MAGIC)]
     if kdf_id != KDF_PBKDF2_SHA256:
         raise ValueError(f"Unsupported key-derivation function id {kdf_id}. "
-                         "This vault needs a newer version of PassMan.")
+                         "This vault needs a newer version of SecretSpace.")
 
     iterations = int.from_bytes(header[len(MAGIC) + 1:], "big")
     if not 1 <= iterations <= MAX_ITERATIONS:

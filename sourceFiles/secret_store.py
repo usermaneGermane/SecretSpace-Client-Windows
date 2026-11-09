@@ -152,7 +152,7 @@ def unprotect(record, username: str, password: str) -> bytes:
         except Exception:
             raise CryptoError("Wrong master password or Secret Key.") from None
     else:
-        raise Unavailable("The stored Secret Key is in a form this PassMan "
+        raise Unavailable("The stored Secret Key is in a form this SecretSpace "
                           "does not know.")
     if len(raw) != account_crypto.SECRET_KEY_LEN:
         raise Unavailable("The stored Secret Key is damaged.")

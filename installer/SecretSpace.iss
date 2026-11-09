@@ -1,18 +1,19 @@
-; PassMan installer - compiled by the PassMan Builder (builder\build.py)
+; SecretSpace installer - compiled by the SecretSpace Builder (builder\build.py)
 ; with Inno Setup 6:
-;     ISCC.exe /DAppVersion=2.1.0 installer\PassMan.iss
+;     ISCC.exe /DAppVersion=2.1.0 installer\SecretSpace.iss
 ;
 ; Installs for the current user only (no admin prompt), by default into
-; %LOCALAPPDATA%\Programs\PassMan, with a Start Menu entry, an optional
+; %LOCALAPPDATA%\Programs\SecretSpace, with a Start Menu entry, an optional
 ; desktop shortcut and an uninstaller in Settings > Apps.
 ;
 ; The vaults are NOT in the program folder. The "installed" marker file makes
-; PassMan keep them in %APPDATA%\PassMan (see vault.get_home_dir), so an
-; upgrade or an uninstall never touches them.
+; SecretSpace keep them in %APPDATA%\SecretSpace (see vault.get_home_dir), so an
+; upgrade or an uninstall never touches them. A copy installed before the
+; rename (as PassMan) keeps %APPDATA%\PassMan: see DataHome below.
 ;
 ; Silent install, e.g. for testing:
-;     PassMan-Client-Installer.exe /VERYSILENT /DIR="C:\somewhere" /TASKS="desktopicon"
-;                       /MOVEVAULTS="E:\old\PassMan"
+;     SecretSpace-Client-Installer.exe /VERYSILENT /DIR="C:\somewhere" /TASKS="desktopicon"
+;                       /MOVEVAULTS="E:\old\SecretSpace"
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -26,11 +27,11 @@
 [Setup]
 ; Never change AppId: it is how an upgrade finds the copy it replaces.
 AppId={{2142690B-93AA-41F8-9056-BE62EE0426B4}
-AppName=PassMan
+AppName=SecretSpace
 AppVersion={#AppVersion}
-AppVerName=PassMan {#AppVersion}
+AppVerName=SecretSpace {#AppVersion}
 VersionInfoVersion={#FileVersion}
-DefaultDirName={autopf}\PassMan
+DefaultDirName={autopf}\SecretSpace
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ; Windows 10 and 11 only (11 reports itself as 10.0.22000+). Older Windows
@@ -39,14 +40,14 @@ MinVersion=10.0
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..
-OutputBaseFilename=PassMan-Client-Installer
-SetupIconFile=..\sourceFiles\PassMan-logo.ico
-UninstallDisplayIcon={app}\PassMan.exe
-UninstallDisplayName=PassMan
+OutputBaseFilename=SecretSpace-Client-Installer
+SetupIconFile=..\sourceFiles\SecretSpace-logo.ico
+UninstallDisplayIcon={app}\SecretSpace.exe
+UninstallDisplayName=SecretSpace
 WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
-; Close a running PassMan before replacing its files.
+; Close a running SecretSpace before replacing its files.
 CloseApplications=yes
 ; The vault move below writes to the user's own profile on purpose.
 UsedUserAreasWarning=no
@@ -57,26 +58,41 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 [InstallDelete]
 ; An upgrade must not leave the previous version's libraries behind.
 Type: filesandordirs; Name: "{app}\_internal"
+; Nor the program and shortcuts of the name before SecretSpace. An upgrade
+; keeps the folder it was installed in, even if that folder says PassMan.
+Type: files; Name: "{app}\PassMan.exe"
+Type: files; Name: "{autoprograms}\PassMan.lnk"
+Type: files; Name: "{autodesktop}\PassMan.lnk"
 
 [Files]
-Source: "..\build\installer\PassMan\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\installer\SecretSpace\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "installed"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\PassMan"; Filename: "{app}\PassMan.exe"
-Name: "{autodesktop}\PassMan"; Filename: "{app}\PassMan.exe"; Tasks: desktopicon
+Name: "{autoprograms}\SecretSpace"; Filename: "{app}\SecretSpace.exe"
+Name: "{autodesktop}\SecretSpace"; Filename: "{app}\SecretSpace.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\PassMan.exe"; Description: "Start PassMan now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\SecretSpace.exe"; Description: "Start SecretSpace now"; Flags: nowait postinstall skipifsilent
 
 [Code]
 var
   MovePage: TInputOptionWizardPage;
   FromPage: TInputDirWizardPage;
 
+{ Where the installed app keeps its data (vault.appdata_home makes the same
+  choice): SecretSpace, unless only the folder of the old name PassMan exists,
+  which an upgrade then keeps using. Nothing is moved or renamed. }
 function DataHome: String;
+var
+  NewHome, OldHome: String;
 begin
-  Result := ExpandConstant('{userappdata}\PassMan');
+  NewHome := ExpandConstant('{userappdata}\SecretSpace');
+  OldHome := ExpandConstant('{userappdata}\PassMan');
+  if (not DirExists(NewHome)) and DirExists(OldHome) then
+    Result := OldHome
+  else
+    Result := NewHome;
 end;
 
 function HasVaults(Dir: String): Boolean;
@@ -107,7 +123,7 @@ procedure InitializeWizard;
 begin
   MovePage := CreateInputOptionPage(wpSelectTasks,
     'Existing vaults', 'Have you used the portable PassMan.exe before?',
-    'This copy of PassMan keeps its vaults in your user profile:' + #13#10 +
+    'This copy of SecretSpace keeps its vaults in your user profile:' + #13#10 +
     '    ' + DataHome + #13#10 + #13#10 +
     'If you have vaults next to an earlier PassMan.exe, Setup can move ' +
     'them there now. They are moved, not copied, so you still have one ' +

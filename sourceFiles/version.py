@@ -12,7 +12,7 @@ has 0).
 
 import re
 
-__version__ = "3.0.0-alpha.1"
+__version__ = "3.0.0-alpha.2"
 
 #: The container a 3.0 account's vaults are written in (account_crypto).
 VAULT_FORMAT = "PMV3"
@@ -26,7 +26,7 @@ def file_version(text: str = __version__) -> tuple:
     """(3, 0, 0, 1) for '3.0.0-alpha.1', (3, 0, 0, 0) for '3.0.0'."""
     m = _VERSION.fullmatch(text)
     if not m:
-        raise ValueError(f"Not a PassMan version: {text!r}")
+        raise ValueError(f"Not a SecretSpace version: {text!r}")
     return tuple(int(g or 0) for g in m.groups())
 
 
@@ -36,5 +36,5 @@ def version_string() -> str:
 
 
 def long_version_string() -> str:
-    """e.g. 'PassMan v3.0.0 · vault format PMV3' — for the Settings footer."""
-    return f"PassMan {version_string()} · vault format {VAULT_FORMAT}"
+    """e.g. 'SecretSpace v3.0.0 · vault format PMV3' — for the Settings footer."""
+    return f"SecretSpace {version_string()} · vault format {VAULT_FORMAT}"

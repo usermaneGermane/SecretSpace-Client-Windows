@@ -1,6 +1,6 @@
 # Security policy
 
-PassMan keeps passwords, so security reports are welcome and taken seriously.
+SecretSpace keeps passwords, so security reports are welcome and taken seriously.
 
 ## Reporting a vulnerability
 
@@ -23,5 +23,5 @@ Please give a reasonable time for a fix before you publish anything.
 
 The client in this repository: vault encryption, the master password,
 Secret Key and recovery phrase handling, the clipboard, the installer and the
-sync client. Server issues go to the PassMan-Server-Windows or
-PassMan-Server-Linux repository, the same way.
+sync client. Server issues go to the SecretSpace-Server-Windows or
+SecretSpace-Server-Linux repository, the same way.

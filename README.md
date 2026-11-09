@@ -1,27 +1,37 @@
-# PassMan for Windows
+# SecretSpace for Windows
 
 A local desktop password manager for Windows. Your vault is a single
 AES-256-GCM encrypted file. There is no online account and no service behind it: it
 works entirely offline, and if you want two PCs in step you run the sync
 server yourself, on your own hardware.
 
-PassMan lives in four repositories:
+**Formerly PassMan.** The project was renamed to SecretSpace in November
+2026, because another password manager already uses the name PassMan.
+Releases up to 2.11.0 and 3.0.0-alpha.1 still carry the old name: their
+installer is `PassMan-Client-Installer.exe`, the program `PassMan.exe`, and
+the data folder `%APPDATA%\PassMan`. Upgrading from them is an ordinary
+upgrade: the installer replaces the PassMan program and shortcuts with
+SecretSpace's, and your vaults stay in `%APPDATA%\PassMan`, which
+SecretSpace keeps using (nothing is moved or renamed). The vault files are
+the same.
+
+SecretSpace lives in four repositories:
 
 | Repository | What it holds |
 |---|---|
-| **PassMan-Client-Windows** (this one) | the app for Windows, and its installer |
-| [PassMan-Client-Linux](https://github.com/usermaneGermane/PassMan-Client-Linux) | the app for Linux — from source or a .deb package |
-| [PassMan-Server-Windows](https://github.com/usermaneGermane/PassMan-Server-Windows) | the sync server for Windows, and its installer |
-| [PassMan-Server-Linux](https://github.com/usermaneGermane/PassMan-Server-Linux) | the sync server for Linux (systemd) |
+| **SecretSpace-Client-Windows** (this one) | the app for Windows, and its installer |
+| [SecretSpace-Client-Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux) | the app for Linux — from source or a .deb package |
+| [SecretSpace-Server-Windows](https://github.com/usermaneGermane/SecretSpace-Server-Windows) | the sync server for Windows, and its installer |
+| [SecretSpace-Server-Linux](https://github.com/usermaneGermane/SecretSpace-Server-Linux) | the sync server for Linux (systemd) |
 
-![PassMan](sourceFiles/PassMan-logo.png)
+![SecretSpace](sourceFiles/SecretSpace-logo.png)
 
-## PassMan 3 — a test version, not for real passwords yet
+## SecretSpace 3 — a test version, not for real passwords yet
 
-`main` is now **3.0.0-alpha.1**, the first step of PassMan 3. **For your real
-passwords keep using [2.11.0](https://github.com/usermaneGermane/PassMan-Client-Windows/releases/tag/v2.11.0)**,
+`main` is now **3.0.0-alpha.2**, a test step of SecretSpace 3. **For your real
+passwords keep using [2.11.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.11.0)**,
 which the rest of this README describes. Do not install the test version
-over it: it opens PassMan 3 accounts only, so your 2.x vaults would not
+over it: it opens SecretSpace 3 accounts only, so your 2.x vaults would not
 show up (they are not changed or deleted — 2.11.0 opens them again).
 
 What the test version has:
@@ -46,7 +56,7 @@ What the test version has:
 Not in this test version yet: **sync** (the next one adds server accounts),
 recovering an account with the 12-word phrase (the phrase is made and
 checked now; the screen that uses it comes later), and sharing a vault with
-other people. PassMan for Linux has the same test version, 1.0.0-alpha.1.
+other people. SecretSpace for Linux has the same test version, 1.0.0-alpha.1.
 Coming next, in this order: sync with accounts on the server, several
 vaults per account, sharing a vault with family or colleagues, and
 recovering an account with the 12-word phrase.
@@ -54,30 +64,31 @@ recovering an account with the 12-word phrase.
 ## Running it
 
 The repository does not contain the app itself. Download
-`PassMan-Client-Installer.exe` from the release marked **Latest** on the
-[Releases](https://github.com/usermaneGermane/PassMan-Client-Windows/releases) page (a
+`SecretSpace-Client-Installer.exe` from the release marked **Latest** on the
+[Releases](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases) page (a
 *Pre-release* is a test version and has the same file name), or build it
-yourself with the [PassMan Builder](#building-it-yourself-windows). The
+yourself with the [SecretSpace Builder](#building-it-yourself-windows). The
 installer is all you need: it brings Python and every library with it, so
 installing needs no source code and no Python.
 
-**`PassMan-Client-Installer.exe`** installs it. Run it and choose a folder
-(by default `%LOCALAPPDATA%\Programs\PassMan`) and whether you want a
+**`SecretSpace-Client-Installer.exe`** installs it. Run it and choose a folder
+(by default `%LOCALAPPDATA%\Programs\SecretSpace`) and whether you want a
 desktop shortcut. It needs Windows 10 or 11 (64-bit) and installs for your
 Windows user only, so it needs no admin rights. You get a Start Menu entry
 and an uninstaller under Settings → Apps; the program it installs is
-`PassMan.exe`. The vault lives in **`%APPDATA%\PassMan`**, not in the
-program folder, so upgrading or uninstalling never touches it.
+`SecretSpace.exe`. The vault lives in **`%APPDATA%\SecretSpace`**, not in the
+program folder, so upgrading or uninstalling never touches it. A copy first
+installed as PassMan keeps `%APPDATA%\PassMan` instead.
 
 If you used the portable `PassMan.exe` of 2.2 or earlier, the installer can
 move your vaults across. They are moved, not copied, and a vault already in
-`%APPDATA%\PassMan` is never overwritten. The portable single-file exe is
+`%APPDATA%\SecretSpace` is never overwritten. The portable single-file exe is
 no longer made: it unpacked itself to a temporary folder on every launch,
 which made it slow to start.
 
 The optional sync server is a separate download from its own repository:
-**`PassMan-Server-Installer.exe`** from [PassMan-Server-Windows](https://github.com/usermaneGermane/PassMan-Server-Windows), or a Python script and a
-systemd unit from [PassMan-Server-Linux](https://github.com/usermaneGermane/PassMan-Server-Linux). The app never needs it, and it never needs the
+**`SecretSpace-Server-Installer.exe`** from [SecretSpace-Server-Windows](https://github.com/usermaneGermane/SecretSpace-Server-Windows), or a Python script and a
+systemd unit from [SecretSpace-Server-Linux](https://github.com/usermaneGermane/SecretSpace-Server-Linux). The app never needs it, and it never needs the
 app.
 
 To run from source:
@@ -90,15 +101,15 @@ python sourceFiles/gui.py
 ## Building it yourself (Windows)
 
 Building needs a checkout of this repository: the builder looks for the
-source next to itself and builds from it. Run **`PassMan-Builder.exe`**
+source next to itself and builds from it. Run **`SecretSpace-Builder.exe`**
 from the project folder. It is not on the Releases page (it is only useful
 inside a checkout); make it once with
 `py builder\build.py --builder`, see below. It shows a checklist of what
 the build needs:
 
-- the PassMan source files
+- the SecretSpace source files
 - Python 3 and its `tkinter`
-- PassMan's libraries (`requirements.txt`)
+- SecretSpace's libraries (`requirements.txt`)
 - PyInstaller
 - that the app imports cleanly
 - Inno Setup 6, for the installer
@@ -114,14 +125,14 @@ it is reported missing, re-run the Python installer, choose **Modify**,
 and tick **tcl/tk and IDLE**.
 
 When every line is ✓, press **Build**. About a minute later the project
-folder holds the installer, `PassMan-Client-Installer.exe`. The version
+folder holds the installer, `SecretSpace-Client-Installer.exe`. The version
 comes from `sourceFiles/version.py`.
 
 The builder does not compile anything itself. It drives the Python
 installed on the PC, which is why Python is on the checklist. It prefers
 the `py` launcher's newest Python 3 over a bare `python` on `PATH`, which
 is often a virtualenv or the Microsoft Store placeholder. It never touches
-an installed or running PassMan: everything it writes is in the project
+an installed or running SecretSpace: everything it writes is in the project
 folder.
 
 The same steps run in a terminal, without the window:
@@ -129,7 +140,7 @@ The same steps run in a terminal, without the window:
 ```
 py builder\build.py                      check, then build
 py builder\build.py --install-missing    install what is missing first
-py builder\build.py --builder            build PassMan-Builder.exe itself
+py builder\build.py --builder            build SecretSpace-Builder.exe itself
 ```
 
 The last line is how the builder is made in the first place, so a fresh
@@ -143,7 +154,7 @@ Copy the **whole project folder** to the other PC. The build needs:
 ```
 requirements.txt
 sourceFiles\    (all of it)
-installer\      (for PassMan-Client-Installer.exe)
+installer\      (for SecretSpace-Client-Installer.exe)
 ```
 
 `README.md` is not needed to build, and neither are the `tests` folders.
@@ -157,32 +168,32 @@ that while the error is still readable.
 
 The installer is self-contained: what it installs bundles Python and
 every library, so the target PC does not need Python installed to *run*
-PassMan. Python is only needed to *build* it.
+SecretSpace. Python is only needed to *build* it.
 
 The exe is not code-signed, so Windows SmartScreen will likely warn the first
 time — "More info" then "Run anyway".
 
 Your passwords do **not** travel with the installer. The vault lives in
-`%APPDATA%\PassMan`, so a fresh install on a new PC starts empty. To bring
+`%APPDATA%\SecretSpace`, so a fresh install on a new PC starts empty. To bring
 your logins across, use *Restore from server* if you sync, or copy
-`vault\<user>.vault.enc` into `%APPDATA%\PassMan\vault` on the new PC, or
+`vault\<user>.vault.enc` into `%APPDATA%\SecretSpace\vault` on the new PC, or
 use Settings → *Encrypted backup* → *Save backup…* and copy that file over. The backup is still protected by
 your master password.
 
 ## A lab copy for testing
 
-The installed copy is your production PassMan: its vaults are in
-`%APPDATA%\PassMan`. Only one copy can be installed — a second run of the
+The installed copy is your production SecretSpace: its vaults are in
+`%APPDATA%\SecretSpace`. Only one copy can be installed — a second run of the
 installer upgrades the first — so a copy for trying things out runs
 *without* the installer, and keeps its vaults and `config.json` in its own
 folder instead:
 
-1. Build (`py builder\build.py`, or PassMan Builder).
-2. Copy the folder `build\installer\PassMan` somewhere of its own, e.g.
-   `D:\PassMan-Lab`, and run `PassMan.exe` from there.
+1. Build (`py builder\build.py`, or SecretSpace Builder).
+2. Copy the folder `build\installer\SecretSpace` somewhere of its own, e.g.
+   `D:\SecretSpace-Lab`, and run `SecretSpace.exe` from there.
 
 That folder has no `installed` file, so it never touches
-`%APPDATA%\PassMan`. Its window title says
+`%APPDATA%\SecretSpace`. Its window title says
 `[LAB - <its vault folder>]`; the installed copy's title never does. Do not
 copy the `installed` file into it.
 
@@ -190,7 +201,7 @@ To update the lab copy after a new build, close it and copy the new program
 files over the old ones, leaving its `vault` folder and `config.json` alone:
 
 ```
-robocopy build\installer\PassMan D:\PassMan-Lab /E /XD vault /XF config.json
+robocopy build\installer\SecretSpace D:\SecretSpace-Lab /E /XD vault /XF config.json
 ```
 
 (`/E` adds and replaces files but deletes nothing.)
@@ -201,12 +212,12 @@ your real vaults do not use** (e.g. `test`, `lab-alice`): a lab vault with
 the same name as a real one would sync into it.
 
 **Moving test vaults out of production.** Uninstalling keeps the vaults, so
-`%APPDATA%\PassMan\vault` may still hold vaults you made while testing. With
-PassMan closed, move each `<user>.vault.enc` together with its `.bak` and
+`%APPDATA%\SecretSpace\vault` may still hold vaults you made while testing. With
+SecretSpace closed, move each `<user>.vault.enc` together with its `.bak` and
 `.base` into the lab copy's `vault` folder (and `config.json` too, if it
 names a test vault as the last user).
 
-### PassMan 3 (test version)
+### SecretSpace 3 (test version)
 
 ```
 keyset.pmk:  base64( "PMK3" || ver(1) || kdf(1) || memory_kib(4) || passes(1) || lanes(1) || salt(16) || nonce(12) || ciphertext )
@@ -222,10 +233,10 @@ cannot be swapped in for another's.
 ## Project layout
 
 ```
-PassMan-Client-Windows/
-├── builder/            PassMan Builder: build.py, its window, its spec
-├── PassMan-Builder.exe  the builder (built, not committed)
-├── PassMan-Client-Installer.exe  installs the app (built, not committed)
+SecretSpace-Client-Windows/
+├── builder/            SecretSpace Builder: build.py, its window, its spec
+├── SecretSpace-Builder.exe  the builder (built, not committed)
+├── SecretSpace-Client-Installer.exe  installs the app (built, not committed)
 ├── vault/               vaults when running from source - never committed
 ├── installer/           the Inno Setup script for the installer
 └── sourceFiles/         the program itself
@@ -248,7 +259,7 @@ PassMan-Client-Windows/
     ├── lockout.py       rate limiting of master-password attempts
     ├── password_generator.py
     ├── version.py       the version shown in the UI
-    ├── PassMan-installer.spec  the PyInstaller build the installer ships
+    ├── SecretSpace-installer.spec  the PyInstaller build the installer ships
     ├── build_version.py the exe's version resource, read from version.py
     └── tests/
         └── sync_server/ a copy of the server, for the end-to-end sync tests
@@ -262,7 +273,7 @@ backup* if it has one.
 
 The upgrade is one-way. This version reads vaults written by older builds and
 transparently re-encrypts them at the stronger settings on first unlock —
-but once that has happened, **an older PassMan.exe can no longer open the
+but once that has happened, **an older SecretSpace.exe can no longer open the
 vault**. It reports "Decryption failed. Wrong password or corrupted data.",
 which looks alarmingly like a lost password even though the data is fine.
 
@@ -279,11 +290,11 @@ So once any PC runs 2.0:
 
 - update **every** PC to 2.0 before using it, and keep no 1.x executable
   pointing at that vault folder;
-- update the sync server too (see "Updating" in [PassMan-Server-Windows](https://github.com/usermaneGermane/PassMan-Server-Windows) or [PassMan-Server-Linux](https://github.com/usermaneGermane/PassMan-Server-Linux)).
+- update the sync server too (see "Updating" in [SecretSpace-Server-Windows](https://github.com/usermaneGermane/SecretSpace-Server-Windows) or [SecretSpace-Server-Linux](https://github.com/usermaneGermane/SecretSpace-Server-Linux)).
 
 ## Syncing two PCs
 
-Point both PCs at a server you run — [PassMan-Server-Windows](https://github.com/usermaneGermane/PassMan-Server-Windows) or [PassMan-Server-Linux](https://github.com/usermaneGermane/PassMan-Server-Linux) says how to set one
+Point both PCs at a server you run — [SecretSpace-Server-Windows](https://github.com/usermaneGermane/SecretSpace-Server-Windows) or [SecretSpace-Server-Linux](https://github.com/usermaneGermane/SecretSpace-Server-Linux) says how to set one
 up — then press **Sync**. The vault is encrypted before it leaves
 your machine, so the server stores ciphertext it has no key for and never sees
 your master password.
@@ -299,7 +310,7 @@ your master password.
   down. After that, Sync on either machine.
 
 **Sync when I unlock.** Sync is manual unless you switch this on, in
-Settings → Sync once sync is set up (off by default). With it on, PassMan
+Settings → Sync once sync is set up (off by default). With it on, SecretSpace
 syncs right after you unlock; a conflict still waits for your choice, and a
 server that cannot be reached only shows a warning — the vault opens either
 way. The switch is per vault and per PC: a merge keeps this PC's choice,
@@ -312,7 +323,7 @@ side by side, and **whichever side you do not keep is saved in that entry's
 history** — every outcome is reversible with one click on *Revert*.
 Cancelling it changes nothing on either side.
 
-**More than one vault.** Each PassMan user syncs as its own, independent vault
+**More than one vault.** Each SecretSpace user syncs as its own, independent vault
 on the server, matched across PCs by username (exactly, including case). Set
 up sync once per vault, while that vault is unlocked; Sync only ever syncs
 the vault that is open.
@@ -407,7 +418,7 @@ History syncs, and never causes a conflict: each PC ends up with the
 combined history from both sides. When you settle a sync conflict, the
 version you do not keep becomes the entry's newest revision.
 
-**Update every PC** before relying on it: an older PassMan does not know the
+**Update every PC** before relying on it: an older SecretSpace does not know the
 field, drops it when it saves, and that loss would then sync. The server
 needs no update for this.
 
@@ -453,7 +464,8 @@ drive or in cloud storage.
 
 ## Where your data lives
 
-The files below are in `%APPDATA%\PassMan`. An installed copy is
+The files below are in `%APPDATA%\SecretSpace` (in `%APPDATA%\PassMan` if
+that folder was there first, from before the rename). An installed copy is
 recognised by the `installed` file that the installer puts next to its exe;
 without it — running from source, or a portable exe from 2.2 or earlier —
 they are next to the program instead.
@@ -484,13 +496,13 @@ is encrypted with the same master password as the vault. Deleting it is safe
 master password deletes it automatically, since it cannot be re-encrypted
 without the old one.
 
-This folder used to be called `data`. If you already have one, PassMan keeps
+This folder used to be called `data`. If you already have one, SecretSpace keeps
 using it as-is and creates nothing new — rename it to `vault` yourself when
 convenient, while the app is closed.
 
 Vault writes go to a temporary file and are then atomically renamed into
 place, so an interrupted save (full disk, power cut) cannot corrupt the vault.
-If the main file is ever damaged, PassMan falls back to the `.bak` copy.
+If the main file is ever damaged, SecretSpace falls back to the `.bak` copy.
 
 ## Vault format
 
@@ -517,7 +529,7 @@ Worth knowing about, in the interest of not overselling this:
 - **The unlocked vault lives in memory in the clear**, and Python strings
   cannot be reliably wiped. Auto-lock limits the window; it does not close it.
 - **Locking does not clear a copied password.** It stays pasteable until
-  the 30-second auto-clear, so you can lock and then paste. Closing PassMan
+  the 30-second auto-clear, so you can lock and then paste. Closing SecretSpace
   still clears it at once, since nothing would be left to clear it later.
 - **Clipboard auto-clear only clears the live clipboard.** Windows clipboard
   history (Win+V) and cloud clipboard sync keep copies no application can
@@ -528,7 +540,7 @@ Worth knowing about, in the interest of not overselling this:
   codes are made on this PC (RFC 6238); scanning a QR code is not supported
   yet, so paste the secret shown under it.
 - **Card details, custom fields and attachments** in an export are not
-  imported; PassMan warns when it sees them.
+  imported; SecretSpace warns when it sees them.
 - **The unlock delay is a speed bump, not a boundary.** It slows guessing at
   the login screen and survives a restart, but anyone who can copy the vault
   file can attack it offline with no limit at all. Deleting `config.json`
@@ -591,12 +603,12 @@ every pull request and every push to `main`
 
 ## License
 
-PassMan (this client) is free software under the **GNU General Public
+SecretSpace (this client) is free software under the **GNU General Public
 License v3.0 only** (GPL-3.0-only) — see [LICENSE](LICENSE). You may use,
 study, change and share it; if you distribute a changed version, it must stay
 under the same licence, with its source.
 
-The other PassMan repositories (the Windows and Linux clients and sync servers)
+The other SecretSpace repositories (the Windows and Linux clients and sync servers)
 are free software under the same licence.
 
 The 12-word recovery phrase uses the BIP39 English word list from

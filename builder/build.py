@@ -1,14 +1,14 @@
 """
-Build PassMan-Client-Installer.exe from the source, after checking every
+Build SecretSpace-Client-Installer.exe from the source, after checking every
 prerequisite. This replaces build.bat. The sync server is built from its own
-repository (PassMan-Server-Windows).
+repository (SecretSpace-Server-Windows).
 
 Two ways to run it:
 
-    PassMan-Builder.exe        double-click; a window walks through it
+    SecretSpace-Builder.exe        double-click; a window walks through it
     py builder\\build.py       the same steps in a terminal
 
-PassMan-Builder.exe is this module frozen with builder_gui.py. It does not
+SecretSpace-Builder.exe is this module frozen with builder_gui.py. It does not
 compile anything itself -- a frozen exe cannot run PyInstaller on the
 source -- it drives a real Python installed on the PC, the way build.bat
 did. Everything here is plain functions over an injectable command runner,
@@ -34,10 +34,10 @@ REQUIRED_FILES = (
     "requirements.txt",
     os.path.join("sourceFiles", "gui.py"),
     os.path.join("sourceFiles", "version.py"),
-    os.path.join("sourceFiles", "PassMan-installer.spec"),
-    os.path.join("sourceFiles", "PassMan-logo.png"),
-    os.path.join("sourceFiles", "PassMan-logo.ico"),
-    os.path.join("installer", "PassMan.iss"),
+    os.path.join("sourceFiles", "SecretSpace-installer.spec"),
+    os.path.join("sourceFiles", "SecretSpace-logo.png"),
+    os.path.join("sourceFiles", "SecretSpace-logo.ico"),
+    os.path.join("installer", "SecretSpace.iss"),
     os.path.join("installer", "installed"),
 )
 
@@ -83,7 +83,7 @@ def run(cmd, cwd=None, env=None, on_line=None) -> Result:
 # ---------------------------------------------------------------------------
 def project_dir() -> str:
     """
-    The PassMan folder: the one holding PassMan-Builder.exe when frozen,
+    The SecretSpace folder: the one holding SecretSpace-Builder.exe when frozen,
     else the parent of builder/ where this file lives.
     """
     if getattr(sys, "frozen", False):
@@ -115,7 +115,7 @@ def file_version(version: str) -> str:
     m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-(?:alpha|beta|rc)\.(\d+))?",
                      version)
     if not m:
-        raise ValueError(f"Not a PassMan version: {version!r}")
+        raise ValueError(f"Not a SecretSpace version: {version!r}")
     return ".".join(g or "0" for g in m.groups())
 
 
@@ -183,7 +183,7 @@ def check_all(project: str, runner=run, find_iscc=find_iscc) -> list:
     checks = []
     gone = missing_files(project)
     checks.append(Check(
-        "PassMan source files", not gone,
+        "SecretSpace source files", not gone,
         "all present" if not gone else
         "missing: " + ", ".join(gone) + ". Copy the whole project folder.",
         None if not gone else "manual"))
@@ -191,7 +191,7 @@ def check_all(project: str, runner=run, find_iscc=find_iscc) -> list:
     py = find_python(runner)
     if py is None:
         checks.append(Check("Python 3", False, "not found", "winget-python"))
-        for name in ("tkinter", "PassMan's libraries", "PyInstaller",
+        for name in ("tkinter", "SecretSpace's libraries", "PyInstaller",
                      "The app imports cleanly"):
             checks.append(Check(name, False, "needs Python first"))
     else:
@@ -208,7 +208,7 @@ def check_all(project: str, runner=run, find_iscc=find_iscc) -> list:
         missing = [pip for mod, pip in APP_PACKAGES
                    if runner(py.cmd + ["-c", f"import {mod}"]).code != 0]
         checks.append(Check(
-            "PassMan's libraries", not missing,
+            "SecretSpace's libraries", not missing,
             "ok" if not missing else "missing: " + ", ".join(missing),
             None if not missing else "pip", missing))
 
@@ -257,10 +257,10 @@ def fix_commands(checks, project: str, py: "Python" = None) -> list:
         elif c.fix == "winget-inno":
             out.append(("Install Inno Setup 6", winget + [WINGET_INNO]))
         elif c.fix == "pip" and py is not None:
-            if c.name == "PassMan's libraries":
+            if c.name == "SecretSpace's libraries":
                 cmd = py.cmd + ["-m", "pip", "install", "-r",
                                 os.path.join(project, "requirements.txt")]
-                out.append(("Install PassMan's libraries", cmd))
+                out.append(("Install SecretSpace's libraries", cmd))
             else:
                 out.append((f"Install {', '.join(c.packages)}",
                             py.cmd + ["-m", "pip", "install"] + c.packages))
@@ -280,14 +280,17 @@ def remove_previous(project: str) -> None:
     successful one because last time's files are still there."""
     import shutil
     # PassMan.exe here is the portable exe of 2.2 and earlier, no longer
-    # built: removed so it cannot pass for a current build.
-    for name in ("PassMan.exe", "PassMan-Client-Installer.exe"):
+    # built, and the PassMan-* names are those from before the rename to
+    # SecretSpace: removed so none of them can pass for a current build.
+    for name in ("SecretSpace.exe", "SecretSpace-Client-Installer.exe",
+                 "PassMan.exe", "PassMan-Client-Installer.exe"):
         path = os.path.join(project, name)
         if os.path.exists(path):
             os.remove(path)
-    folder = os.path.join(project, "build", "installer", "PassMan")
-    if os.path.isdir(folder):
-        shutil.rmtree(folder)
+    for folder in (os.path.join(project, "build", "installer", "SecretSpace"),
+                   os.path.join(project, "build", "installer", "PassMan")):
+        if os.path.isdir(folder):
+            shutil.rmtree(folder)
 
 
 def build_steps(project: str, py: "Python", iscc: str, version: str) -> list:
@@ -300,14 +303,14 @@ def build_steps(project: str, py: "Python", iscc: str, version: str) -> list:
                    "--distpath", os.path.join(project, "build", "installer"),
                    "--workpath", os.path.join(project, "build",
                                               "installer-work"),
-                   os.path.join(src, "PassMan-installer.spec")],
-         os.path.join(project, "build", "installer", "PassMan",
-                      "PassMan.exe")),
-        ("Packing PassMan-Client-Installer.exe",
+                   os.path.join(src, "SecretSpace-installer.spec")],
+         os.path.join(project, "build", "installer", "SecretSpace",
+                      "SecretSpace.exe")),
+        ("Packing SecretSpace-Client-Installer.exe",
          [iscc, "/Q", f"/DAppVersion={version}",
           f"/DFileVersion={file_version(version)}",
-          os.path.join(project, "installer", "PassMan.iss")],
-         os.path.join(project, "PassMan-Client-Installer.exe")),
+          os.path.join(project, "installer", "SecretSpace.iss")],
+         os.path.join(project, "SecretSpace-Client-Installer.exe")),
     ]
 
 
@@ -315,7 +318,7 @@ def build(project: str, py: "Python", iscc: str, log=print, runner=run,
           exists=os.path.isfile) -> bool:
     """Run the build, logging as it goes. True when every output exists."""
     version = app_version(project)
-    log(f"PassMan {version}")
+    log(f"SecretSpace {version}")
     remove_previous(project)
     for label, cmd, product in build_steps(project, py, iscc, version):
         log("")
@@ -327,31 +330,31 @@ def build(project: str, py: "Python", iscc: str, log=print, runner=run,
                 "The messages above give the reason.")
             return False
     log("")
-    log(f"DONE. Version {version}: PassMan-Client-Installer.exe")
+    log(f"DONE. Version {version}: SecretSpace-Client-Installer.exe")
     return True
 
 
 def build_builder(project: str, py: "Python", log=print, runner=run) -> bool:
-    """Freeze this module and builder_gui.py into PassMan-Builder.exe."""
-    product = os.path.join(project, "PassMan-Builder.exe")
+    """Freeze this module and builder_gui.py into SecretSpace-Builder.exe."""
+    product = os.path.join(project, "SecretSpace-Builder.exe")
     if os.path.exists(product):
         os.remove(product)
     res = runner(py.cmd + ["-m", "PyInstaller", "--noconfirm",
                            "--distpath", project,
                            "--workpath", os.path.join(project, "build"),
                            os.path.join(project, "builder",
-                                        "PassMan-Builder.spec")],
+                                        "SecretSpace-Builder.spec")],
                  cwd=project, on_line=log)
     ok = res.code == 0 and os.path.isfile(product)
-    log("DONE: PassMan-Builder.exe" if ok else
-        f"FAILED to build PassMan-Builder.exe (exit code {res.code})")
+    log("DONE: SecretSpace-Builder.exe" if ok else
+        f"FAILED to build SecretSpace-Builder.exe (exit code {res.code})")
     return ok
 
 
 # ---------------------------------------------------------------------------
 # Terminal use:  py builder\build.py [--install-missing] [--builder]
 #   --install-missing  install what is missing, then build
-#   --builder          build PassMan-Builder.exe instead of the app
+#   --builder          build SecretSpace-Builder.exe instead of the app
 # ---------------------------------------------------------------------------
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
