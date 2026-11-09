@@ -1,4 +1,4 @@
-"""PassMan 3.0 account cryptography: published vectors first, then the format."""
+"""SecretSpace 3.0 account cryptography: published vectors first, then the format."""
 
 import base64
 import hashlib
@@ -178,8 +178,8 @@ def test_an_absurd_cost_is_refused_before_any_work(cost):
 
 
 @pytest.mark.parametrize("mangle,words", [
-    (lambda r: b"PMV2" + r[4:], "not a PassMan 3 account"),
-    (lambda r: r[:4] + b"\x09" + r[5:], "newer PassMan"),
+    (lambda r: b"PMV2" + r[4:], "not a SecretSpace 3 account"),
+    (lambda r: r[:4] + b"\x09" + r[5:], "newer SecretSpace"),
     (lambda r: r[:30], "too short"),
 ])
 def test_a_wrong_file_says_so(mangle, words):
@@ -254,7 +254,7 @@ def test_a_2x_vault_is_not_mistaken_for_pmv3():
     import crypto_utils
     blob = crypto_utils.encrypt("pw", DATA, iterations=1000)
     blob = blob.decode() if isinstance(blob, bytes) else blob
-    with pytest.raises(ac.CryptoError, match="not a PassMan 3 vault"):
+    with pytest.raises(ac.CryptoError, match="not a SecretSpace 3 vault"):
         ac.vault_header(blob)
 
 

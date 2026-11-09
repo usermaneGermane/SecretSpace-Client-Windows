@@ -82,7 +82,7 @@ LEGACY_DIR_NAME = "data"
 
 def get_app_dir() -> str:
     """
-    The project root: the folder holding PassMan.exe when frozen, else the
+    The project root: the folder holding SecretSpace.exe when frozen, else the
     parent of ``sourceFiles`` where this module lives.
 
     Anchored to the executable, NOT the working directory, so shortcuts with
@@ -92,11 +92,11 @@ def get_app_dir() -> str:
     """
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
-    # .../PassMan/sourceFiles/vault.py -> .../PassMan
+    # .../SecretSpace/sourceFiles/vault.py -> .../SecretSpace
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-#: The installer puts a file of this name next to PassMan.exe. Its presence
+#: The installer puts a file of this name next to SecretSpace.exe. Its presence
 #: means "installed copy": the program folder is replaced on upgrade and
 #: removed on uninstall, so the user's data must live somewhere else.
 INSTALLED_MARKER = "installed"
@@ -111,18 +111,37 @@ def get_home_dir() -> str:
     Where config.json and the vault folder live.
 
     Portable (no installer marker): the app folder, so the app and its data
-    travel together on a USB stick. Installed: %APPDATA%\\PassMan, which
+    travel together on a USB stick. Installed: %APPDATA%\\SecretSpace, which
     survives upgrades and uninstalling and does not need the program folder
-    to be writable.
+    to be writable -- or %APPDATA%\\PassMan, see ``appdata_home``.
     """
     if is_installed():
         base = os.environ.get("APPDATA") or os.path.join(
             os.path.expanduser("~"), "AppData", "Roaming")
-        return os.path.join(base, "PassMan")
+        return appdata_home(base)
     return get_app_dir()
 
 
-APP_TITLE = "PassMan - Password Manager"
+#: The folder name before the rename to SecretSpace (2026-11).
+OLD_HOME_NAME = "PassMan"
+HOME_NAME = "SecretSpace"
+
+
+def appdata_home(base: str) -> str:
+    """
+    The data folder under ``base``: SecretSpace, unless only the folder of
+    the old name, PassMan, exists -- then that one, so an upgrade finds the
+    vaults where they are. Nothing is moved or renamed; the installer's
+    DataHome makes the same choice.
+    """
+    new = os.path.join(base, HOME_NAME)
+    old = os.path.join(base, OLD_HOME_NAME)
+    if not os.path.isdir(new) and os.path.isdir(old):
+        return old
+    return new
+
+
+APP_TITLE = "SecretSpace - Password Manager"
 
 
 def window_title() -> str:
@@ -143,7 +162,7 @@ def get_data_dir() -> str:
     deliberately the ONLY place vaults are read from or written to — the
     user requires a single copy they control (no AppData mirrors, no
     automatic migration copies). Do not re-add code that copies vault files
-    elsewhere. An installed copy keeps its one copy in %APPDATA%\\PassMan
+    elsewhere. An installed copy keeps its one copy in %APPDATA%\\SecretSpace
     instead of next to the exe; that is a different home, not a mirror.
 
     If a folder from before the rename (``data``) is present and ``vault`` is
@@ -286,7 +305,7 @@ def validate_vault(data) -> dict:
     bare KeyError after an apparently successful unlock.
     """
     if not isinstance(data, dict):
-        raise ValueError("This file is not a PassMan vault.")
+        raise ValueError("This file is not a SecretSpace vault.")
     accounts = data.get("accounts")
     if accounts is None:
         raise ValueError("This vault has no 'accounts' section; it may have "

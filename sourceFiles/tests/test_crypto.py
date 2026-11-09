@@ -13,7 +13,7 @@ SAMPLE = {"accounts": [{"site": "github", "username": "me", "password": "hunter2
 
 
 def legacy_blob(password, data):
-    """A vault exactly as PassMan wrote them before the PMV2 header existed."""
+    """A vault exactly as SecretSpace wrote them before the PMV2 header existed."""
     salt, nonce = os.urandom(16), os.urandom(12)
     key = C.derive_key(password, salt, C.LEGACY_ITERATIONS)
     ct = AESGCM(key).encrypt(nonce, json.dumps(data).encode(), None)

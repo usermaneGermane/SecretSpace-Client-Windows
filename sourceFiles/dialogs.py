@@ -115,7 +115,7 @@ def import_dialog(app):
     if not path:
         return
 
-    # Encrypted PassMan vault files (.vault / .vault.enc / .enc) must be
+    # Encrypted SecretSpace vault files (.vault / .vault.enc / .enc) must be
     # decrypted with their own master password before we can read accounts.
     ext = os.path.splitext(path)[1].lower()
     if ext in (".vault", ".enc"):
@@ -200,7 +200,7 @@ def _finish_import(app, parsed, path):
         # Say so up front: silently losing data is how people get locked
         # out of their accounts after a migration.
         msg += ("\n\nThis file also contains " + ", ".join(parsed.dropped) +
-                ", which PassMan cannot store. Keep the original file "
+                ", which SecretSpace cannot store. Keep the original file "
                 "until you have checked you still have them.")
     msg += "\n\nAdd them to your vault?"
     if not app._confirm("Import accounts", msg, danger=False):
@@ -466,7 +466,7 @@ def settings_dialog(app):
         on_unlock = ctk.CTkSwitch(
             setting_row(syn, "Sync when I unlock",
                         "Off: nothing is sent until you press Sync. On: "
-                        "PassMan syncs right after you unlock; a conflict "
+                        "SecretSpace syncs right after you unlock; a conflict "
                         "still waits for your choice.", hint),
             text="", width=46, switch_width=42, switch_height=22,
             progress_color=GREEN, button_color=TEXT,

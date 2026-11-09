@@ -1,5 +1,5 @@
 """
-The cryptography of PassMan 3.0 accounts (design: E:\\CLAUDE\\PassMan\\DESIGN-3.0.md).
+The cryptography of SecretSpace 3.0 accounts (design: E:\\CLAUDE\\SecretSpace\\DESIGN-3.0.md).
 
 Nothing in the 2.x app calls this yet: phase 1 builds the local account on it.
 Every function is pure -- bytes and dicts in, bytes and dicts out, no files --
@@ -128,7 +128,7 @@ def _check_cost(passes, memory_kib, lanes):
             and 8 * lanes <= memory_kib <= ARGON2_MAX_MEMORY_KIB
             and 1 <= lanes <= ARGON2_MAX_LANES):
         raise CryptoError("The account file asks for an unreasonable key "
-                          "derivation cost; it is damaged or not PassMan's.")
+                          "derivation cost; it is damaged or not SecretSpace's.")
 
 
 # ===========================================================================
@@ -252,13 +252,13 @@ def keyset_header(blob: str) -> dict:
     the password is stretched, so the stored cost is the one used."""
     raw = _unb64(blob, "account file")
     if len(raw) < _KEYSET_HEADER.size + NONCE_LEN + 16:
-        raise CryptoError("The account file is too short to be PassMan's.")
+        raise CryptoError("The account file is too short to be SecretSpace's.")
     magic, version, kdf, memory_kib, passes, lanes, salt = \
         _KEYSET_HEADER.unpack(raw[:_KEYSET_HEADER.size])
     if magic != KEYSET_MAGIC:
-        raise CryptoError("That is not a PassMan 3 account file.")
+        raise CryptoError("That is not a SecretSpace 3 account file.")
     if version != KEYSET_VERSION:
-        raise CryptoError("The account file was written by a newer PassMan; "
+        raise CryptoError("The account file was written by a newer SecretSpace; "
                           "update this one.")
     if kdf not in (KDF_ARGON2ID, KDF_NONE):
         raise CryptoError("The account file uses an unknown key derivation.")
@@ -329,7 +329,7 @@ def wrap_key(recipient_public: bytes, vault_key: bytes, vault_id: bytes,
 def unwrap_key(keyset: dict, wrapped: str, vault_id: bytes, member: str) -> bytes:
     raw = _unb64(wrapped, "shared vault key")
     if len(raw) != 1 + 32 + NONCE_LEN + KEY_LEN + 16 or raw[0] != WRAP_VERSION:
-        raise CryptoError("A shared vault key is damaged or from a newer PassMan.")
+        raise CryptoError("A shared vault key is damaged or from a newer SecretSpace.")
     eph_pub, nonce, ct = raw[1:33], raw[33:33 + NONCE_LEN], raw[33 + NONCE_LEN:]
     private = X25519PrivateKey.from_private_bytes(
         _unb64(keyset["x25519_private"], "account key"))
@@ -373,13 +373,13 @@ def encrypt_vault(vault_key: bytes, vault_id: bytes, key_generation: int,
 def vault_header(blob: str) -> dict:
     raw = _unb64(blob, "vault")
     if len(raw) < _VAULT_HEADER.size + NONCE_LEN + 16:
-        raise CryptoError("The vault file is too short to be a PassMan 3 vault.")
+        raise CryptoError("The vault file is too short to be a SecretSpace 3 vault.")
     magic, version, vault_id, generation = _VAULT_HEADER.unpack(
         raw[:_VAULT_HEADER.size])
     if magic != VAULT_MAGIC:
-        raise CryptoError("That is not a PassMan 3 vault.")
+        raise CryptoError("That is not a SecretSpace 3 vault.")
     if version != VAULT_VERSION:
-        raise CryptoError("The vault was written by a newer PassMan; update "
+        raise CryptoError("The vault was written by a newer SecretSpace; update "
                           "this one.")
     return {"vault_id": vault_id, "key_generation": generation}
 
