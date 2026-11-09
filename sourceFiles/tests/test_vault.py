@@ -753,7 +753,7 @@ def test_csv_export_leaves_history_out_json_keeps_it(tmp_path):
     assert exported["accounts"][0]["history"][0]["password"] == "v1"
 
 
-# --- installed copy: data in %APPDATA%\PassMan, not the program folder -----
+# --- installed copy: data in %APPDATA%\SecretSpace, not the program folder -----
 def test_portable_copy_keeps_data_next_to_the_app(tmp_path, monkeypatch):
     monkeypatch.delenv("PASSMAN_DATA_DIR", raising=False)
     monkeypatch.setattr(vault, "get_app_dir", lambda: str(tmp_path / "app"))
@@ -765,12 +765,12 @@ def test_portable_copy_keeps_data_next_to_the_app(tmp_path, monkeypatch):
 def test_installed_copy_keeps_data_in_appdata(tmp_path, monkeypatch):
     import appconfig
     monkeypatch.delenv("PASSMAN_DATA_DIR", raising=False)
-    app = tmp_path / "Programs" / "PassMan"
+    app = tmp_path / "Programs" / "SecretSpace"
     app.mkdir(parents=True)
     (app / vault.INSTALLED_MARKER).write_text("installed by setup")
     monkeypatch.setattr(vault, "get_app_dir", lambda: str(app))
     monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
-    home = tmp_path / "Roaming" / "PassMan"
+    home = tmp_path / "Roaming" / "SecretSpace"
     assert vault.is_installed()
     assert vault.get_data_dir() == str(home / "vault")
     assert appconfig.config_file() == str(home / "config.json")
@@ -778,6 +778,40 @@ def test_installed_copy_keeps_data_in_appdata(tmp_path, monkeypatch):
     vault.create_new_user("alice", "pw")
     assert (home / "vault" / "alice.vault.enc").exists()
     assert sorted(p.name for p in app.iterdir()) == [vault.INSTALLED_MARKER]
+
+
+def _installed(tmp_path, monkeypatch):
+    monkeypatch.delenv("PASSMAN_DATA_DIR", raising=False)
+    app = tmp_path / "Programs" / "SecretSpace"
+    app.mkdir(parents=True)
+    (app / vault.INSTALLED_MARKER).write_text("installed by setup")
+    monkeypatch.setattr(vault, "get_app_dir", lambda: str(app))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    return tmp_path / "Roaming"
+
+
+def test_an_upgrade_from_passman_keeps_the_old_data_folder(tmp_path, monkeypatch):
+    """Installed as PassMan before the rename: the vaults stay where they are,
+    nothing is moved, and no empty SecretSpace folder appears beside them."""
+    roaming = _installed(tmp_path, monkeypatch)
+    old = roaming / "PassMan"
+    (old / "vault").mkdir(parents=True)
+    (old / "vault" / "bob.vault.enc").write_bytes(b"x")
+    assert vault.get_data_dir() == str(old / "vault")
+    assert "bob" in vault.list_users()
+    assert not (roaming / "SecretSpace").exists()
+
+
+def test_the_new_folder_wins_once_it_exists(tmp_path, monkeypatch):
+    roaming = _installed(tmp_path, monkeypatch)
+    (roaming / "PassMan").mkdir(parents=True)
+    (roaming / "SecretSpace").mkdir(parents=True)
+    assert vault.get_data_dir() == str(roaming / "SecretSpace" / "vault")
+
+
+def test_a_new_install_uses_the_new_name(tmp_path, monkeypatch):
+    roaming = _installed(tmp_path, monkeypatch)
+    assert vault.get_data_dir() == str(roaming / "SecretSpace" / "vault")
 
 
 def test_env_override_beats_an_installed_copy(tmp_path, monkeypatch):

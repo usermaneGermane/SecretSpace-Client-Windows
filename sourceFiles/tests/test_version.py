@@ -16,7 +16,7 @@ def test_version_string_is_prefixed():
 
 def test_long_version_mentions_app_and_format():
     text = version.long_version_string()
-    assert "PassMan" in text
+    assert "SecretSpace" in text
     assert version.version_string() in text
     assert version.VAULT_FORMAT in text
 

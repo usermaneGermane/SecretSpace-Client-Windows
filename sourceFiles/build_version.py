@@ -1,5 +1,5 @@
 """
-The Windows version resource for PassMan.exe -- what Explorer shows under
+The Windows version resource for SecretSpace.exe -- what Explorer shows under
 Properties > Details. Used by both .spec files at build time only; the app
 never imports it, so PyInstaller does not bundle it.
 
@@ -14,8 +14,8 @@ from PyInstaller.utils.win32.versioninfo import (
 from version import __version__
 
 
-def version_info(description="PassMan password manager",
-                 filename="PassMan.exe") -> VSVersionInfo:
+def version_info(description="SecretSpace password manager",
+                 filename="SecretSpace.exe") -> VSVersionInfo:
     numbers = tuple(int(part) for part in __version__.split(".")) + (0,)
     return VSVersionInfo(
         ffi=FixedFileInfo(filevers=numbers, prodvers=numbers),
@@ -25,7 +25,7 @@ def version_info(description="PassMan password manager",
                 StringStruct("FileVersion", __version__),
                 StringStruct("InternalName", filename[:-4]),
                 StringStruct("OriginalFilename", filename),
-                StringStruct("ProductName", "PassMan"),
+                StringStruct("ProductName", "SecretSpace"),
                 StringStruct("ProductVersion", __version__),
             ])]),
             VarFileInfo([VarStruct("Translation", [0x0409, 1200])]),

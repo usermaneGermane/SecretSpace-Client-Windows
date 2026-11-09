@@ -30,7 +30,7 @@ NOTE_KEYS = ("notes", "note", "comments", "comment", "extra", "description")
 TOTP_KEYS = ("totp", "login_totp", "otp", "otpauth", "authenticator",
              "two_factor", "2fa")
 
-#: Columns whose contents PassMan has nowhere to put. Reported to the user
+#: Columns whose contents SecretSpace has nowhere to put. Reported to the user
 #: rather than discarded quietly -- losing a TOTP seed without being told is
 #: how people get locked out of their accounts after a migration.
 LOSSY_KEYS = (
