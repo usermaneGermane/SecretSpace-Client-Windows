@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   pytest:
-    # Windows, because that is what PassMan ships for: the paths, the
+    # Windows, because that is what SecretSpace ships for: the paths, the
     # installer marker and the tkinter build all match what users run.
     runs-on: windows-latest
     strategy:

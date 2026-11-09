@@ -445,7 +445,7 @@ def password_mismatch_dialog(app, adopt, wrong=False):
         body = ("You changed this vault's master password while the server "
                 "could not be reached, so its copy is still under your "
                 "previous password.\n\n"
-                "Enter the previous password once. PassMan reads the server's "
+                "Enter the previous password once. SecretSpace reads the server's "
                 "copy with it, merges, and uploads everything again under "
                 "your new password.")
         label = "Your previous master password"
@@ -575,7 +575,7 @@ def _archive_row(app, parent, index, entry, rebuild):
                 "Delete permanently",
                 f"Permanently delete the saved login for "
                 f"“{entry.get('site', '')}”?\n\n"
-                "This cannot be undone, and it is the only action in PassMan "
+                "This cannot be undone, and it is the only action in SecretSpace "
                 "that really destroys a password."):
             return
         vault.purge_account(app.vault, entry["id"])
@@ -643,7 +643,7 @@ def sync_settings_dialog(app):
     token_entry.insert(0, settings.get("token", ""))
 
     ca_entry = field(wrap, "Certificate file (only for https, optional)",
-                     placeholder="C:\\PassMan\\server.crt")
+                     placeholder="C:\\SecretSpace\\server.crt")
     ca_entry.insert(0, settings.get("ca_file", ""))
 
     note(wrap, "Plain http is reasonable over a VPN you trust. For https with "

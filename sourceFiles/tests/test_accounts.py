@@ -1,4 +1,4 @@
-"""PassMan 3.0 local accounts: files, unlock, Secret Key per device, 2.x import."""
+"""SecretSpace 3.0 local accounts: files, unlock, Secret Key per device, 2.x import."""
 
 import hashlib
 import json
@@ -227,7 +227,7 @@ def test_newer_account_format_refused():
     info = json.load(open(path, encoding="utf-8"))
     info["format"] = 99
     json.dump(info, open(path, "w", encoding="utf-8"))
-    with pytest.raises(ValueError, match="another PassMan version"):
+    with pytest.raises(ValueError, match="another SecretSpace version"):
         accounts.unlock("alice", PW)
 
 

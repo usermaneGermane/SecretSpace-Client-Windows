@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 #
-# The build the installer ships: a folder (PassMan.exe + _internal\), not a
+# The build the installer ships: a folder (SecretSpace.exe + _internal\), not a
 # single self-extracting file. A single-file exe unpacks ~45 MB to %TEMP% on
 # every launch - about a second of start-up, and a leftover _MEI folder
 # whenever it is killed - which is why the portable one was retired. UPX is off for the same reason: every DLL would otherwise be
@@ -14,8 +14,8 @@ SRC = SPECPATH
 sys.path.insert(0, SRC)
 from build_version import version_info   # Properties > Details
 
-datas = [(os.path.join(SRC, 'PassMan-logo.png'), '.'),
-         (os.path.join(SRC, 'PassMan-logo.ico'), '.')]
+datas = [(os.path.join(SRC, 'SecretSpace-logo.png'), '.'),
+         (os.path.join(SRC, 'SecretSpace-logo.ico'), '.')]
 binaries = []
 # PIL.ImageTk pulls in PIL._tkinter_finder at runtime, and PyInstaller's
 # Pillow hook does not always detect it. Without it the frozen app crashes
@@ -46,7 +46,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='PassMan',
+    name='SecretSpace',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -57,7 +57,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=[os.path.join(SRC, 'PassMan-logo.ico')],
+    icon=[os.path.join(SRC, 'SecretSpace-logo.ico')],
     version=version_info(),
 )
 
@@ -68,5 +68,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='PassMan',
+    name='SecretSpace',
 )

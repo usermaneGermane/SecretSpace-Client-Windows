@@ -17,7 +17,7 @@ import contextlib
 
 import pytest
 
-# A copy of the server, from PassMan-Server-Windows / PassMan-Server-Linux
+# A copy of the server, from SecretSpace-Server-Windows / SecretSpace-Server-Linux
 # (sync_server/README.md says how to refresh it).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "sync_server"))

@@ -72,7 +72,7 @@ def test_missing_libraries_are_installed_from_requirements():
     runner = healthy(**{"import customtkinter": build.Result(1, ""),
                         "import PIL": build.Result(1, "")})
     checks = build.check_all(PROJECT, runner, find_iscc=has_iscc)
-    libs = checks_by_name(checks)["PassMan's libraries"]
+    libs = checks_by_name(checks)["SecretSpace's libraries"]
     assert not libs.ok and libs.fix == "pip"
     assert libs.detail == "missing: customtkinter, Pillow"
     [(label, cmd)] = build.fix_commands(checks, PROJECT,
@@ -125,7 +125,7 @@ def test_a_broken_source_file_blocks_the_build():
 
 def test_an_incomplete_folder_is_reported(tmp_path):
     checks = build.check_all(str(tmp_path), healthy(), find_iscc=has_iscc)
-    files = checks_by_name(checks)["PassMan source files"]
+    files = checks_by_name(checks)["SecretSpace source files"]
     assert not files.ok and "Copy the whole project folder" in files.detail
 
 
@@ -167,7 +167,7 @@ def project(tmp_path):
     (tmp_path / "sourceFiles").mkdir()
     (tmp_path / "sourceFiles" / "version.py").write_text(
         '__version__ = "9.8.7"\n')
-    (tmp_path / "PassMan.exe").write_text("last time's build")
+    (tmp_path / "SecretSpace.exe").write_text("last time's build")
     return str(tmp_path)
 
 
@@ -177,8 +177,8 @@ def test_build_runs_the_steps_in_order(project):
     assert build.build(project, py, r"C:\Inno\ISCC.exe", log=lambda s: None,
                        runner=runner, exists=lambda p: True)
     cmds = [" ".join(c) for c, _ in runner.calls]
-    assert "PassMan-installer.spec" in cmds[0]
-    assert "/DAppVersion=9.8.7" in cmds[1] and "PassMan.iss" in cmds[1]
+    assert "SecretSpace-installer.spec" in cmds[0]
+    assert "/DAppVersion=9.8.7" in cmds[1] and "SecretSpace.iss" in cmds[1]
     assert "/DFileVersion=9.8.7.0" in cmds[1]
     assert len(cmds) == 2
 
@@ -188,7 +188,7 @@ def test_the_portable_exe_is_no_longer_built(project):
     build.build(project, build.Python(["py"], "3", "p"), "iscc",
                 log=lambda s: None, runner=runner, exists=lambda p: True)
     cmds = [" ".join(c) for c, _ in runner.calls]
-    assert not any(c.endswith("PassMan.spec") for c in cmds)
+    assert not any(c.endswith("SecretSpace.spec") for c in cmds)
     assert not any("--distpath " + project + " " in c for c in cmds)
 
 
@@ -196,7 +196,7 @@ def test_only_the_app_is_built():
     """The server has its own repository and its own build."""
     steps = build.build_steps("P", build.Python(["py"], "3", "p"), "iscc", "1.0.0")
     products = [os.path.basename(product) for _, _, product in steps]
-    assert products == ["PassMan.exe", "PassMan-Client-Installer.exe"]
+    assert products == ["SecretSpace.exe", "SecretSpace-Client-Installer.exe"]
 
 
 def test_old_outputs_are_removed_before_building(project):
@@ -204,11 +204,11 @@ def test_old_outputs_are_removed_before_building(project):
                 log=lambda s: None, runner=FakeRunner(),
                 exists=lambda p: True)
     # A portable exe left by 2.2 or earlier must not pass for a new build.
-    assert not os.path.exists(os.path.join(project, "PassMan.exe"))
+    assert not os.path.exists(os.path.join(project, "SecretSpace.exe"))
 
 
 def test_an_old_installer_is_removed_too(project):
-    old = os.path.join(project, "PassMan-Client-Installer.exe")
+    old = os.path.join(project, "SecretSpace-Client-Installer.exe")
     with open(old, "w") as f:
         f.write("last time's build")
     build.remove_previous(project)
@@ -216,7 +216,7 @@ def test_an_old_installer_is_removed_too(project):
 
 
 def test_build_stops_at_the_first_failure(project):
-    runner = FakeRunner({"PassMan-installer.spec": build.Result(1, "boom")})
+    runner = FakeRunner({"SecretSpace-installer.spec": build.Result(1, "boom")})
     lines = []
     ok = build.build(project, build.Python(["py"], "3", "p"), "iscc",
                      log=lines.append, runner=runner, exists=lambda p: True)
