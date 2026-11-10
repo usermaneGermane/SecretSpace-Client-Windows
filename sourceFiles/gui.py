@@ -25,6 +25,7 @@ import history_ui
 import lockout
 import sync_client
 import sync_ui
+import account_sync_ui
 import totp
 from theme import (F, BG, HEADER_BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
@@ -405,13 +406,17 @@ class PasswordManagerGUI:
 
         links = ctk.CTkFrame(pad, fg_color="transparent")
         links.pack(fill="x")
-        # 3.0 phase 1 is local only; "Restore from server" returns with the
-        # server accounts of phase 2. 2.x vaults come in through Import once
-        # an account is open.
+        # 2.x vaults come in through Import once an account is open; an
+        # account used on another device comes in through its server.
         ctk.CTkButton(links, text="Create an account",
                       command=self.create_user_dialog, width=10, height=32,
                       fg_color="transparent", hover_color=CARD_HOVER,
                       text_color=GREEN, font=F(13, "bold")).pack(side="left")
+        ctk.CTkButton(links, text="Sign in from a server",
+                      command=lambda: account_sync_ui.sign_in_dialog(self),
+                      width=10, height=32, fg_color="transparent",
+                      hover_color=CARD_HOVER, text_color=GREEN,
+                      font=F(13, "bold")).pack(side="right")
         ctk.CTkLabel(pad, text=version_string(), font=F(11),
                      text_color=MUTED).pack(pady=(14, 0))
 
@@ -692,7 +697,9 @@ class PasswordManagerGUI:
 
         controls = ctk.CTkFrame(bar, fg_color="transparent")
         controls.grid(row=0, column=3, padx=(0, 24))
-        # No Sync button in 3.0 phase 1: accounts sync from phase 2 on.
+        syn = self._ghost_button(controls, "Sync", self.sync_now, width=70)
+        syn.pack(side="left", padx=(0, 8))
+        Tooltip(syn, "Sync this account with its server (Settings → Sync)")
         imp = self._ghost_button(controls, "Import", self.import_dialog, width=80)
         imp.pack(side="left", padx=(0, 8))
         Tooltip(imp, "Import a PassMan 2.x vault, or a CSV or JSON file")
@@ -1252,6 +1259,8 @@ class PasswordManagerGUI:
         sync_ui.restore_from_server_dialog(self)
 
     def sync_now(self, **options):
+        if self.account is not None:
+            return account_sync_ui.run_sync(self)
         sync_ui.run_sync(self, **options)
 
     # ==================================================================
