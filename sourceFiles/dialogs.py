@@ -18,19 +18,23 @@ import customtkinter as ctk
 from tkinter import filedialog
 
 import account_crypto
+import account_sync
+import account_sync_ui
 import accounts
 import appconfig
 import importers
+import sync_client
 import totp
 import vault
 from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, INPUT_BG, BORDER,
-                   CARD, CARD_HOVER, ON_ACCENT, MONO, tile_colors)
+                   CARD, CARD_HOVER, ON_ACCENT, MONO, DANGER, tile_colors)
 from vault import (add_account, validate_username, export_csv, export_json,
                    update_entry, find_duplicate)
 from widgets import (dialog_shell, section, setting_row, option_menu, note,
                      error_label, check, field_label, entry, danger_button)
 from crypto_utils import password_matches
 from password_generator import generate_password
+from sync_ui import _in_background
 from version import long_version_string
 
 
@@ -700,15 +704,27 @@ def settings_dialog(app):
     lock_menu.set(label_for(appconfig.autolock_minutes()))
 
     # ---- sync ----
-    # SecretSpace 3 accounts sync from phase 2 (server accounts) on.
     syn = section(wrap, "Sync")
-    # The control slot gets a label: an empty CTkFrame is 200 px tall.
-    ctk.CTkLabel(setting_row(syn, "Not in this test version",
-                             "Accounts sync from the next 3.0 test version "
-                             "on. Your 2.x vaults keep syncing in SecretSpace "
-                             "2.x.", hint, first=True),
-                 text="Next version", font=F(12, "bold"),
-                 text_color=MUTED).pack()
+    server = app.account.server
+    if server:
+        app._ghost_button(
+            setting_row(syn, "Synced with", server["url"], hint, first=True),
+            "Sync now", lambda: (top.destroy(), app.sync_now()), width=150).pack()
+        app._ghost_button(
+            setting_row(syn, "Stop syncing on this PC",
+                        "The server keeps its copy; connect again any time.",
+                        hint),
+            "Disconnect", lambda: (account_sync_ui.forget_server(app),
+                                   top.destroy()), width=150).pack()
+    else:
+        app._ghost_button(
+            setting_row(syn, "Not on a server yet",
+                        "Keep this account in step across your devices "
+                        "through your own SecretSpace Server (2.0 or newer).",
+                        hint, first=True),
+            "Set up…", lambda: (top.destroy(),
+                               account_sync_ui.server_dialog(app)),
+            width=150).pack()
 
     # ---- archive ----
     arc = section(wrap, "Archive")
@@ -848,16 +864,26 @@ def _change_master_dialog(app, parent_top):
             err.configure(text="That is already your master password."); return
         if len(new) < 8:
             err.configure(text="Use at least 8 characters."); return
-        try:
-            # The keyset is resealed; the vault file is not touched.
-            app.account.change_password(new)
-        except Exception:
-            err.configure(text="Could not save. Password unchanged.")
-            return
-        app.master_password = new
-        top.destroy()
-        parent_top.destroy()
-        app.toast("Master password changed")
+        # The keyset is resealed; the vault file is not touched. An account
+        # on a server tells the server first (account_sync.change_password),
+        # so this runs off the main thread.
+        err.configure(text="Changing…", text_color=MUTED)
+
+        def done(_):
+            app.master_password = new
+            top.destroy()
+            parent_top.destroy()
+            app.toast("Master password changed")
+
+        def failed(e):
+            text = (str(e) if isinstance(e, sync_client.SyncError)
+                    else "Could not save. Password unchanged.")
+            if isinstance(e, sync_client.SyncError):
+                text += " The password was not changed anywhere."
+            err.configure(text=text, text_color=DANGER)
+
+        _in_background(app, lambda: account_sync.change_password(app.account, new),
+                       done, failed)
 
     app._ghost_button(shell.buttons, "Cancel", top.destroy,
                       width=110).pack(side="left")
