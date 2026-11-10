@@ -29,10 +29,10 @@ SecretSpace lives in four repositories:
 ## SecretSpace 3 — a test version, not for real passwords yet
 
 `main` is now **3.0.0-alpha.4**, a test step of SecretSpace 3. **For your real
-passwords keep using [2.12.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.12.0)**,
+passwords keep using [2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0)**,
 which the rest of this README describes. Do not install the test version
 over it: it opens SecretSpace 3 accounts only, so your 2.x vaults would not
-show up (they are not changed or deleted — 2.12.0 opens them again).
+show up (they are not changed or deleted — 2.13.0 opens them again).
 
 What the test version has:
 
