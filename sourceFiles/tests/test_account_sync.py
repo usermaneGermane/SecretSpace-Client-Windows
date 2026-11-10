@@ -303,9 +303,11 @@ def test_a_password_changed_on_one_device_reaches_the_other(server, device, alic
     stale = accounts.unlock("alice", PW)                   # b still has the old
     with pytest.raises(LoginFailed, match="Sign in from a server"):
         account_sync.AccountSync(stale).prepare(stale.load_vault())
-    # b signs in again with the new password; under the password scheme its
-    # stored Secret Key was sealed with the old one, so the kit is needed.
-    kit = alice.kit if scheme == "password" else None
+    # b signs in again with the new password. Where the Secret Key is kept
+    # under the password (the scheme forced here, and Linux's own), it was
+    # sealed with the old one, so the kit is needed; DPAPI does not care.
+    kit = (alice.kit if secret_store.default_scheme() == secret_store.SCHEME_PASSWORD
+           else None)
     if kit is None:
         caught, _ = account_sync.sign_in(server.url, "", "alice",
                                          "a brand new password")
