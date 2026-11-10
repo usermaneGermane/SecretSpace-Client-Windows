@@ -28,7 +28,7 @@ SecretSpace lives in four repositories:
 
 ## SecretSpace 3 — a test version, not for real passwords yet
 
-`main` is now **3.0.0-alpha.3**, a test step of SecretSpace 3. **For your real
+`main` is now **3.0.0-alpha.4**, a test step of SecretSpace 3. **For your real
 passwords keep using [2.12.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.12.0)**,
 which the rest of this README describes. Do not install the test version
 over it: it opens SecretSpace 3 accounts only, so your 2.x vaults would not
@@ -50,6 +50,9 @@ What the test version has:
 - **Importing a 2.x vault.** *Import* lists the 2.x vaults on this PC (or
   takes a `.vault.enc` file) and copies every entry with its history and
   archive state. The 2.x file is only read; its sync settings stay with it.
+- **A smoother look** (new in alpha.4). Rounded corners are drawn smoothed
+  instead of in pixel steps, the sign-in screen's padlock and key are
+  redrawn, and an entry's coloured header has room around its tile.
 - **Sync through your own server** (new in alpha.3). *Settings → Sync →
   Set up…* puts the account on a SecretSpace Server **2.0** (a test version
   too) with the server's token as the sign-up code; after that the **Sync**
@@ -67,7 +70,7 @@ Not in this test version yet: more than one vault per account,
 recovering an account with the 12-word phrase (the phrase is made and
 checked now; the screen that uses it comes later), sharing a vault with
 other people, and *Sync when I unlock* for accounts. SecretSpace for Linux
-has the same test version, 1.0.0-alpha.3. Coming next, in this order:
+has the same test version, 1.0.0-alpha.4. Coming next, in this order:
 several vaults per account, sharing a vault with family or colleagues, and
 recovering an account with the 12-word phrase.
 

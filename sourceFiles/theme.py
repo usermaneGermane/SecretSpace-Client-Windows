@@ -13,12 +13,10 @@ import customtkinter as ctk
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
 
-# CustomTkinter's Windows default draws rounded corners out of font glyphs,
-# which costs ~60 ms per account row. Polygons -- its macOS default -- halve
-# that, at the price of slightly less smoothed corners. Must be set before
-# any widget is created.
-from customtkinter.windows.widgets.core_rendering import DrawEngine
-DrawEngine.preferred_drawing_method = "polygon_shapes"
+# Rounded corners are drawn the way CustomTkinter prefers here: out of
+# smoothed font glyphs. Until 3.0.0-alpha.4 polygons were forced instead,
+# which are quicker (about 7 ms per account row, measured on CustomTkinter
+# 6.0) but not smoothed at all -- every corner showed its pixel steps.
 
 BG = "#0A0C0B"                 # the window itself
 HEADER_BG = "#101311"          # top bar, history panel

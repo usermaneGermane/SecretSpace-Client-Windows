@@ -31,7 +31,7 @@ from theme import (F, BG, HEADER_BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    ON_ACCENT, WARN, MONO,
                    tile_colors, asset_candidates)
-from widgets import (Tooltip, ghost_button, accent_button, field,
+from widgets import (Tooltip, even_width, ghost_button, accent_button, field,
                      strength_widget, modal, fit_modal, safe_grab, confirm,
                      STRENGTH_SEGMENTS)
 from password_generator import estimate_strength
@@ -49,6 +49,9 @@ SEARCH_DEBOUNCE_MS = 150        # wait for a pause in typing before filtering
 ROW_SLICE_SECONDS = 0.1         # list work per step before redrawing the window
 
 LOGIN_TILES_PER_ROW = 3
+
+BACKDROP_REDRAW_MS = 60         # the login backdrop waits for a resize to settle
+BACKDROP_OVERSAMPLE = 3         # painted this many times larger, then scaled down
 
 #: What the Sort menu shows for each of vault.SORT_ORDERS.
 SORT_LABELS = {
@@ -69,6 +72,66 @@ def _row_signature(acc):
             acc.get("password"), bool(acc.get("notes")), bool(acc.get("totp")),
             acc.get("updated_at"),
             tuple(r.get("rid") for r in acc.get("history") or []))
+
+
+def backdrop_picture(w, h):
+    """
+    The login backdrop: two soft discs, a padlock, a key and a few dots,
+    with smooth edges. None when the window has no size yet.
+    """
+    from PIL import Image, ImageDraw
+    if w < 2 or h < 2:
+        return None
+    k = BACKDROP_OVERSAMPLE
+    img = Image.new("RGB", (w * k, h * k), BG)
+    d = ImageDraw.Draw(img)
+
+    def box(x0, y0, x1, y1):
+        return [round(x0 * k), round(y0 * k), round(x1 * k), round(y1 * k)]
+
+    def dot(x, y, r, fill):
+        d.ellipse(box(x - r, y - r, x + r, y + r), fill=fill)
+
+    def stroke(points, fill, width=4):
+        """A line with round ends and joints."""
+        d.line([(round(x * k), round(y * k)) for x, y in points], fill=fill,
+               width=width * k, joint="curve")
+        for x, y in (points[0], points[-1]):
+            dot(x, y, width / 2, fill)
+
+    r1, r2 = max(w, h) * 0.17, max(w, h) * 0.21
+    dot(w * 0.1, h * 0.16, r1, "#0F2117")
+    dot(w * 0.93, h * 0.9, r2, "#101A14")
+
+    # A padlock, top right: a rounded body, a shackle, a keyhole.
+    x, y = w * 0.86, h * 0.2
+    d.arc(box(x - 17, y - 32, x + 17, y + 2), start=180, end=360, fill=GREEN,
+          width=4 * k)
+    stroke([(x - 15, y - 15), (x - 15, y - 4)], GREEN)
+    stroke([(x + 15, y - 15), (x + 15, y - 4)], GREEN)
+    d.rounded_rectangle(box(x - 26, y - 6, x + 26, y + 34), radius=9 * k,
+                        outline=GREEN, width=4 * k)
+    dot(x, y + 11, 4.5, GREEN)
+    stroke([(x, y + 13), (x, y + 21)], GREEN)
+
+    # A key, bottom left: a ring, a shaft, two teeth.
+    x, y = w * 0.15, h * 0.8
+    ink = "#7BE0A6"
+    d.ellipse(box(x - 40, y - 18, x - 4, y + 18), outline=ink, width=4 * k)
+    stroke([(x - 5, y), (x + 44, y)], ink)
+    stroke([(x + 30, y), (x + 30, y + 15)], ink)
+    stroke([(x + 42, y), (x + 42, y + 11)], ink)
+
+    for fx, fy in ((0.3, 0.1), (0.7, 0.92), (0.96, 0.48), (0.05, 0.55)):
+        dot(w * fx, h * fy, 4, "#1F3A2A")
+    return img.resize((w, h), Image.LANCZOS)
+
+
+def backdrop_image(w, h):
+    """:func:`backdrop_picture` as an image a Tk canvas can show."""
+    from PIL import ImageTk
+    picture = backdrop_picture(w, h)
+    return None if picture is None else ImageTk.PhotoImage(picture)
 
 
 def _clip(text, limit):
@@ -116,6 +179,7 @@ class PasswordManagerGUI:
         self._clip_text = None
         self._idle_job = None
         self._lockout_job = None
+        self._backdrop_job = None
         self._last_activity = time.monotonic()
         self._autolock_seconds = appconfig.DEFAULT_AUTOLOCK_MINUTES * 60
         self._syncing = False
@@ -209,6 +273,9 @@ class PasswordManagerGUI:
         if self._search_job:
             self.root.after_cancel(self._search_job)
             self._search_job = None
+        if self._backdrop_job:
+            self.root.after_cancel(self._backdrop_job)
+            self._backdrop_job = None
         for w in self.root.winfo_children():
             w.destroy()
         self._toast = None
@@ -348,7 +415,8 @@ class PasswordManagerGUI:
         backdrop = tk.Canvas(self.root, bg=BG, highlightthickness=0, bd=0)
         backdrop.place(relx=0, rely=0, relwidth=1, relheight=1)
         backdrop.bind("<Configure>",
-                      lambda e: self._draw_backdrop(backdrop, e.width, e.height))
+                      lambda e: self._backdrop_resized(backdrop, e.width,
+                                                       e.height))
 
         card = ctk.CTkFrame(backdrop, fg_color=CARD, corner_radius=24,
                             bg_color=BG, border_width=1, border_color=BORDER)
@@ -427,8 +495,40 @@ class PasswordManagerGUI:
             self._begin_lockout(self._login_user,
                                 lockout.remaining(self._login_user))
 
+    def _backdrop_resized(self, canvas, w, h):
+        """Redraw once the window stops changing size, not on every step."""
+        if self._backdrop_job:
+            self.root.after_cancel(self._backdrop_job)
+            self._backdrop_job = None
+        if not canvas.find_all():
+            self._draw_backdrop(canvas, w, h)
+            return
+
+        def draw():
+            self._backdrop_job = None
+            if canvas.winfo_exists():
+                self._draw_backdrop(canvas, w, h)
+        self._backdrop_job = self.root.after(BACKDROP_REDRAW_MS, draw)
+
     def _draw_backdrop(self, canvas, w, h):
+        """
+        The shapes behind the login card. A Tk canvas draws without
+        smoothing, so they are painted larger with Pillow and scaled down;
+        without Pillow the plain canvas shapes still do.
+        """
         canvas.delete("all")
+        try:
+            image = backdrop_image(w, h)
+        except Exception:
+            image = None
+        if image is None:
+            self._draw_backdrop_plain(canvas, w, h)
+            return
+        canvas.image = image          # Tk keeps no reference of its own
+        canvas.create_image(0, 0, anchor="nw", image=image)
+
+    @staticmethod
+    def _draw_backdrop_plain(canvas, w, h):
         r1, r2 = max(w, h) * 0.17, max(w, h) * 0.21
         canvas.create_oval(w * 0.1 - r1, h * 0.16 - r1, w * 0.1 + r1,
                            h * 0.16 + r1, fill="#0F2117", outline="")
@@ -760,10 +860,12 @@ class PasswordManagerGUI:
         self.list_frame.pack(fill="both", expand=True, padx=6, pady=8)
         self.list_frame.grid_columnconfigure(0, weight=1)
 
-        add = self._accent_button(left, "+  Add an entry",
+        add_row = ctk.CTkFrame(left, fg_color="transparent", height=48)
+        add_row.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        add = self._accent_button(add_row, "+  Add an entry",
                                   self.add_account_dialog)
         add.configure(height=48, corner_radius=16, font=F(14, "bold"))
-        add.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        even_width(add, add_row)
         ctk.CTkLabel(left, text=version_string(), font=F(11),
                      text_color=MUTED).grid(row=3, column=0, pady=(8, 0))
 
@@ -990,7 +1092,7 @@ class PasswordManagerGUI:
         band = ctk.CTkFrame(self.detail, fg_color=band_color, corner_radius=18,
                             height=112)
         band.pack(fill="x", padx=8, pady=(8, 0))
-        band.pack_propagate(False)
+        band.grid_propagate(False)
         band.grid_columnconfigure(1, weight=1)
         band.grid_rowconfigure(0, weight=1)
         ctk.CTkLabel(band, text=(acc["site"][:1].upper() or "?"), width=72,

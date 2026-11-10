@@ -85,6 +85,29 @@ def danger_button(parent, text, command, width=130):
     )
 
 
+def even_width(widget, holder):
+    """
+    Fill ``holder`` (a frame of the widget's height, with nothing else in
+    it) with ``widget``, an even number of pixels wide. Smoothed corners are
+    drawn for even sizes only; at an odd width a bright button shows a
+    one-pixel step down its right edge.
+
+    The widget is placed, not packed: its width must not feed back into
+    the layout that decides the holder's.
+    """
+    def fit(event):
+        try:
+            # winfo sizes are physical pixels; CTk wants its own points.
+            scale = widget._get_widget_scaling()
+        except Exception:
+            scale = 1
+        want = (event.width // 2 * 2) / scale
+        if abs(widget.cget("width") - want) > 0.01:
+            widget.configure(width=want)
+    widget.place(x=0, y=0)
+    holder.bind("<Configure>", fit, add="+")
+
+
 def small_button(parent, text, command, accent=False, danger=False, width=72):
     """The compact button of list rows (archive) -- same as the details card's."""
     return ctk.CTkButton(
