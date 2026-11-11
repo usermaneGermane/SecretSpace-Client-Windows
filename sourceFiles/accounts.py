@@ -10,8 +10,10 @@ An account replaces the 2.x "one vault file per user". It is a folder::
                             it (secret_store), fingerprints seen
         keyset.pmk          the keyset, under master password + Secret Key
         recovery.pmk        the same keyset, under the 12-word phrase
-        vaults/<id>.pmv3    the personal vault (+ .bak, the previous save,
-                            + .base, the state last agreed with the server)
+        vaults/<id>.pmv3    a vault (+ .bak, the previous save, + .base,
+                            the state last agreed with the server): the
+                            personal one, and since phase 3 any further
+                            vaults the account has (account.json "vaults")
 
 ``<home>`` is the folder that holds the 2.x ``vault`` folder (beside the app
 for a lab copy, %APPDATA%\\SecretSpace when installed). 2.x vault files are only
@@ -37,6 +39,10 @@ VAULTS_DIR = "vaults"
 VAULT_SUFFIX = ".pmv3"
 ACCOUNT_FORMAT = 1
 MODE_PERSONAL = "personal"
+
+#: What the personal vault is called wherever vaults are listed. It has no
+#: stored name, and no other vault may take this one.
+PERSONAL_NAME = "Personal"
 
 
 class SecretKeyNeeded(Exception):
@@ -116,94 +122,74 @@ def _write_info(username: str, info: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# An open account
+# One vault of an open account
 # ---------------------------------------------------------------------------
-class Account:
-    """An unlocked account: its keys in memory, its files on disk."""
+def clean_vault_name(name: str) -> str:
+    """A vault name as it is stored, or ValueError saying what is wrong."""
+    name = " ".join((name or "").split())
+    if not name:
+        raise ValueError("Give the vault a name.")
+    if len(name) > account_crypto.VAULT_NAME_CHARS or \
+            len(name.encode("utf-8")) > account_crypto.VAULT_NAME_BYTES:
+        raise ValueError(f"A vault name can be up to "
+                         f"{account_crypto.VAULT_NAME_CHARS} characters.")
+    if any(ord(c) < 32 or ord(c) == 127 for c in name):
+        raise ValueError("A vault name cannot contain control characters.")
+    return name
 
-    def __init__(self, username: str, info: dict, keyset: dict, secret: bytes,
-                 login_key: bytes = None):
-        self.username = username
-        self.info = info
-        self.keyset = keyset
-        self._secret = secret
-        # What logs this account in to its server (account_sync). Derived at
-        # unlock from the password and the Secret Key, so it is kept only in
-        # memory, like the keys it travels with.
-        self.login_key = login_key
-        self.vault_id = bytes.fromhex(info["personal_vault"])
-        self._vault_key = account_crypto._unb64(keyset["personal_vault_key"],
-                                                "vault key")
 
-    @property
-    def mode(self) -> str:
-        return self.info.get("mode", MODE_PERSONAL)
+class VaultFile:
+    """
+    One vault of an unlocked account: its id, name and key in memory, its
+    files on disk. Everything that reads, writes or syncs a vault goes
+    through one of these, the personal vault and any other alike.
+    """
 
-    @property
-    def fingerprint(self) -> str:
-        return account_crypto.fingerprint(account_crypto.public_key_of(self.keyset))
-
-    @property
-    def secret_key_text(self) -> str:
-        """For the Emergency Kit again (Settings)."""
-        return account_crypto.format_secret_key(self._secret)
-
-    @property
-    def vault_path(self) -> str:
-        return os.path.join(account_dir(self.username), VAULTS_DIR,
-                            self.info["personal_vault"] + VAULT_SUFFIX)
-
-    def load_vault(self) -> dict:
-        """The personal vault. Falls back to .bak like a 2.x vault does."""
-        first_error = None
-        for path in (self.vault_path, self.vault_path + vault.BACKUP_SUFFIX):
-            if not os.path.exists(path):
-                continue
-            try:
-                data = account_crypto.decrypt_vault(
-                    self._vault_key, _read_text(path), self.vault_id)
-                return vault.validate_vault(data)
-            except (ValueError, OSError) as e:      # CryptoError is a ValueError
-                if first_error is None:
-                    first_error = e
-        raise first_error or FileNotFoundError("The personal vault is missing.")
-
-    def save_vault(self, data: dict) -> None:
-        vault._rotate_backup(self.vault_path)
-        _write_text(self.vault_path, self.encrypt(data))
-
-    def encrypt(self, data: dict) -> str:
-        """``data`` as a PMV3 blob under the personal vault's key."""
-        return account_crypto.encrypt_vault(self._vault_key, self.vault_id, 0,
-                                            vault.validate_vault(data))
-
-    def decrypt(self, blob: str) -> dict:
-        """A PMV3 blob of the personal vault (it must name this vault)."""
-        return vault.validate_vault(account_crypto.decrypt_vault(
-            self._vault_key, blob, self.vault_id))
-
-    @property
-    def has_vault_file(self) -> bool:
-        return os.path.exists(self.vault_path)
-
-    # -- the server -----------------------------------------------------------
-    @property
-    def server(self) -> dict:
-        """{"url", "ca_file"} of the server this account syncs with, or None."""
-        found = self.info.get("server")
-        return found if isinstance(found, dict) and found.get("url") else None
-
-    def set_server(self, url, ca_file: str = "") -> None:
-        """Remember the server (None forgets it). account.json only."""
-        info = dict(self.info)
-        info["server"] = ({"url": url.rstrip("/"), "ca_file": ca_file or ""}
-                          if url else None)
-        _write_info(self.username, info)
-        self.info = info
+    def __init__(self, username: str, vault_id: bytes, key: bytes, name: str,
+                 personal: bool):
+        self.id = vault_id
+        self.hex = vault_id.hex()
+        self.name = name
+        self.personal = personal
+        self._key = key
+        self.path = os.path.join(account_dir(username), VAULTS_DIR,
+                                 self.hex + VAULT_SUFFIX)
 
     @property
     def base_path(self) -> str:
-        return self.vault_path + vault.BASE_SUFFIX
+        return self.path + vault.BASE_SUFFIX
+
+    @property
+    def has_file(self) -> bool:
+        return os.path.exists(self.path)
+
+    def encrypt(self, data: dict) -> str:
+        """``data`` as a PMV3 blob under this vault's key."""
+        return account_crypto.encrypt_vault(self._key, self.id, 0,
+                                            vault.validate_vault(data))
+
+    def decrypt(self, blob: str) -> dict:
+        """A PMV3 blob of this vault (it must name this vault)."""
+        return vault.validate_vault(account_crypto.decrypt_vault(
+            self._key, blob, self.id))
+
+    def load(self) -> dict:
+        """The vault's data. Falls back to .bak like a 2.x vault does."""
+        first_error = None
+        for path in (self.path, self.path + vault.BACKUP_SUFFIX):
+            if not os.path.exists(path):
+                continue
+            try:
+                return self.decrypt(_read_text(path))
+            except (ValueError, OSError) as e:      # CryptoError is a ValueError
+                if first_error is None:
+                    first_error = e
+        raise first_error or FileNotFoundError(
+            f"The vault “{self.name}” is missing on this PC.")
+
+    def save(self, data: dict) -> None:
+        vault._rotate_backup(self.path)
+        _write_text(self.path, self.encrypt(data))
 
     def load_base(self):
         """
@@ -222,6 +208,246 @@ class Account:
         data = dict(data)
         data[vault.BASE_ORIGIN_KEY] = origin
         _write_text(self.base_path, self.encrypt(data))
+
+    def sealed_name(self) -> str:
+        """The name as the server keeps it (it cannot read it)."""
+        return account_crypto.seal_vault_name(self._key, self.id, self.name)
+
+    def open_name(self, sealed: str) -> str:
+        return account_crypto.open_vault_name(self._key, self.id, sealed)
+
+    def remove_files(self) -> None:
+        for path in (self.path, self.path + vault.BACKUP_SUFFIX, self.base_path):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# An open account
+# ---------------------------------------------------------------------------
+class Account:
+    """An unlocked account: its keys in memory, its files on disk."""
+
+    def __init__(self, username: str, info: dict, keyset: dict, secret: bytes,
+                 login_key: bytes = None):
+        self.username = username
+        self.info = info
+        self.keyset = keyset
+        self._secret = secret
+        # What logs this account in to its server (account_sync). Derived at
+        # unlock from the password and the Secret Key, so it is kept only in
+        # memory, like the keys it travels with.
+        self.login_key = login_key
+        self.vault_id = bytes.fromhex(info["personal_vault"])
+        self._vault_key = account_crypto._unb64(keyset["personal_vault_key"],
+                                                "vault key")
+        # Keys of the further vaults, unwrapped once per unlock.
+        self._vault_keys = {}
+
+    @property
+    def mode(self) -> str:
+        return self.info.get("mode", MODE_PERSONAL)
+
+    @property
+    def fingerprint(self) -> str:
+        return account_crypto.fingerprint(account_crypto.public_key_of(self.keyset))
+
+    @property
+    def secret_key_text(self) -> str:
+        """For the Emergency Kit again (Settings)."""
+        return account_crypto.format_secret_key(self._secret)
+
+    # -- its vaults -----------------------------------------------------------
+    @property
+    def personal_id(self) -> str:
+        return self.info["personal_vault"]
+
+    def _extra(self) -> dict:
+        """account.json's record of the vaults besides the personal one."""
+        found = self.info.get("vaults")
+        return found if isinstance(found, dict) else {}
+
+    def vault_ids(self) -> list:
+        """Every vault of the account, by id: the personal one first, then
+        the others by name."""
+        extra = self._extra()
+        return [self.personal_id] + sorted(
+            extra, key=lambda v: (str(extra[v].get("name", "")).lower(), v))
+
+    def vault_record(self, vault_id: str) -> dict:
+        """What account.json holds about a further vault ({} for the personal
+        one): name, wrapped_key, on_server, gone_from_server, rename_pending."""
+        return dict(self._extra().get(vault_id, {}))
+
+    def vault_file(self, vault_id: str = None) -> VaultFile:
+        """The vault with this id (the personal one when None)."""
+        if vault_id is None or vault_id == self.personal_id:
+            return VaultFile(self.username, self.vault_id, self._vault_key,
+                             PERSONAL_NAME, True)
+        record = self._extra().get(vault_id)
+        if record is None:
+            raise KeyError(f"This account has no vault {vault_id}.")
+        key = self._vault_keys.get(vault_id)
+        if key is None:
+            key = account_crypto.unwrap_key(
+                self.keyset, record["wrapped_key"], bytes.fromhex(vault_id),
+                self.username)
+            self._vault_keys[vault_id] = key
+        return VaultFile(self.username, bytes.fromhex(vault_id), key,
+                         record.get("name", ""), False)
+
+    def _name_taken(self, name: str, except_id: str = None) -> bool:
+        wanted = name.lower()
+        if wanted == PERSONAL_NAME.lower():
+            return True
+        return any(str(r.get("name", "")).lower() == wanted
+                   for v, r in self._extra().items() if v != except_id)
+
+    def _write_vaults(self, extra: dict) -> None:
+        info = dict(self.info)
+        info["vaults"] = extra
+        _write_info(self.username, info)
+        self.info = info
+
+    def create_vault(self, name: str) -> VaultFile:
+        """
+        A further vault, empty, on this device. Its key is random and kept
+        wrapped to the account's own public key -- exactly how it will be
+        handed to another member once vaults are shared.
+        """
+        name = clean_vault_name(name)
+        if self._name_taken(name):
+            raise ValueError(f"There is already a vault called “{name}”.")
+        vault_id = account_crypto.new_vault_id()
+        key = account_crypto.new_vault_key()
+        wrapped = account_crypto.wrap_key(
+            account_crypto.public_key_of(self.keyset), key, vault_id,
+            self.username)
+        made = VaultFile(self.username, vault_id, key, name, False)
+        made.save({"accounts": []})
+        extra = dict(self._extra())
+        extra[made.hex] = {"name": name, "wrapped_key": wrapped,
+                           "created_at": vault.utc_now(), "on_server": False}
+        self._write_vaults(extra)                  # last: it makes it a vault
+        self._vault_keys[made.hex] = key
+        return made
+
+    def adopt_vault(self, vault_id: str, wrapped_key: str, sealed_name: str) -> VaultFile:
+        """
+        A vault the server holds for this account and this device does not
+        have yet. The key must open with this account's key, and the name
+        with the vault's -- otherwise it is not ours and nothing is written.
+        """
+        raw_id = bytes.fromhex(vault_id)
+        key = account_crypto.unwrap_key(self.keyset, wrapped_key, raw_id,
+                                        self.username)
+        name = clean_vault_name(account_crypto.open_vault_name(key, raw_id,
+                                                               sealed_name))
+        # Two devices may each have made a vault of the same name while
+        # offline: both are kept, and told apart.
+        base, n = name, 2
+        while self._name_taken(name, except_id=vault_id):
+            name = f"{base} ({n})"
+            n += 1
+        extra = dict(self._extra())
+        extra[vault_id] = {"name": name, "wrapped_key": wrapped_key,
+                           "created_at": vault.utc_now(), "on_server": True}
+        self._write_vaults(extra)
+        self._vault_keys[vault_id] = key
+        return self.vault_file(vault_id)
+
+    def rename_vault(self, vault_id: str, name: str, pending: bool = True) -> None:
+        """``pending`` marks a name the server has not been told yet."""
+        name = clean_vault_name(name)
+        if vault_id == self.personal_id or vault_id not in self._extra():
+            raise ValueError("That vault cannot be renamed.")
+        if self._name_taken(name, except_id=vault_id):
+            raise ValueError(f"There is already a vault called “{name}”.")
+        extra = dict(self._extra())
+        record = dict(extra[vault_id])
+        record["name"] = name
+        record["rename_pending"] = bool(pending and record.get("on_server"))
+        extra[vault_id] = record
+        self._write_vaults(extra)
+
+    def mark_vault(self, vault_id: str, **flags) -> None:
+        """Set on_server / gone_from_server / rename_pending for a vault."""
+        extra = dict(self._extra())
+        if vault_id not in extra:
+            return
+        record = dict(extra[vault_id])
+        record.update(flags)
+        extra[vault_id] = record
+        self._write_vaults(extra)
+
+    def delete_vault(self, vault_id: str) -> None:
+        """Forget a further vault on this device: its record and its files.
+        The caller has checked the password (and told the server first)."""
+        if vault_id == self.personal_id or vault_id not in self._extra():
+            raise ValueError("That vault cannot be deleted.")
+        target = self.vault_file(vault_id)
+        extra = dict(self._extra())
+        del extra[vault_id]
+        self._write_vaults(extra)              # first: no record, no vault
+        self._vault_keys.pop(vault_id, None)
+        target.remove_files()
+
+    # -- the personal vault, as before phase 3 -----------------------------------
+    @property
+    def vault_path(self) -> str:
+        return self.vault_file().path
+
+    def load_vault(self) -> dict:
+        return self.vault_file().load()
+
+    def save_vault(self, data: dict) -> None:
+        self.vault_file().save(data)
+
+    def encrypt(self, data: dict) -> str:
+        return self.vault_file().encrypt(data)
+
+    def decrypt(self, blob: str) -> dict:
+        return self.vault_file().decrypt(blob)
+
+    @property
+    def has_vault_file(self) -> bool:
+        return self.vault_file().has_file
+
+    # -- the server -----------------------------------------------------------
+    @property
+    def server(self) -> dict:
+        """{"url", "ca_file"} of the server this account syncs with, or None."""
+        found = self.info.get("server")
+        return found if isinstance(found, dict) and found.get("url") else None
+
+    def set_server(self, url, ca_file: str = "") -> None:
+        """Remember the server (None forgets it). account.json only."""
+        info = dict(self.info)
+        before = (info.get("server") or {}).get("url")
+        info["server"] = ({"url": url.rstrip("/"), "ca_file": ca_file or ""}
+                          if url else None)
+        if (info["server"] or {}).get("url") != before:
+            # Another server (or none) knows nothing of these vaults: they
+            # are this device's again, to be put on whichever comes next.
+            info["vaults"] = {
+                v: {k: x for k, x in r.items()
+                    if k not in ("on_server", "gone_from_server",
+                                 "rename_pending")}
+                for v, r in self._extra().items()}
+        _write_info(self.username, info)
+        self.info = info
+
+    @property
+    def base_path(self) -> str:
+        return self.vault_file().base_path
+
+    def load_base(self):
+        return self.vault_file().load_base()
+
+    def save_base(self, data: dict, origin: dict) -> None:
+        self.vault_file().save_base(data, origin)
 
     def check_password(self, password: str) -> bool:
         """Is this the master password? (Re-derives: 2FA reveal, delete.)"""
@@ -418,7 +644,8 @@ def adopt_from_server(username: str, me: dict, keyset: dict, secret: bytes,
         os.mkdir(folder, 0o700)
         info = {"format": ACCOUNT_FORMAT, "username": username,
                 "mode": MODE_PERSONAL, "created_at": vault.utc_now(),
-                "personal_vault": vault_id, "fingerprints_seen": {}}
+                "personal_vault": vault_id, "fingerprints_seen": {},
+                "vaults": {}}
     info.update({"public_key": me["public_key"], "server": server,
                  "secret_key": secret_store.protect(secret, username, password)})
     _write_text(os.path.join(folder, KEYSET_FILE), me["keyset"])

@@ -407,6 +407,49 @@ def decrypt_vault(vault_key: bytes, blob: str, expect_vault_id: bytes = None) ->
 
 
 # ===========================================================================
+# A vault's name, as the server keeps it
+# ===========================================================================
+#: Longest vault name, in characters and in UTF-8 bytes (the server's limit).
+VAULT_NAME_CHARS = 60
+VAULT_NAME_BYTES = 200
+
+
+def new_vault_key() -> bytes:
+    return os.urandom(KEY_LEN)
+
+
+def _name_key(vault_key: bytes, vault_id: bytes) -> bytes:
+    # Its own key, so a name and the vault's entries never share one.
+    return _hkdf(vault_key, vault_id, b"PassMan3 vault name")
+
+
+def seal_vault_name(vault_key: bytes, vault_id: bytes, name: str) -> str:
+    """
+    ``name`` under the vault's key, for the server: it lists an account's
+    vaults without learning what they are called. Bound to the vault id, so
+    one vault's name cannot be shown as another's.
+    """
+    raw = name.encode("utf-8")
+    if not raw or len(raw) > VAULT_NAME_BYTES:
+        raise CryptoError("A vault name must be 1 to 200 bytes long.")
+    nonce = os.urandom(NONCE_LEN)
+    return _b64(nonce + AESGCM(_name_key(vault_key, vault_id)).encrypt(
+        nonce, raw, vault_id))
+
+
+def open_vault_name(vault_key: bytes, vault_id: bytes, sealed: str) -> str:
+    raw = _unb64(sealed, "vault name")
+    if len(raw) < NONCE_LEN + 1 + 16:
+        raise CryptoError("The vault's name is damaged.")
+    try:
+        return AESGCM(_name_key(vault_key, vault_id)).decrypt(
+            raw[:NONCE_LEN], raw[NONCE_LEN:], vault_id).decode("utf-8")
+    except Exception:
+        raise CryptoError("The vault's name could not be read: wrong key, or "
+                          "it is damaged.") from None
+
+
+# ===========================================================================
 # The 12-word recovery phrase (BIP39, English)
 # ===========================================================================
 PHRASE_WORDS = 12

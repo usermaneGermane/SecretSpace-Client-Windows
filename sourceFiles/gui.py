@@ -11,6 +11,8 @@ crypto_utils.py / vault.py); this file never touches the cipher, it just talks
 to load_vault / save_vault.
 """
 
+import hashlib
+import json
 import os
 import time
 import tkinter as tk
@@ -26,6 +28,7 @@ import lockout
 import sync_client
 import sync_ui
 import account_sync_ui
+import vaults_ui
 import totp
 from theme import (F, BG, HEADER_BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
@@ -53,6 +56,9 @@ LOGIN_TILES_PER_ROW = 3
 BACKDROP_REDRAW_MS = 60         # the login backdrop waits for a resize to settle
 BACKDROP_OVERSAMPLE = 3         # painted this many times larger, then scaled down
 
+#: The vault filter's entry that shows every vault of the account.
+ALL_VAULTS = "All vaults"
+
 #: What the Sort menu shows for each of vault.SORT_ORDERS.
 SORT_LABELS = {
     "modified_desc": "Recently modified",
@@ -62,13 +68,14 @@ SORT_LABELS = {
 }
 
 
-def _row_signature(acc):
+def _row_signature(acc, label=""):
     """
     Everything an account row shows or closes over. A cached row is reused
     only while this is unchanged; ``id(acc)`` covers a sync or a reload that
-    replaces the entry dicts, which the row's buttons hold on to.
+    replaces the entry dicts, which the row's buttons hold on to. ``label``
+    is the vault's name, when the row shows it.
     """
-    return (id(acc), acc.get("site"), acc.get("username"),
+    return (label, id(acc), acc.get("site"), acc.get("username"),
             acc.get("password"), bool(acc.get("notes")), bool(acc.get("totp")),
             acc.get("updated_at"),
             tuple(r.get("rid") for r in acc.get("history") or []))
@@ -157,7 +164,14 @@ class PasswordManagerGUI:
         self.root.minsize(980, 640)
         self.root.configure(fg_color=BG)
 
-        self.vault = None
+        # Every vault of the open account, by id, as account.vault_ids()
+        # orders them. ``self.vault`` (a property) is the one new entries go
+        # to: the vault picked in the filter, or the personal one.
+        self.vaults = {}
+        self._saved = {}                # vault id -> its content when last saved
+        self.vault_filter = None        # None = all vaults
+        self._entry_vault = {}          # listed entry id -> its vault's id
+        self.vault_menu = None
         self.master_password = None
         self.current_user = None
         # The unlocked 3.0 account (accounts.Account): its keys, its files.
@@ -203,6 +217,108 @@ class PasswordManagerGUI:
             self.root.bind_all(seq, self._mark_activity, add="+")
         self.root.bind("<Control-f>", self._focus_search)
         self.show_login_screen()
+
+    # ------------------------------------------------------------------
+    # The open account's vaults
+    # ------------------------------------------------------------------
+    @property
+    def active_vault_id(self):
+        """The vault new entries go to: the one picked in the filter, else
+        the personal one."""
+        if self.account is None:
+            return None
+        if self.vault_filter in self.vaults:
+            return self.vault_filter
+        return self.account.personal_id
+
+    @property
+    def vault(self):
+        return self.vaults.get(self.active_vault_id) if self.vaults else None
+
+    @vault.setter
+    def vault(self, data):
+        if data is None:                # locking: nothing stays in memory
+            self.vaults, self._saved = {}, {}
+            self.vault_filter = None
+            self._entry_vault = {}
+        else:
+            self.vaults[self.active_vault_id] = data
+
+    @staticmethod
+    def _content_mark(data):
+        return hashlib.sha256(json.dumps(data, sort_keys=True, default=str)
+                              .encode("utf-8")).hexdigest()
+
+    def load_vaults(self):
+        """
+        Bring ``self.vaults`` in line with the account's list: read vaults
+        that are new (made here, or arrived with a sync), forget ones that
+        are gone, keep the rest as they are in memory. Returns the names of
+        vaults whose file could not be read.
+        """
+        if self.account is None:
+            return []
+        unreadable, current = [], {}
+        for vault_id in self.account.vault_ids():
+            if vault_id in self.vaults:
+                current[vault_id] = self.vaults[vault_id]
+                continue
+            file = self.account.vault_file(vault_id)
+            if not file.has_file:
+                # Known from the server, its entries not fetched yet: the
+                # sync that listed it fills it in.
+                current[vault_id] = {"accounts": []}
+                continue
+            try:
+                current[vault_id] = file.load()
+                self._saved[vault_id] = self._content_mark(current[vault_id])
+            except Exception:
+                unreadable.append(file.name)
+        self.vaults = current
+        self._saved = {v: m for v, m in self._saved.items() if v in current}
+        if self.vault_filter not in self.vaults:
+            self.vault_filter = None
+        return unreadable
+
+    def set_vault_data(self, vault_id, data, saved=False):
+        """Replace a vault's data (a sync's merge). ``saved``: it is already
+        on disk like this."""
+        self.vaults[vault_id] = data
+        if saved:
+            self._saved[vault_id] = self._content_mark(data)
+
+    def scope_ids(self):
+        """The vaults the list shows: the picked one, or all of them."""
+        if self.vault_filter in self.vaults:
+            return [self.vault_filter]
+        return list(self.vaults)
+
+    def scope_vaults(self):
+        return [self.vaults[v] for v in self.scope_ids()]
+
+    def scope_data(self):
+        """Every entry in view as one vault-shaped dict (the export)."""
+        return {"accounts": [a for data in self.scope_vaults()
+                             for a in data["accounts"]]}
+
+    def vault_name(self, vault_id):
+        if self.account is None or vault_id == self.account.personal_id:
+            return accounts.PERSONAL_NAME
+        return self.account.vault_record(vault_id).get("name", "")
+
+    def vault_holding(self, entry_id):
+        """The data of the vault that holds this entry (the active one if
+        none does)."""
+        for data in self.vaults.values():
+            if any(a.get("id") == entry_id for a in data["accounts"]):
+                return data
+        return self.vault
+
+    def vault_phrase(self, vault_id=None):
+        """“your vault”, or the vault by name once there are several."""
+        if len(self.vaults) < 2:
+            return "your vault"
+        return f"the vault “{self.vault_name(vault_id or self.active_vault_id)}”"
 
     # ------------------------------------------------------------------
     # Branding (window icon + logo) - all optional / best effort
@@ -282,6 +398,7 @@ class PasswordManagerGUI:
         self._rows = {}
         self._empty_box = None
         self.search_entry = None
+        self.vault_menu = None
 
     # ------------------------------------------------------------------
     # Thin wrappers over widgets.py, so dialog code reads the same as before
@@ -323,8 +440,13 @@ class PasswordManagerGUI:
             self._toast = None
 
     def _save(self, rekey=False):
+        """Write every vault that changed since it was last written."""
         try:
-            self.account.save_vault(self.vault)
+            for vault_id, data in self.vaults.items():
+                mark = self._content_mark(data)
+                if self._saved.get(vault_id) != mark:
+                    self.account.vault_file(vault_id).save(data)
+                    self._saved[vault_id] = mark
             return True
         except Exception as e:
             self.toast(f"Save failed: {e}", "error")
@@ -717,17 +839,23 @@ class PasswordManagerGUI:
         """After an unlock or a new account: the main window."""
         self._session += 1
         self.account = account
-        self.vault = loaded
+        self.vaults, self._saved, self.vault_filter = {}, {}, None
+        self.vault = loaded                         # the personal vault
+        self._saved[account.personal_id] = self._content_mark(loaded)
+        unreadable = self.load_vaults()             # and every other one
         self.master_password = master_password
         self.current_user = account.username
         appconfig.save_config(last_username=account.username)
 
-        # Archived entries past this vault's keep-for limit (Settings).
-        purged = auto_purge_archive(self.vault)
+        # Archived entries past the keep-for limit (Settings), in every vault.
+        purged = sum(auto_purge_archive(data) for data in self.vaults.values())
         if purged:
             self._save()
 
         self.show_main_window()
+        if unreadable:
+            self.toast("Could not read the vault “" + "”, “".join(unreadable) +
+                       "” on this PC — sync to fetch it again", "error")
         if purged:
             self.toast(f"Deleted {purged} archived "
                        f"entr{'y' if purged == 1 else 'ies'} older than "
@@ -823,11 +951,32 @@ class PasswordManagerGUI:
 
         left = ctk.CTkFrame(body, fg_color="transparent")
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 20))
-        left.grid_rowconfigure(1, weight=1)
+        left.grid_rowconfigure(2, weight=1)
         left.grid_columnconfigure(0, weight=1)
 
+        # Which vault the list shows, and the way to the Vaults window.
+        vault_row = ctk.CTkFrame(left, fg_color="transparent")
+        vault_row.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        vault_row.grid_columnconfigure(0, weight=1)
+        self.vault_menu = ctk.CTkOptionMenu(
+            vault_row, height=34, corner_radius=10, values=[ALL_VAULTS],
+            fg_color=INPUT_BG, button_color=BORDER,
+            button_hover_color=CARD_HOVER, text_color=TEXT, font=F(12, "bold"),
+            dropdown_fg_color=CARD, dropdown_hover_color=CARD_HOVER,
+            dropdown_text_color=TEXT, anchor="w", command=self._on_vault_pick)
+        self.vault_menu.grid(row=0, column=0, sticky="ew")
+        Tooltip(self.vault_menu, "Which vault the list shows. New entries go "
+                                 "to the vault picked here.")
+        manage = ctk.CTkButton(
+            vault_row, text="Vaults", command=self.vaults_dialog, width=76,
+            height=34, corner_radius=10, fg_color="transparent",
+            border_width=1, border_color=BORDER, hover_color=CARD_HOVER,
+            text_color=TEXT, font=F(12, "bold"))
+        manage.grid(row=0, column=1, padx=(8, 0))
+        Tooltip(manage, "Add, rename or delete vaults")
+
         chips = ctk.CTkFrame(left, fg_color="transparent")
-        chips.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        chips.grid(row=1, column=0, sticky="ew", pady=(0, 12))
         self.all_chip = ctk.CTkLabel(chips, text="All", height=34,
                                      corner_radius=17, fg_color=GREEN,
                                      text_color=ON_ACCENT, font=F(12, "bold"))
@@ -854,20 +1003,20 @@ class PasswordManagerGUI:
 
         list_card = ctk.CTkFrame(left, fg_color=CARD, corner_radius=20,
                                  border_width=1, border_color=BORDER)
-        list_card.grid(row=1, column=0, sticky="nsew")
+        list_card.grid(row=2, column=0, sticky="nsew")
         self.list_frame = ctk.CTkScrollableFrame(list_card, fg_color=CARD,
                                                  corner_radius=0)
         self.list_frame.pack(fill="both", expand=True, padx=6, pady=8)
         self.list_frame.grid_columnconfigure(0, weight=1)
 
         add_row = ctk.CTkFrame(left, fg_color="transparent", height=48)
-        add_row.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        add_row.grid(row=3, column=0, sticky="ew", pady=(12, 0))
         add = self._accent_button(add_row, "+  Add an entry",
                                   self.add_account_dialog)
         add.configure(height=48, corner_radius=16, font=F(14, "bold"))
         even_width(add, add_row)
         ctk.CTkLabel(left, text=version_string(), font=F(11),
-                     text_color=MUTED).grid(row=3, column=0, pady=(8, 0))
+                     text_color=MUTED).grid(row=4, column=0, pady=(8, 0))
 
         self.detail = ctk.CTkFrame(body, fg_color=CARD, corner_radius=24,
                                    border_width=1, border_color=BORDER)
@@ -904,16 +1053,50 @@ class PasswordManagerGUI:
                 break
         self.refresh_account_list()
 
+    def _on_vault_pick(self, label):
+        picked = None
+        for vault_id in self.vaults:
+            if self.vault_name(vault_id) == label:
+                picked = vault_id
+        self.vault_filter = None if label == ALL_VAULTS else picked
+        self.refresh_account_list()
+
+    def _refresh_vault_menu(self):
+        if self.vault_menu is None or not self.vault_menu.winfo_exists():
+            return
+        names = [self.vault_name(v) for v in self.vaults]
+        # One vault needs no "all of them".
+        self.vault_menu.configure(
+            values=names if len(names) < 2 else [ALL_VAULTS] + names)
+        self.vault_menu.set(self.vault_name(self.vault_filter)
+                            if self.vault_filter in self.vaults
+                            else (ALL_VAULTS if len(names) > 1 else names[0]))
+
+    def _row_label(self, acc):
+        """The vault's name on a row -- only where rows of several vaults
+        are mixed."""
+        if self.vault_filter in self.vaults or len(self.vaults) < 2:
+            return ""
+        return self.vault_name(self._entry_vault.get(acc["id"]))
+
     def refresh_account_list(self):
         self._cancel_row_build()
         if self._empty_box is not None:
             self._empty_box.destroy()
             self._empty_box = None
+        self._refresh_vault_menu()
 
-        accounts = active_accounts(self.vault)
+        accounts, stored = [], 0
+        self._entry_vault = {}
+        for vault_id in self.scope_ids():
+            data = self.vaults[vault_id]
+            stored += len(data["accounts"])
+            for a in active_accounts(data):
+                accounts.append(a)
+                self._entry_vault[a["id"]] = vault_id
         active = {a["id"]: a for a in accounts}
         total = len(accounts)
-        archived = len(self.vault["accounts"]) - total
+        archived = stored - total
         q = self.search_query.strip().lower()
         if q:
             accounts = [a for a in accounts
@@ -937,7 +1120,7 @@ class PasswordManagerGUI:
         for eid, cached in list(self._rows.items()):
             sig, frame, pos = cached
             acc = active.get(eid)
-            if acc is None or _row_signature(acc) != sig:
+            if acc is None or _row_signature(acc, self._row_label(acc)) != sig:
                 frame.destroy()
                 del self._rows[eid]
             else:
@@ -972,7 +1155,8 @@ class PasswordManagerGUI:
                 cached[1].grid(row=i, column=0, sticky="ew", pady=2, padx=2)
                 cached[2] = i
             else:
-                self._rows[acc["id"]] = [_row_signature(acc),
+                self._rows[acc["id"]] = [_row_signature(acc,
+                                                        self._row_label(acc)),
                                          self._add_row(i, acc), i]
         if pending:
             self._row_job = self.root.after(1, lambda: self._place_rows(pending))
@@ -1028,11 +1212,20 @@ class PasswordManagerGUI:
                             text_color=MUTED)
         user.pack(anchor="w")
 
-        when = ctk.CTkLabel(row, text=history_ui.short_when(
+        side = ctk.CTkFrame(row, fg_color="transparent")
+        side.grid(row=0, column=2, padx=(8, 14))
+        when = ctk.CTkLabel(side, text=history_ui.short_when(
             acc.get("updated_at", "")), font=F(11), text_color=MUTED)
-        when.grid(row=0, column=2, padx=(8, 14))
+        when.pack(anchor="e")
+        clickable = [row, tile, info, site, user, side, when]
+        label = self._row_label(acc)
+        if label:
+            where = ctk.CTkLabel(side, text=_clip(label, 16), font=F(11, "bold"),
+                                 text_color=MUTED, height=16)
+            where.pack(anchor="e")
+            clickable.append(where)
 
-        for w in (row, tile, info, site, user, when):
+        for w in clickable:
             w.bind("<Button-1>", lambda e, eid=acc["id"]: self._select(eid))
         return row
 
@@ -1050,9 +1243,10 @@ class PasswordManagerGUI:
     def _selected_entry(self):
         if self._selected_id is None or self.vault is None:
             return None
-        for acc in active_accounts(self.vault):
-            if acc["id"] == self._selected_id:
-                return acc
+        for data in self.scope_vaults():
+            for acc in active_accounts(data):
+                if acc["id"] == self._selected_id:
+                    return acc
         return None
 
     def _cancel_totp(self):
@@ -1104,8 +1298,11 @@ class PasswordManagerGUI:
         ctk.CTkLabel(names, text=_clip(acc["site"], 34), font=F(24, "bold"),
                      text_color=TEXT, anchor="w").pack(anchor="w")
         changed = acc.get("updated_at")
-        ctk.CTkLabel(names, text=("Last changed " + history_ui.local_time(
-            changed)) if changed else "", font=F(12), text_color=MUTED,
+        line = ("Last changed " + history_ui.local_time(changed)) if changed else ""
+        if len(self.vaults) > 1:
+            line += ("  ·  " if line else "") + _clip(self.vault_name(
+                self._entry_vault.get(acc["id"])), 24)
+        ctk.CTkLabel(names, text=line, font=F(12), text_color=MUTED,
                      anchor="w").pack(anchor="w")
         actions = ctk.CTkFrame(band, fg_color="transparent")
         actions.grid(row=0, column=2, padx=(8, 22))
@@ -1313,7 +1510,7 @@ class PasswordManagerGUI:
                 "It leaves this list but stays in your vault, and you can "
                 "restore it at any time.", danger=False):
             return
-        archive_account(self.vault, acc["id"])
+        archive_account(self.vault_holding(acc["id"]), acc["id"])
         self._save()
         self.refresh_account_list()
         self.toast("Moved to archive")
@@ -1353,6 +1550,9 @@ class PasswordManagerGUI:
 
     def archive_dialog(self):
         sync_ui.archive_dialog(self)
+
+    def vaults_dialog(self):
+        vaults_ui.vaults_dialog(self)
 
     def sync_settings_dialog(self):
         sync_ui.sync_settings_dialog(self)

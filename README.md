@@ -28,7 +28,7 @@ SecretSpace lives in four repositories:
 
 ## SecretSpace 3 — a test version, not for real passwords yet
 
-`main` is now **3.0.0-alpha.4**, a test step of SecretSpace 3. **For your real
+`main` is now **3.0.0-alpha.5**, a test step of SecretSpace 3. **For your real
 passwords keep using [2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0)**,
 which the rest of this README describes. Do not install the test version
 over it: it opens SecretSpace 3 accounts only, so your 2.x vaults would not
@@ -50,6 +50,18 @@ What the test version has:
 - **Importing a 2.x vault.** *Import* lists the 2.x vaults on this PC (or
   takes a `.vault.enc` file) and copies every entry with its history and
   archive state. The 2.x file is only read; its sync settings stay with it.
+- **Several vaults in one account** (new in alpha.5). Besides the
+  *Personal* vault an account can have more — *Home*, *Work*, a project —
+  made, renamed and deleted in the **Vaults** window. The menu above the
+  list picks which vault is shown (*All vaults* shows them together, each
+  row naming its vault, and search covers them all); a new entry goes to
+  the vault picked there, or to the one chosen in the *Add an entry*
+  window. Every vault has its own key. **Sync** covers all of them, each
+  with its own merge and conflict questions; it needs SecretSpace Server
+  **2.0.0-alpha.2** (an older 2.0 server keeps only the Personal vault, and
+  the app says so). A vault deleted on one device is **kept** on the others,
+  marked and no longer synced, until you delete it there too or put it
+  back.
 - **A smoother look** (new in alpha.4). Rounded corners are drawn smoothed
   instead of in pixel steps, the sign-in screen's padlock and key are
   redrawn, and an entry's coloured header has room around its tile.
@@ -66,13 +78,13 @@ What the test version has:
 - Everything else in the window — entries, archive, history, 2FA codes,
   generator, plain export — works as in 2.12.
 
-Not in this test version yet: more than one vault per account,
+Not in this test version yet: sharing a vault with other people (with a
+record of who changed what), moving an entry from one vault to another,
 recovering an account with the 12-word phrase (the phrase is made and
-checked now; the screen that uses it comes later), sharing a vault with
-other people, and *Sync when I unlock* for accounts. SecretSpace for Linux
-has the same test version, 1.0.0-alpha.4. Coming next, in this order:
-several vaults per account, sharing a vault with family or colleagues, and
-recovering an account with the 12-word phrase.
+checked now; the screen that uses it comes later), and *Sync when I
+unlock* for accounts. SecretSpace for Linux has the same test version,
+1.0.0-alpha.5. Coming next, in this order: sharing a vault with family or
+colleagues, and recovering an account with the 12-word phrase.
 
 ## Running it
 
