@@ -142,9 +142,14 @@ def _all_done(app, run):
         parts.append("now on the server: " + ", ".join(changes.uploaded))
     for old, new in changes.renamed:
         parts.append(f"“{old}” is now “{new}”")
+    if changes.rekeyed:
+        parts.append("new key for: " + ", ".join(changes.rekeyed))
+    for name, role in changes.roles:
+        parts.append(f"you are now {role} of “{name}”")
     kind = "info"
     if changes.gone:
-        parts.append("deleted on another device, kept on this PC only: " +
+        parts.append("no longer on the server for you (deleted, or you were "
+                     "removed), kept on this PC only: " +
                      ", ".join(changes.gone) + " (see Vaults)")
         kind = "warn"
     if changes.server_too_old:

@@ -22,6 +22,7 @@ import pyperclip
 
 import accounts
 import appconfig
+import changelog
 import dialogs
 import history_ui
 import lockout
@@ -227,9 +228,28 @@ class PasswordManagerGUI:
         the personal one."""
         if self.account is None:
             return None
-        if self.vault_filter in self.vaults:
+        # A vault this account may only read cannot take a new entry.
+        if self.vault_filter in self.vaults and \
+                self.account.can_write(self.vault_filter):
             return self.vault_filter
         return self.account.personal_id
+
+    def entry_writable(self, entry_id):
+        """May the open account change this entry (it is not in a vault
+        shared with it for reading only)?"""
+        if self.account is None:
+            return False
+        return self.account.can_write(self._entry_vault.get(entry_id)
+                                      or self._vault_id_of(entry_id))
+
+    def _vault_id_of(self, entry_id):
+        for vault_id, data in self.vaults.items():
+            if any(a.get("id") == entry_id for a in data["accounts"]):
+                return vault_id
+        return None
+
+    def read_only_notice(self):
+        self.toast("This vault is shared with you for reading only", "warn")
 
     @property
     def vault(self):
@@ -440,17 +460,50 @@ class PasswordManagerGUI:
             self._toast = None
 
     def _save(self, rekey=False):
-        """Write every vault that changed since it was last written."""
+        """
+        Write every vault that changed since it was last written, noting in
+        each who changed what (changelog). A vault this account may only
+        read is never written: should a change to one get this far, it is
+        undone from the file.
+        """
         try:
-            for vault_id, data in self.vaults.items():
-                mark = self._content_mark(data)
-                if self._saved.get(vault_id) != mark:
-                    self.account.vault_file(vault_id).save(data)
-                    self._saved[vault_id] = mark
-            return True
+            refused = []
+            for vault_id, data in list(self.vaults.items()):
+                if self._saved.get(vault_id) == self._content_mark(data):
+                    continue
+                file = self.account.vault_file(vault_id)
+                if not file.can_write:
+                    self.vaults[vault_id] = (file.load() if file.has_file
+                                             else {"accounts": []})
+                    self._saved[vault_id] = self._content_mark(
+                        self.vaults[vault_id])
+                    refused.append(file.name)
+                    continue
+                self._note_changes(file, data)
+                file.save(data)
+                self._saved[vault_id] = self._content_mark(data)
+            if refused:
+                # After the caller's own message, so this is the one read.
+                self.root.after(60, lambda: (
+                    self.refresh_account_list(),
+                    self.toast("“" + "”, “".join(refused) + "” is shared with "
+                               "you for reading only — nothing was changed "
+                               "there", "warn")))
+            return not refused
         except Exception as e:
             self.toast(f"Save failed: {e}", "error")
             return False
+
+    def _note_changes(self, file, data):
+        """Add to ``data``'s change log what differs from the vault as it was
+        last written. Never stops a save: a log line is worth less than the
+        change it describes."""
+        try:
+            before = file.load() if file.has_file else {"accounts": []}
+            changelog.record(data, before, self.account.username,
+                             self.account.keyset, file.hex)
+        except Exception:
+            pass
 
     def _copy(self, text, message, sensitive=False):
         if not text:
@@ -847,8 +900,11 @@ class PasswordManagerGUI:
         self.current_user = account.username
         appconfig.save_config(last_username=account.username)
 
-        # Archived entries past the keep-for limit (Settings), in every vault.
-        purged = sum(auto_purge_archive(data) for data in self.vaults.values())
+        # Archived entries past the keep-for limit (Settings), in every vault
+        # this account may change.
+        purged = sum(auto_purge_archive(data)
+                     for vault_id, data in self.vaults.items()
+                     if account.can_write(vault_id))
         if purged:
             self._save()
 
@@ -1299,6 +1355,11 @@ class PasswordManagerGUI:
                      text_color=TEXT, anchor="w").pack(anchor="w")
         changed = acc.get("updated_at")
         line = ("Last changed " + history_ui.local_time(changed)) if changed else ""
+        home = self._entry_vault.get(acc["id"])
+        writable = self.entry_writable(acc["id"])
+        # In a vault other people are in, a change has a name.
+        if line and acc.get("updated_by") and self.account.is_shared(home):
+            line += " by " + _clip(acc["updated_by"], 24)
         if len(self.vaults) > 1:
             line += ("  ·  " if line else "") + _clip(self.vault_name(
                 self._entry_vault.get(acc["id"])), 24)
@@ -1306,13 +1367,22 @@ class PasswordManagerGUI:
                      anchor="w").pack(anchor="w")
         actions = ctk.CTkFrame(band, fg_color="transparent")
         actions.grid(row=0, column=2, padx=(8, 22))
-        self._ghost_button(actions, "Edit", lambda: self.account_dialog(acc),
-                           width=74).pack(side="left", padx=(0, 8))
-        arch = self._ghost_button(actions, "Archive",
-                                  lambda: self._archive_account(acc), width=88)
-        arch.pack(side="left")
-        Tooltip(arch, "Move to archive — restorable, and it still syncs the "
-                      "removal to your other PCs")
+        if writable:
+            self._ghost_button(actions, "Edit", lambda: self.account_dialog(acc),
+                               width=74).pack(side="left", padx=(0, 8))
+            arch = self._ghost_button(actions, "Archive",
+                                      lambda: self._archive_account(acc),
+                                      width=88)
+            arch.pack(side="left")
+            Tooltip(arch, "Move to archive — restorable, and it still syncs "
+                          "the removal to your other PCs")
+        else:
+            only = ctk.CTkLabel(actions, text="Read only", font=F(12, "bold"),
+                                text_color=MUTED, fg_color=CARD,
+                                corner_radius=8, width=92, height=32)
+            only.pack(side="left")
+            Tooltip(only, "This vault is shared with you for reading: you can "
+                          "see and copy, not change")
 
         scroll = ctk.CTkScrollableFrame(self.detail, fg_color=CARD,
                                         corner_radius=0)
@@ -1504,6 +1574,8 @@ class PasswordManagerGUI:
         an undo for the user and the tombstone the sync merge reads -- a hard
         delete would be resurrected by the next sync from the other PC.
         """
+        if not self.entry_writable(acc["id"]):
+            return self.read_only_notice()
         if not self._confirm(
                 "Move to archive",
                 f"Move the saved login for “{acc['site']}” to the archive?\n\n"

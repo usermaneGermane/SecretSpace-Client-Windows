@@ -44,6 +44,10 @@ MODE_PERSONAL = "personal"
 #: stored name, and no other vault may take this one.
 PERSONAL_NAME = "Personal"
 
+#: What a member of a vault may do (the server enforces it; the app follows).
+ROLE_OWNER, ROLE_EDITOR, ROLE_READER = "owner", "editor", "reader"
+ROLES = (ROLE_OWNER, ROLE_EDITOR, ROLE_READER)
+
 
 class SecretKeyNeeded(Exception):
     """
@@ -146,11 +150,16 @@ class VaultFile:
     """
 
     def __init__(self, username: str, vault_id: bytes, key: bytes, name: str,
-                 personal: bool):
+                 personal: bool, generation: int = 0, role: str = ROLE_OWNER):
         self.id = vault_id
         self.hex = vault_id.hex()
         self.name = name
         self.personal = personal
+        # How many times the vault's key was changed (a member removed);
+        # written into each file's header so the server can refuse an upload
+        # made under a key that is no longer the vault's.
+        self.generation = generation
+        self.role = role
         self._key = key
         self.path = os.path.join(account_dir(username), VAULTS_DIR,
                                  self.hex + VAULT_SUFFIX)
@@ -163,9 +172,14 @@ class VaultFile:
     def has_file(self) -> bool:
         return os.path.exists(self.path)
 
+    @property
+    def can_write(self) -> bool:
+        """May this account change the vault (owner or editor)?"""
+        return self.role != ROLE_READER
+
     def encrypt(self, data: dict) -> str:
         """``data`` as a PMV3 blob under this vault's key."""
-        return account_crypto.encrypt_vault(self._key, self.id, 0,
+        return account_crypto.encrypt_vault(self._key, self.id, self.generation,
                                             vault.validate_vault(data))
 
     def decrypt(self, blob: str) -> dict:
@@ -252,7 +266,53 @@ class Account:
 
     @property
     def fingerprint(self) -> str:
-        return account_crypto.fingerprint(account_crypto.public_key_of(self.keyset))
+        """What this account's owner reads out to someone who is about to
+        share a vault with them."""
+        return account_crypto.account_fingerprint(
+            account_crypto.public_key_of(self.keyset),
+            account_crypto.signing_key_of(self.keyset))
+
+    @property
+    def signing_key(self) -> str:
+        """The public signing key, as the server and other members get it."""
+        return account_crypto._b64(account_crypto.signing_key_of(self.keyset))
+
+    # -- other people ------------------------------------------------------------
+    def contact(self, username: str):
+        """
+        The keys this device has seen for another account, or None:
+        {"public_key", "signing_key" (bytes), "verified" (the fingerprint was
+        compared by the user)}.
+        """
+        seen = self.info.get("fingerprints_seen")
+        found = seen.get(username) if isinstance(seen, dict) else None
+        if not isinstance(found, dict):
+            return None
+        try:
+            return {"public_key": account_crypto._unb64(found["public_key"], "key"),
+                    "signing_key": account_crypto._unb64(found["signing_key"], "key"),
+                    "verified": bool(found.get("verified"))}
+        except (KeyError, CryptoError):
+            return None
+
+    def remember_contact(self, username: str, public_key: bytes,
+                         signing_key: bytes, verified: bool) -> None:
+        """Keep an account's keys, so a later change of them is noticed."""
+        info = dict(self.info)
+        seen = dict(info.get("fingerprints_seen") or {})
+        seen[username] = {"public_key": account_crypto._b64(public_key),
+                          "signing_key": account_crypto._b64(signing_key),
+                          "verified": bool(verified), "seen_at": vault.utc_now()}
+        info["fingerprints_seen"] = seen
+        _write_info(self.username, info)
+        self.info = info
+
+    def signing_key_for(self, username: str):
+        """The key to check ``username``'s signatures with, or None."""
+        if username == self.username:
+            return account_crypto.signing_key_of(self.keyset)
+        found = self.contact(username)
+        return found["signing_key"] if found else None
 
     @property
     def secret_key_text(self) -> str:
@@ -278,8 +338,24 @@ class Account:
 
     def vault_record(self, vault_id: str) -> dict:
         """What account.json holds about a further vault ({} for the personal
-        one): name, wrapped_key, on_server, gone_from_server, rename_pending."""
+        one): name, wrapped_key, on_server, gone_from_server, rename_pending,
+        and since phase 4 role, key_generation and members (how many)."""
         return dict(self._extra().get(vault_id, {}))
+
+    def vault_role(self, vault_id: str) -> str:
+        if vault_id is None or vault_id == self.personal_id:
+            return ROLE_OWNER
+        role = self._extra().get(vault_id, {}).get("role")
+        return role if role in ROLES else ROLE_OWNER
+
+    def can_write(self, vault_id: str) -> bool:
+        return self.vault_role(vault_id) != ROLE_READER
+
+    def is_shared(self, vault_id: str) -> bool:
+        """Is anyone else in this vault (as far as the last sync knew)?"""
+        record = self._extra().get(vault_id, {})
+        return int(record.get("members", 1) or 1) > 1 or \
+            self.vault_role(vault_id) != ROLE_OWNER
 
     def vault_file(self, vault_id: str = None) -> VaultFile:
         """The vault with this id (the personal one when None)."""
@@ -296,7 +372,9 @@ class Account:
                 self.username)
             self._vault_keys[vault_id] = key
         return VaultFile(self.username, bytes.fromhex(vault_id), key,
-                         record.get("name", ""), False)
+                         record.get("name", ""), False,
+                         int(record.get("key_generation", 0) or 0),
+                         self.vault_role(vault_id))
 
     def _name_taken(self, name: str, except_id: str = None) -> bool:
         wanted = name.lower()
@@ -334,7 +412,9 @@ class Account:
         self._vault_keys[made.hex] = key
         return made
 
-    def adopt_vault(self, vault_id: str, wrapped_key: str, sealed_name: str) -> VaultFile:
+    def adopt_vault(self, vault_id: str, wrapped_key: str, sealed_name: str,
+                    role: str = ROLE_OWNER, key_generation: int = 0,
+                    members: int = 1) -> VaultFile:
         """
         A vault the server holds for this account and this device does not
         have yet. The key must open with this account's key, and the name
@@ -353,10 +433,55 @@ class Account:
             n += 1
         extra = dict(self._extra())
         extra[vault_id] = {"name": name, "wrapped_key": wrapped_key,
-                           "created_at": vault.utc_now(), "on_server": True}
+                           "created_at": vault.utc_now(), "on_server": True,
+                           "role": role if role in ROLES else ROLE_OWNER,
+                           "key_generation": int(key_generation or 0),
+                           "members": int(members or 1)}
         self._write_vaults(extra)
         self._vault_keys[vault_id] = key
         return self.vault_file(vault_id)
+
+    def rekey_vault(self, vault_id: str, wrapped_key: str, generation: int) -> None:
+        """
+        The vault has a new key (a member was removed, here or by another
+        owner): take it, and put this device's copy of the vault under it.
+        ``wrapped_key`` must open with this account's key, or nothing changes.
+        """
+        if vault_id == self.personal_id or vault_id not in self._extra():
+            raise ValueError("That vault has no key to change.")
+        raw_id = bytes.fromhex(vault_id)
+        new_key = account_crypto.unwrap_key(self.keyset, wrapped_key, raw_id,
+                                            self.username)
+        old = self.vault_file(vault_id)
+        data = base = None
+        if old.has_file:
+            try:
+                data = old.load()
+            except (ValueError, OSError):
+                data = None             # unreadable already: a sync refetches it
+        base = old.load_base()
+        extra = dict(self._extra())
+        record = dict(extra[vault_id])
+        record["wrapped_key"] = wrapped_key
+        record["key_generation"] = int(generation)
+        extra[vault_id] = record
+        self._write_vaults(extra)
+        self._vault_keys[vault_id] = new_key
+        new = self.vault_file(vault_id)
+        if data is not None:
+            new.save(data)              # the old file becomes its .bak ...
+        else:
+            old.remove_files()
+        # ... which, like the old base, is under the old key and unreadable
+        # from now on.
+        for stale in (new.path + vault.BACKUP_SUFFIX, new.base_path):
+            try:
+                os.remove(stale)
+            except OSError:
+                pass
+        origin = (base or {}).pop(vault.BASE_ORIGIN_KEY, None)
+        if base is not None and origin:
+            new.save_base(base, origin)
 
     def rename_vault(self, vault_id: str, name: str, pending: bool = True) -> None:
         """``pending`` marks a name the server has not been told yet."""
@@ -431,10 +556,13 @@ class Account:
         if (info["server"] or {}).get("url") != before:
             # Another server (or none) knows nothing of these vaults: they
             # are this device's again, to be put on whichever comes next.
+            # (Roles and key generations were that server's too: on the next
+            # one each vault starts as this account's own, at generation 0.)
             info["vaults"] = {
                 v: {k: x for k, x in r.items()
                     if k not in ("on_server", "gone_from_server",
-                                 "rename_pending")}
+                                 "rename_pending", "role", "key_generation",
+                                 "members")}
                 for v, r in self._extra().items()}
         _write_info(self.username, info)
         self.info = info
@@ -509,7 +637,8 @@ class NewAccount:
         self._made = made
         self.secret_key_text = made["secret_key_text"]
         self.recovery_phrase = made["recovery_phrase"]
-        self.fingerprint = account_crypto.fingerprint(made["public_key"])
+        self.fingerprint = account_crypto.account_fingerprint(
+            made["public_key"], account_crypto.signing_key_of(made["keyset"]))
 
     def save(self) -> Account:
         username = self.username

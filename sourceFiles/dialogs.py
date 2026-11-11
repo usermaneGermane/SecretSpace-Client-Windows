@@ -473,6 +473,8 @@ def _finish_import(app, parsed, path):
 
 def account_dialog(app, acc):
     editing = acc is not None
+    if editing and not app.entry_writable(acc["id"]):
+        return app.read_only_notice()
     title = "Edit entry" if editing else "Add an entry"
     subtitle = ("Update this login; the version it replaces is kept in its "
                 "history." if editing else "Store a new login in your vault.")
@@ -603,8 +605,10 @@ def account_dialog(app, acc):
     app._accent_button(shell.buttons,
                        "Save changes" if editing else "Save entry",
                        save, width=150).pack(side="right")
-    if not editing and len(app.vaults) > 1:
-        names = {app.vault_name(v): v for v in app.vaults}
+    # (Only vaults this account may change can take a new entry.)
+    names = {app.vault_name(v): v for v in app.vaults
+             if app.account.can_write(v)}
+    if not editing and len(names) > 1:
         picker = option_menu(
             shell.buttons, list(names),
             lambda label: target.update(id=names[label]), width=140)
@@ -765,7 +769,9 @@ def settings_dialog(app):
             purge_menu.set(days_label(vault.archive_purge_days(app.vault)))
             return
         purged = 0
-        for data in app.vaults.values():         # one setting, every vault
+        for vault_id, data in app.vaults.items():    # one setting, every vault
+            if not app.account.can_write(vault_id):
+                continue                 # ... that is this account's to change
             vault.set_archive_purge_days(data, days)
             purged += vault.auto_purge_archive(data)
         if app._save():

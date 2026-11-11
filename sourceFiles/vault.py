@@ -28,7 +28,7 @@ BASE_ORIGIN_KEY = "base_origin"
 #: never for deciding a merge, because the two PCs' clocks disagree. That
 #: decision belongs to the three-way merge in sync.py.
 OPTIONAL_FIELDS = ("notes", "totp", "updated_at", "archived_at",
-                   "history_cleared_at")
+                   "history_cleared_at", "updated_by")
 
 #: What a revision records, and what counts as an edit worth recording.
 #: Everything the user can type into an entry -- not just the password, since
@@ -670,6 +670,11 @@ def _clean_revision(raw):
     changed = raw.get("changed")
     rev["changed"] = ([f for f in REVISION_FIELDS if f in changed]
                       if isinstance(changed, list) else [])
+    # Who made the edit that replaced this version (3.0 accounts; changelog).
+    # Not part of the id: the same revision is the same one with or without.
+    by = str(raw.get("by", "") or "")[:64]
+    if by:
+        rev["by"] = by
     rev["rid"] = _revision_id(rev)
     return rev
 
