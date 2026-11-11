@@ -28,7 +28,7 @@ SecretSpace lives in four repositories:
 
 ## SecretSpace 3 — a test version, not for real passwords yet
 
-`main` is now **3.0.0-alpha.5**, a test step of SecretSpace 3. **For your real
+`main` is now **3.0.0-alpha.6**, a test step of SecretSpace 3. **For your real
 passwords keep using [2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0)**,
 which the rest of this README describes. Do not install the test version
 over it: it opens SecretSpace 3 accounts only, so your 2.x vaults would not
@@ -50,6 +50,27 @@ What the test version has:
 - **Importing a 2.x vault.** *Import* lists the 2.x vaults on this PC (or
   takes a `.vault.enc` file) and copies every entry with its history and
   archive state. The 2.x file is only read; its sync settings stay with it.
+- **Sharing a vault** (new in alpha.6). An owner adds other accounts of
+  the same server to a vault in **Vaults → Members**, as *owner*, *editor*
+  or *reader* (the server refuses a reader's upload, and the app shows a
+  reader no Edit or Archive). Before the first share the app shows the
+  other person's **fingerprint**: they read theirs to you (it is at the top
+  of their Members window) and the two must match — that is what keeps a
+  dishonest server from slipping in its own key. The vault's key reaches a
+  member only wrapped to their public key; the server never holds it.
+  **Remove** takes a member out *and* gives the vault a new key in the same
+  step, so they can open nothing written afterwards (what they had already
+  seen they may have kept). A member can **leave**; an owner can change the
+  key on its own. It needs SecretSpace Server **2.0.0-alpha.3**.
+- **Who changed what** (new in alpha.6). Every save adds lines to the
+  vault's own change log — *user1 changed the password of “Mail”* — signed
+  with the author's account key, encrypted with the vault and synced with
+  it. **Vaults → Activity** shows it to every member; a line whose
+  signature does not match its author is marked. In a shared vault an
+  entry and each of its earlier versions say who changed them. Owners can
+  also read the **server log** there: uploads, members added and removed,
+  key changes, with the address they came from. Values are never recorded,
+  and neither is who looked at an entry or copied a password.
 - **Several vaults in one account** (new in alpha.5). Besides the
   *Personal* vault an account can have more — *Home*, *Work*, a project —
   made, renamed and deleted in the **Vaults** window. The menu above the
@@ -78,13 +99,13 @@ What the test version has:
 - Everything else in the window — entries, archive, history, 2FA codes,
   generator, plain export — works as in 2.12.
 
-Not in this test version yet: sharing a vault with other people (with a
-record of who changed what), moving an entry from one vault to another,
+Not in this test version yet: adding someone to a vault before they have
+an account (they make the account first, then you share), the web admin
+for a company's server, moving an entry from one vault to another,
 recovering an account with the 12-word phrase (the phrase is made and
 checked now; the screen that uses it comes later), and *Sync when I
 unlock* for accounts. SecretSpace for Linux has the same test version,
-1.0.0-alpha.5. Coming next, in this order: sharing a vault with family or
-colleagues, and recovering an account with the 12-word phrase.
+1.0.0-alpha.6. Coming next: recovering an account with the 12-word phrase.
 
 ## Running it
 

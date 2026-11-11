@@ -566,7 +566,16 @@ def _archive_row(app, parent, index, entry, rebuild):
     buttons = ctk.CTkFrame(row, fg_color="transparent")
     buttons.grid(row=0, column=2, padx=(8, 14))
 
+    def read_only() -> bool:
+        check = getattr(app, "entry_writable", None)
+        if check is None or check(entry["id"]):
+            return False
+        app.read_only_notice()
+        return True
+
     def restore():
+        if read_only():
+            return
         vault.restore_account(app.vault_holding(entry["id"]), entry["id"])
         app._save()
         app.refresh_account_list()
@@ -574,6 +583,8 @@ def _archive_row(app, parent, index, entry, rebuild):
         app.toast(f"Restored {entry.get('site', '')}".strip())
 
     def purge():
+        if read_only():
+            return
         if not app._confirm(
                 "Delete permanently",
                 f"Permanently delete the saved login for "

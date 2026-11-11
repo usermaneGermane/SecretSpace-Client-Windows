@@ -113,6 +113,10 @@ def panel(app, parent, acc):
     for i, rev in enumerate(history, start=1):
         _revision_line(app, panel, i, acc, rev)
 
+    if not _writable(app, acc):
+        ctk.CTkLabel(panel, text="", height=6).grid(row=len(history) + 1,
+                                                    column=0)
+        return panel
     clear = _small_button(panel, "Clear history",
                           lambda: _clear(app, acc), danger=True, width=110)
     clear.grid(row=len(history) + 1, column=0, columnspan=6, sticky="e",
@@ -121,12 +125,31 @@ def panel(app, parent, acc):
     return panel
 
 
+def _writable(app, acc) -> bool:
+    """May the open account change this entry? (Yes for an app without
+    accounts' vault roles.)"""
+    check = getattr(app, "entry_writable", None)
+    return True if check is None else bool(check(acc.get("id")))
+
+
+def changed_by(app, acc, rev) -> str:
+    """“by user1” for a version made in a vault other people are in."""
+    who = rev.get("by")
+    account = getattr(app, "account", None)
+    if not who or account is None:
+        return ""
+    home = getattr(app, "_entry_vault", {}).get(acc.get("id"))
+    return f"by {who}" if account.is_shared(home) else ""
+
+
 def _revision_line(app, panel, line, acc, rev):
     ctk.CTkLabel(panel, text=local_time(rev.get("replaced_at", "")), width=150,
                  anchor="w", font=F(12), text_color=TEXT).grid(
         row=line, column=0, sticky="w", padx=(12, 8), pady=3)
     # Wrapped: the details pane is narrower than the old full-width row.
-    ctk.CTkLabel(panel, text=describe(rev), anchor="w", font=F(11),
+    who = changed_by(app, acc, rev)
+    ctk.CTkLabel(panel, text=describe(rev) + ("\n" + who if who else ""),
+                 anchor="w", font=F(11),
                  text_color=MUTED, wraplength=170, justify="left").grid(
         row=line, column=1, sticky="w", pady=3)
 
@@ -158,6 +181,8 @@ def _revision_line(app, panel, line, acc, rev):
                   lambda: app._copy(secret, "Earlier password copied",
                                     sensitive=True)).grid(
         row=line, column=4, padx=2, pady=3)
+    if not _writable(app, acc):
+        return
     revert = _small_button(panel, "Revert", lambda: _revert(app, acc, rev),
                            accent=True)
     revert.grid(row=line, column=5, padx=(2, 12), pady=3)

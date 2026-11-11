@@ -33,6 +33,8 @@ import struct
 import unicodedata
 
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (Ed25519PrivateKey,
+                                                               Ed25519PublicKey)
 from cryptography.hazmat.primitives.asymmetric.x25519 import (X25519PrivateKey,
                                                               X25519PublicKey)
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -347,6 +349,49 @@ def fingerprint(public_key: bytes) -> str:
     digest = hashlib.sha256(b"PassMan3 fingerprint" + public_key).digest()
     digits = str(int.from_bytes(digest[:12], "big") % 10 ** 24).zfill(24)
     return " ".join(digits[i:i + 4] for i in range(0, 24, 4))
+
+
+def account_fingerprint(public_key: bytes, signing_key: bytes) -> str:
+    """
+    The fingerprint two people compare before the first share: it covers
+    both of an account's public keys, so one check vouches for the key a
+    vault key is wrapped to *and* the key the account's changes are signed
+    with.
+    """
+    return fingerprint(public_key + signing_key)
+
+
+# ===========================================================================
+# Signing (the change log, phase 4)
+# ===========================================================================
+def _signing_private(keyset: dict) -> Ed25519PrivateKey:
+    # Derived from the account's private key rather than stored beside it:
+    # every keyset ever made already has one, the recovery copy included,
+    # and there is nothing new to keep in step. HKDF keeps the two keys
+    # independent in use.
+    seed = _hkdf(_unb64(keyset["x25519_private"], "account key"),
+                 b"PassMan3 signing", b"PassMan3 signing key")
+    return Ed25519PrivateKey.from_private_bytes(seed)
+
+
+def signing_key_of(keyset: dict) -> bytes:
+    """The public half of the account's signing key (32 bytes)."""
+    return _signing_private(keyset).public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+
+
+def sign(keyset: dict, message: bytes) -> str:
+    return _b64(_signing_private(keyset).sign(message))
+
+
+def verify(signing_key: bytes, message: bytes, signature: str) -> bool:
+    """Did the owner of ``signing_key`` sign ``message``? Never raises."""
+    try:
+        Ed25519PublicKey.from_public_bytes(signing_key).verify(
+            base64.b64decode(signature, validate=True), message)
+        return True
+    except Exception:
+        return False
 
 
 # ===========================================================================
