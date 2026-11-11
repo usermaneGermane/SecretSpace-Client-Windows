@@ -30,7 +30,7 @@ from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, INPUT_BG, BORDER,
                    CARD, CARD_HOVER, ON_ACCENT, MONO, DANGER, tile_colors)
 from vault import (add_account, validate_username, export_csv, export_json,
                    update_entry, find_duplicate)
-from widgets import (dialog_shell, section, setting_row, option_menu, note,
+from widgets import (Tooltip, dialog_shell, section, setting_row, option_menu, note,
                      error_label, check, field_label, entry, danger_button)
 from crypto_utils import password_matches
 from password_generator import generate_password
@@ -401,9 +401,10 @@ def _import_2x(app, path, label):
             app.toast("Everything in that vault is already here", "warn")
             return
         msg = (f"Import {added} entr{'y' if added == 1 else 'ies'} from "
-               f"“{label}”, with their history and archive state?")
+               f"“{label}” into {app.vault_phrase()}, with their history "
+               "and archive state?")
         if skipped:
-            msg += (f"\n\n{skipped} already in this account will be "
+            msg += (f"\n\n{skipped} already in that vault will be "
                     "skipped.")
         msg += ("\n\nThe 2.x vault is not changed, and its sync settings "
                 "stay with it.")
@@ -458,7 +459,7 @@ def _finish_import(app, parsed, path):
         msg += ("\n\nThis file also contains " + ", ".join(parsed.dropped) +
                 ", which SecretSpace cannot store. Keep the original file "
                 "until you have checked you still have them.")
-    msg += "\n\nAdd them to your vault?"
+    msg += f"\n\nAdd them to {app.vault_phrase()}?"
     if not app._confirm("Import accounts", msg, danger=False):
         return
 
@@ -481,6 +482,14 @@ def account_dialog(app, acc):
                          subtitle, tile=_site_tile(acc["site"] if editing
                                                    else ""))
     wrap = shell.body
+
+    # A new entry goes to the vault picked in the main window; with several
+    # vaults it can be changed here. An edit stays in the entry's own vault.
+    # (The picker sits in the button bar, so the form is no taller.)
+    target = {"id": app.active_vault_id}
+
+    def target_vault():
+        return app.vault_holding(acc["id"]) if editing else app.vaults[target["id"]]
 
     site_entry = app._field(wrap, "Website / App", placeholder="e.g. GitHub")
     user_entry = app._field(wrap, "Username / Email",
@@ -566,7 +575,7 @@ def account_dialog(app, acc):
         username = user_entry.get().strip()
         # Ask before the same login is stored twice -- on add, or when an
         # edit would turn this entry into a copy of another one.
-        twin = find_duplicate(app.vault, site, username,
+        twin = find_duplicate(target_vault(), site, username,
                               exclude_id=acc["id"] if editing else None)
         if twin is not None and not app._confirm(
                 "Already saved",
@@ -582,7 +591,7 @@ def account_dialog(app, acc):
             update_entry(acc, site=site, username=username,
                          password=password, notes=notes, totp=totp_secret)
         else:
-            add_account(app.vault, site, username,
+            add_account(target_vault(), site, username,
                         password, notes=notes, totp=totp_secret)
         app._save()
         top.destroy()
@@ -594,6 +603,15 @@ def account_dialog(app, acc):
     app._accent_button(shell.buttons,
                        "Save changes" if editing else "Save entry",
                        save, width=150).pack(side="right")
+    if not editing and len(app.vaults) > 1:
+        names = {app.vault_name(v): v for v in app.vaults}
+        picker = option_menu(
+            shell.buttons, list(names),
+            lambda label: target.update(id=names[label]), width=140)
+        picker.configure(height=40)
+        picker.pack(side="right", padx=(0, 10))
+        picker.set(app.vault_name(target["id"]))
+        Tooltip(picker, "The vault this entry is saved in")
     for e in (site_entry, user_entry, pw_entry, totp_entry):
         e.bind("<Return>", lambda ev: save())
     site_entry.focus()
@@ -735,7 +753,8 @@ def settings_dialog(app):
     def set_purge(choice):
         days = next(d for d in vault.ARCHIVE_PURGE_CHOICES
                     if days_label(d) == choice)
-        due = (vault.archived_before(app.vault, vault.purge_cutoff(days))
+        due = ([e for data in app.vaults.values()
+                for e in vault.archived_before(data, vault.purge_cutoff(days))]
                if days else [])
         if due and not app._confirm(
                 "Delete archived entries",
@@ -745,8 +764,10 @@ def settings_dialog(app):
                 "This cannot be undone."):
             purge_menu.set(days_label(vault.archive_purge_days(app.vault)))
             return
-        vault.set_archive_purge_days(app.vault, days)
-        purged = vault.auto_purge_archive(app.vault)
+        purged = 0
+        for data in app.vaults.values():         # one setting, every vault
+            vault.set_archive_purge_days(data, days)
+            purged += vault.auto_purge_archive(data)
         if app._save():
             app.refresh_account_list()
             if purged:
@@ -831,7 +852,7 @@ def _export_plaintext(app):
         return
     try:
         writer = export_json if path.lower().endswith(".json") else export_csv
-        count = writer(app.vault, path)
+        count = writer(app.scope_data(), path)
     except Exception as e:
         app.toast(f"Export failed: {e}", "error")
         return

@@ -214,7 +214,7 @@ def _in_background(app, work, done, on_error):
 # ==========================================================================
 # Conflict resolution
 # ==========================================================================
-def conflict_dialog(app, result):
+def conflict_dialog(app, result, where=""):
     """
     Show every entry both sides changed and collect a decision for each.
 
@@ -232,7 +232,9 @@ def conflict_dialog(app, result):
     count = len(result.conflicts)
     shell = dialog_shell(
         top, "Review sync conflicts",
-        f"{count} entr{'y' if count == 1 else 'ies'} changed on both this PC "
+        f"{count} entr{'y' if count == 1 else 'ies'} "
+        + (f"in the vault “{where}” " if where else "") +
+        f"changed on both this PC "
         f"and the server. Everything else merged on its own: "
         f"{result.summary()}.", scroll=True)
     listing = shell.body
@@ -517,7 +519,8 @@ def archive_dialog(app):
         for child in listing.winfo_children():
             child.destroy()
 
-        entries = vault.archived_accounts(app.vault)
+        entries = [e for data in app.scope_vaults()
+                   for e in vault.archived_accounts(data)]
         if not entries:
             box = ctk.CTkFrame(listing, fg_color="transparent")
             box.grid(row=0, column=0, pady=80)
@@ -564,7 +567,7 @@ def _archive_row(app, parent, index, entry, rebuild):
     buttons.grid(row=0, column=2, padx=(8, 14))
 
     def restore():
-        vault.restore_account(app.vault, entry["id"])
+        vault.restore_account(app.vault_holding(entry["id"]), entry["id"])
         app._save()
         app.refresh_account_list()
         rebuild()
@@ -578,7 +581,7 @@ def _archive_row(app, parent, index, entry, rebuild):
                 "This cannot be undone, and it is the only action in SecretSpace "
                 "that really destroys a password."):
             return
-        vault.purge_account(app.vault, entry["id"])
+        vault.purge_account(app.vault_holding(entry["id"]), entry["id"])
         app._save()
         app.refresh_account_list()
         rebuild()

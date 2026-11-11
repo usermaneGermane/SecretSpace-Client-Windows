@@ -24,6 +24,11 @@ from widgets import ghost_button, accent_button, field, note, dialog_shell
 # The Sync button
 # ==========================================================================
 def run_sync(app):
+    """
+    One press of Sync: log in once, make the list of vaults the same here
+    and on the server (account_sync.reconcile_vaults), then sync each vault
+    in turn -- its own merge, its own conflict questions.
+    """
     if app.account is None or app.vault is None:
         return
     if not app.account.server:
@@ -33,76 +38,128 @@ def run_sync(app):
         return app.toast("A sync is already running")
     app._syncing = True
     app.toast("Syncing…")
-    attempt = {"retry_allowed": True, "session": getattr(app, "_session", 0)}
-    _sync_step(app, attempt)
-
-
-def _sync_step(app, attempt):
     account = app.account
+    attempt = {"session": getattr(app, "_session", 0)}
 
     def work():
-        session = account_sync.AccountSync(account)
+        server = account_sync.logged_in(account)
         try:
-            result = session.prepare(app.vault)
+            changes = account_sync.reconcile_vaults(account, server)
+            return server, changes, account_sync.syncable_vaults(account, server)
         except BaseException:
-            session.close()
+            server.logout()
             raise
-        return session, result
 
     def done(payload):
+        server, changes, vault_ids = payload
+        if not _still_open(app, attempt):
+            return _logout_in_background(server)
+        app.load_vaults()               # vaults that just arrived, or left
+        run = {"server": server, "changes": changes, "queue": list(vault_ids),
+               "many": len(vault_ids) > 1, "updated": [], "summary": None,
+               "account": account}
+        _next_vault(app, run, attempt)
+
+    _in_background(app, work, done,
+                   on_error=lambda e: _finish(app, str(e), "error")
+                   if _still_open(app, attempt) else None)
+
+
+def _next_vault(app, run, attempt):
+    if not run["queue"]:
+        return _all_done(app, run)
+    _sync_step(app, run, attempt, run["queue"].pop(0), retry_allowed=True)
+
+
+def _sync_step(app, run, attempt, vault_id, retry_allowed):
+    def failed(error):
+        if not _still_open(app, attempt):
+            return _logout_in_background(run["server"])
+        if isinstance(error, sync_client.Conflict409) and retry_allowed:
+            app.toast("The server moved on — merging again")
+            return _sync_step(app, run, attempt, vault_id, retry_allowed=False)
+        _logout_in_background(run["server"])
+        app.refresh_account_list()
+        _finish(app, str(error), "error")
+
+    def work():
+        session = account_sync.AccountSync(run["account"], run["server"], vault_id)
+        return session, session.prepare(app.vaults[vault_id])
+
+    def prepared(payload):
         session, result = payload
         if not _still_open(app, attempt):
-            return _close_in_background(session)
+            return _logout_in_background(run["server"])
         if not session.has_work():
-            _close_in_background(session)
-            return _finish(app, "Already up to date")
+            return _next_vault(app, run, attempt)
         choices = None
         if result.conflicts:
-            choices = conflict_dialog(app, result)
+            choices = conflict_dialog(
+                app, result, app.vault_name(vault_id) if run["many"] else "")
             if choices is None:
-                _close_in_background(session)
-                return _finish(app, "Sync cancelled — nothing changed", "warn")
-        _commit(app, session, result, choices, attempt)
+                _logout_in_background(run["server"])
+                app.refresh_account_list()
+                return _finish(
+                    app, "Sync cancelled — nothing changed" + (
+                        f" in “{app.vault_name(vault_id)}”" if run["many"] else ""),
+                    "warn")
 
-    _in_background(app, work, done, on_error=lambda e: _failed(app, e, attempt))
+        def commit():
+            return session.commit(app.vaults[vault_id], choices)
+
+        def committed(merged):
+            if not _still_open(app, attempt):
+                return _logout_in_background(run["server"])
+            app.set_vault_data(vault_id, merged, saved=True)
+            run["updated"].append(vault_id)
+            summary = f"Synced — {result.summary()}"
+            if session.first_push:
+                summary = "Synced — the server now has this account's vault"
+            elif session.base_ignored:
+                summary += " (first sync with this server)"
+            run["summary"] = summary
+            _next_vault(app, run, attempt)
+
+        _in_background(app, commit, committed, on_error=failed)
+
+    _in_background(app, work, prepared, on_error=failed)
 
 
-def _commit(app, session, result, choices, attempt):
-    def work():
-        try:
-            return session.commit(app.vault, choices)
-        finally:
-            session.close()
+def _all_done(app, run):
+    _logout_in_background(run["server"])
+    app.refresh_account_list()
+    changes, updated = run["changes"], run["updated"]
+    if not run["many"] and not changes:
+        # An account with only its personal vault: what phase 2 said.
+        return _finish(app, run["summary"] or "Already up to date")
+    parts = []
+    if updated:
+        parts.append(f"{len(updated)} vault{'s' if len(updated) != 1 else ''} "
+                     "updated")
+    if changes.added:
+        parts.append("new from the server: " + ", ".join(changes.added))
+    if changes.uploaded:
+        parts.append("now on the server: " + ", ".join(changes.uploaded))
+    for old, new in changes.renamed:
+        parts.append(f"“{old}” is now “{new}”")
+    kind = "info"
+    if changes.gone:
+        parts.append("deleted on another device, kept on this PC only: " +
+                     ", ".join(changes.gone) + " (see Vaults)")
+        kind = "warn"
+    if changes.server_too_old:
+        parts.append("this server keeps only the Personal vault — the others "
+                     "need SecretSpace Server 2.0.0-alpha.2 or newer")
+        kind = "warn"
+    _finish(app, "Synced — " + "; ".join(parts) if parts else "Already up to date",
+            kind)
 
-    def done(merged):
-        if not _still_open(app, attempt):
-            return
-        app.vault = merged
-        summary = f"Synced — {result.summary()}"
-        if session.first_push:
-            summary = "Synced — the server now has this account's vault"
-        elif session.base_ignored:
-            summary += " (first sync with this server)"
-        app.refresh_account_list()
-        _finish(app, summary)
 
-    _in_background(app, work, done, on_error=lambda e: _failed(app, e, attempt))
-
-
-def _close_in_background(session):
+def _logout_in_background(server):
     """Log out without the window waiting: a logout is a network call too,
     and a slow server must never freeze the window (Lab flow, 2026-11-10:
     on the main thread it stalled the UI for 20 s)."""
-    threading.Thread(target=session.close, daemon=True).start()
-
-
-def _failed(app, error, attempt):
-    if not _still_open(app, attempt):
-        return
-    if isinstance(error, sync_client.Conflict409) and attempt["retry_allowed"]:
-        app.toast("The server moved on — merging again")
-        return _sync_step(app, dict(attempt, retry_allowed=False))
-    _finish(app, str(error), "error")
+    threading.Thread(target=server.logout, daemon=True).start()
 
 
 # ==========================================================================
