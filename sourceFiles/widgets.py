@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import customtkinter as ctk
 
-from theme import (F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
+from theme import (tile_colors, F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
                    GREEN_HOVER, DANGER, DANGER_HOVER, INPUT_BG, BORDER,
                    CARD_HOVER, ON_ACCENT)
 from password_generator import estimate_strength
@@ -47,7 +47,7 @@ class Tooltip:
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
         tw.attributes("-topmost", True)
-        lbl = tk.Label(tw, text=self.text, bg="#0E0E10", fg="#EDEDED",
+        lbl = tk.Label(tw, text=self.text, bg="#16181D", fg="#F0F1F4",
                        padx=9, pady=4, font=(FONT, 9), bd=0)
         lbl.pack()
 
@@ -217,8 +217,24 @@ def _rule(parent):
                  fg_color=BORDER).pack(fill="x")
 
 
+def avatar(parent, name, size=40):
+    """A person's initial on a round pastel tile, the colour fixed by the
+    name."""
+    bg, ink, _ = tile_colors(name)
+    # A frame of a fixed size with the letter placed in it: a label with
+    # rounded corners grows sideways and the circle becomes an oval.
+    disc = ctk.CTkFrame(parent, width=size, height=size,
+                        corner_radius=size // 2, fg_color=bg)
+    disc.pack_propagate(False)
+    disc.grid_propagate(False)
+    ctk.CTkLabel(disc, text=(name[:1].upper() or "?"), fg_color="transparent",
+                 text_color=ink, font=F(size * 2 // 5, "bold")).place(
+        relx=0.5, rely=0.5, anchor="center")
+    return disc
+
+
 def dialog_shell(top, title, subtitle="", tile=None, danger=False,
-                 scroll=False, fit_exact=True):
+                 scroll=False, fit_exact=True, band=None):
     """
     Header band, body and footer bar for a dialog -- the top bar and the
     details card of the main window, in small.
@@ -229,6 +245,8 @@ def dialog_shell(top, title, subtitle="", tile=None, danger=False,
                   buttons stay put.
     ``fit_exact`` the window takes the height its content needs, so short
                   dialogs lose their empty middle. Scrolling ones keep theirs.
+    ``band``      the header's colour, for a dialog about one thing that has
+                  a tile (a vault, an entry): the band of its tile colours.
 
     Returns a namespace: ``body`` (build into it), ``buttons`` (the footer
     row), ``heading`` and ``tile`` (to change them live), ``text_width``
@@ -243,7 +261,7 @@ def dialog_shell(top, title, subtitle="", tile=None, danger=False,
     buttons = ctk.CTkFrame(foot, fg_color="transparent")
     buttons.pack(fill="x", padx=PAD, pady=14)
 
-    head = ctk.CTkFrame(top, fg_color=HEADER_BG, corner_radius=0)
+    head = ctk.CTkFrame(top, fg_color=band or HEADER_BG, corner_radius=0)
     head.pack(side="top", fill="x")
     inner = ctk.CTkFrame(head, fg_color="transparent")
     inner.pack(fill="x", padx=PAD, pady=(20, 18))
@@ -263,10 +281,12 @@ def dialog_shell(top, title, subtitle="", tile=None, danger=False,
                            justify="left", wraplength=text_width)
     heading.pack(anchor="w")
     if subtitle:
-        ctk.CTkLabel(words, text=subtitle, font=F(12), text_color=MUTED,
+        ctk.CTkLabel(words, text=subtitle, font=F(12),
+                     text_color=TEXT if band else MUTED,
                      anchor="w", justify="left",
                      wraplength=text_width).pack(anchor="w", pady=(3, 0))
-    _rule(head)
+    if not band:
+        _rule(head)
 
     if scroll:
         body = ctk.CTkScrollableFrame(top, fg_color="transparent")

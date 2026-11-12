@@ -15,7 +15,10 @@ sys.path.insert(0, SRC)
 from build_version import version_info   # Properties > Details
 
 datas = [(os.path.join(SRC, 'SecretSpace-logo.png'), '.'),
-         (os.path.join(SRC, 'SecretSpace-logo.ico'), '.')]
+         (os.path.join(SRC, 'SecretSpace-logo.ico'), '.'),
+         (os.path.join(SRC, 'Manrope-Regular.ttf'), '.'),
+         (os.path.join(SRC, 'Manrope-Bold.ttf'), '.'),
+         (os.path.join(SRC, 'Manrope-OFL.txt'), '.')]
 binaries = []
 # PIL.ImageTk pulls in PIL._tkinter_finder at runtime, and PyInstaller's
 # Pillow hook does not always detect it. Without it the frozen app crashes

@@ -18,15 +18,17 @@ widgets are touched only on the main one.
 """
 
 import customtkinter as ctk
+import pyperclip
 
 import account_sync
 import accounts
 import changelog
 from history_ui import local_time
 from sync_ui import _in_background
-from theme import F, TEXT, MUTED, CARD, BORDER, WARN, DANGER, GREEN, MONO
+from theme import (F, TEXT, MUTED, CARD, BORDER, WARN, DANGER, GREEN, MONO,
+                   tile_colors)
 from widgets import (dialog_shell, ghost_button, accent_button, small_button,
-                     field, error_label, note, option_menu, Tooltip)
+                     field, error_label, note, option_menu, Tooltip, avatar)
 
 ROLE_LABELS = {accounts.ROLE_OWNER: "Owner", accounts.ROLE_EDITOR: "Editor",
                accounts.ROLE_READER: "Reader"}
@@ -92,13 +94,15 @@ def members_dialog(app, vault_id, changed=None):
     account = app.account
     name = app.vault_name(vault_id)
     owner = account.vault_role(vault_id) == accounts.ROLE_OWNER
-    top = app._modal(f"Members of “{name}”", 620, 660)
+    top = app._modal(f"Members of “{name}”", 620, 680)
+    tile_bg, tile_ink, band = tile_colors(name)
     shell = dialog_shell(
         top, f"Members of “{name}”",
         "Everyone here can open this vault. Owners manage the members; "
         "editors change entries; readers only read." if owner else
         f"You are {_a(role_label(account.vault_role(vault_id)).lower())} of "
-        "this vault. Its owners manage the members.", scroll=True)
+        "this vault. Its owners manage the members.", scroll=True,
+        tile=(name[:1].upper() or "?", tile_bg, tile_ink), band=band)
     listing = shell.body
     listing.grid_columnconfigure(0, weight=1)
     state = {"members": [], "busy": False}
@@ -117,17 +121,29 @@ def members_dialog(app, vault_id, changed=None):
             return
         for child in listing.winfo_children():
             child.destroy()
-        fp = ctk.CTkFrame(listing, fg_color="transparent")
-        fp.grid(row=0, column=0, sticky="ew", padx=4, pady=(10, 6))
-        ctk.CTkLabel(fp, text="Your fingerprint", font=F(12, "bold"),
+        fp = ctk.CTkFrame(listing, fg_color=CARD, corner_radius=14)
+        fp.grid(row=0, column=0, sticky="ew", padx=2, pady=(10, 4))
+        fp.grid_columnconfigure(0, weight=1)
+        words = ctk.CTkFrame(fp, fg_color="transparent")
+        words.grid(row=0, column=0, sticky="w", padx=(16, 8), pady=(10, 0))
+        ctk.CTkLabel(words, text="Your fingerprint", font=F(12),
                      text_color=MUTED).pack(anchor="w")
-        ctk.CTkLabel(fp, text=account.fingerprint,
+        ctk.CTkLabel(words, text=account.fingerprint,
                      font=ctk.CTkFont(family=MONO, size=15),
                      text_color=TEXT).pack(anchor="w")
+
+        def copy_fingerprint():
+            pyperclip.copy(account.fingerprint)
+            app.toast("Fingerprint copied")
+
+        small_button(fp, "Copy", copy_fingerprint, width=70).grid(
+            row=0, column=1, padx=(0, 14), pady=(10, 0))
         ctk.CTkLabel(fp, text="Read it to someone who is about to share a "
                      "vault with you, so they know the key is yours.",
-                     font=F(11), text_color=MUTED, wraplength=shell.text_width,
-                     justify="left").pack(anchor="w")
+                     font=F(11), text_color=MUTED,
+                     wraplength=shell.text_width - 40,
+                     justify="left").grid(row=1, column=0, columnspan=2,
+                                          sticky="w", padx=16, pady=(2, 10))
         for i, member in enumerate(members, start=1):
             _member_row(listing, i, member)
         status(f"{len(members)} member{'s' if len(members) != 1 else ''}")
@@ -168,12 +184,13 @@ def members_dialog(app, vault_id, changed=None):
         _with_server(app, both, done, failed)
 
     def _member_row(parent, index, member):
-        row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14,
-                           border_width=1, border_color=BORDER)
+        row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14)
         row.grid(row=index, column=0, sticky="ew", padx=2, pady=4)
-        row.grid_columnconfigure(0, weight=1)
+        row.grid_columnconfigure(1, weight=1)
+        avatar(row, member["username"]).grid(row=0, column=0, padx=(14, 0),
+                                             pady=12)
         info = ctk.CTkFrame(row, fg_color="transparent")
-        info.grid(row=0, column=0, sticky="w", padx=(16, 8), pady=10)
+        info.grid(row=0, column=1, sticky="w", padx=(12, 8), pady=10)
         who = member["username"] + ("  (you)" if member["me"] else "")
         ctk.CTkLabel(info, text=who, anchor="w", font=F(14, "bold"),
                      text_color=TEXT).pack(anchor="w")
@@ -192,7 +209,7 @@ def members_dialog(app, vault_id, changed=None):
         if member["me"] or (member["verified"] and not owner):
             return
         buttons = ctk.CTkFrame(row, fg_color="transparent")
-        buttons.grid(row=0, column=1, padx=(0, 14))
+        buttons.grid(row=0, column=2, padx=(0, 14))
         who = member["username"]
         if not member["verified"]:
             check = small_button(buttons, "Check", lambda: check_person(who),
