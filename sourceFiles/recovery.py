@@ -77,7 +77,7 @@ class Pending:
             remote.check_api()
             if not remote.has_recovery():
                 raise SyncError("This server cannot recover accounts yet: it "
-                                "needs SecretSpace Server 2.0.0-alpha.4 or "
+                                "needs SecretSpace Server 2.0.0 or "
                                 "newer. Nothing was changed.")
             remote.recover({
                 "username": self.username,
@@ -141,7 +141,7 @@ def open_with_phrase(username: str, phrase: str, url: str = "",
         remote.check_api()
         if not remote.has_recovery():
             raise SyncError("This server cannot recover accounts yet: it needs "
-                            "SecretSpace Server 2.0.0-alpha.4 or newer.")
+                            "SecretSpace Server 2.0.0 or newer.")
         reply = remote.recovery_copy(username)
         username = reply.get("username") or username
         sealed = reply.get("recovery", "")
@@ -213,7 +213,7 @@ class NewPhrase:
                 if not remote.has_recovery():
                     raise SyncError("The server cannot take a new recovery "
                                     "phrase yet: it needs SecretSpace Server "
-                                    "2.0.0-alpha.4 or newer. Nothing was "
+                                    "2.0.0 or newer. Nothing was "
                                     "changed.")
                 remote.put_recovery(sealed)
             finally:

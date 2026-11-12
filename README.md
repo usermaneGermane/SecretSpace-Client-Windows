@@ -1,9 +1,18 @@
 # SecretSpace for Windows
 
-A local desktop password manager for Windows. Your vault is a single
-AES-256-GCM encrypted file. There is no online account and no service behind it: it
-works entirely offline, and if you want two PCs in step you run the sync
-server yourself, on your own hardware.
+A desktop password manager for Windows that you run entirely yourself. Your
+passwords are in encrypted vaults on your own PC (AES-256-GCM; the key comes
+from your master password and a Secret Key, through Argon2id). There is no
+online service behind it: it works offline, and if you want several devices
+in step, or a vault shared with other people, you run the sync server
+yourself, on your own hardware.
+
+**This README describes SecretSpace 3** (3.0.0 and later). The 2.x line —
+one vault file per user, last release
+[2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0) —
+has its own README on the branch
+[`release-2.x`](https://github.com/usermaneGermane/SecretSpace-Client-Windows/tree/release-2.x).
+Coming from 2.x? Read [Upgrading from 2.x](#upgrading-from-2x) first.
 
 **Formerly PassMan.** The project was renamed to SecretSpace in November
 2026, because another password manager already uses the name PassMan.
@@ -26,20 +35,16 @@ SecretSpace lives in four repositories:
 
 ![SecretSpace](sourceFiles/SecretSpace-logo.png)
 
-## SecretSpace 3 — a test version, not for real passwords yet
+## What SecretSpace 3 is
 
-`main` is now **3.0.0-alpha.8**, a test step of SecretSpace 3. **For your real
-passwords keep using [2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0)**,
-which the rest of this README describes. Do not install the test version
-over it: it opens SecretSpace 3 accounts only, so your 2.x vaults would not
-show up (they are not changed or deleted — 2.13.0 opens them again).
+SecretSpace 3 replaces "one vault file per user" with **accounts**. An
+account has a master password, a Secret Key and a recovery phrase, and holds
+one or more vaults.
 
-What the test version has:
-
-- **Accounts instead of vault files.** *Create an account* asks for a name
-  and a master password, then shows your **Emergency Kit** (a *Secret Key*,
-  `A3-XXXXX-…`) and a **12-word recovery phrase**, which you type three
-  words of back. Nothing is written until that last step.
+- **Accounts.** *Create an account* asks for a name and a master password,
+  then shows your **Emergency Kit** (a *Secret Key*, `A3-XXXXX-…`) and a
+  **12-word recovery phrase**, which you type three words of back. Nothing
+  is written until that last step.
 - **A stronger lock.** The key comes from your master password *and* the
   Secret Key, through Argon2id (64 MiB, memory-hard) instead of PBKDF2. A
   stolen copy of the account folder cannot be opened by guessing the
@@ -47,93 +52,110 @@ What the test version has:
 - **The Secret Key is typed once per PC.** This PC keeps it, protected by
   Windows (DPAPI) for your Windows user. Copy the account folder to another
   PC and that PC asks for the Secret Key once, from the Emergency Kit.
+- **Several vaults in one account.** Besides the *Personal* vault an account
+  can have more — *Home*, *Work*, a project — made, renamed and deleted in
+  the **Vaults** window. The menu above the list picks which vault is shown
+  (*All vaults* shows them together, each row naming its vault, and search
+  covers them all); a new entry goes to the vault picked there, or to the
+  one chosen in the *Add an entry* window. Every vault has its own key. A
+  vault deleted on one device is **kept** on the others, marked and no
+  longer synced, until you delete it there too or put it back.
+- **Sync through your own server.** *Settings → Sync → Set up…* puts the
+  account on a SecretSpace Server **2.0.0** or newer, with the server's token
+  as the sign-up code; after that the **Sync** button keeps every vault in
+  step, each with its own merge and conflict questions. On another device,
+  *Sign in from a server* on the login screen asks for the address, your
+  username and master password and — once per device — the Secret Key. The
+  server stores only what it cannot open: no master password, no Secret
+  Key, no vault key. More under [Syncing your devices](#syncing-your-devices).
+- **Sharing a vault.** An owner adds other accounts of the same server to a
+  vault in **Vaults → Members**, as *owner*, *editor* or *reader* (the
+  server refuses a reader's upload, and the app shows a reader no Edit or
+  Archive). Before the first share the app shows the other person's
+  **fingerprint**: they read theirs to you (it is at the top of their
+  Members window) and the two must match — that is what keeps a dishonest
+  server from slipping in its own key. The vault's key reaches a member only
+  wrapped to their public key; the server never holds it. **Remove** takes
+  a member out *and* gives the vault a new key in the same step, so they can
+  open nothing written afterwards (what they had already seen they may have
+  kept — and any member can export what they can read). A member can
+  **leave**; an owner can change the key on its own.
+- **Vault keys are signed.** Every vault key carries a signature of the
+  account that made it. The app takes a key only when it is signed by your
+  own account, by whoever gave you the key you hold, or by someone whose
+  fingerprint you checked, and never an older key. So a dishonest sync
+  server, or someone who broke into it, cannot hand the app a key of its
+  own making. *Remove* and *Change key* name the members whose fingerprint
+  was never checked on this PC, and an unencrypted `http://` address of
+  another machine asks before it is used.
+- **Who changed what.** Every save adds lines to the vault's own change log
+  — *user1 changed the password of “Mail”* — signed with the author's
+  account key, encrypted with the vault and synced with it. **Vaults →
+  Activity** shows it to every member; a line whose signature does not
+  match its author is marked. In a shared vault an entry and each of its
+  earlier versions say who changed them. Owners can also read the **server
+  log** there: uploads, members added and removed, key changes, with the
+  address they came from. Values are never recorded, and neither is who
+  looked at an entry or copied a password.
+- **Recovering an account.** *Forgot your master password?* on the login
+  screen takes the account name and the 12-word recovery phrase, then a new
+  master password. The same keys open again, so every vault and every share
+  is still there. You get a **new phrase** (the old one stops working) and,
+  when this PC could not keep the old Secret Key (a new PC), a new Emergency
+  Kit. On a PC that does not have the account, the account comes from its
+  server. An account on a server is changed there first; other devices then
+  sign in again with the new password. *Settings → Recovery phrase → New
+  phrase…* replaces a phrase that was lost or seen.
 - **Importing a 2.x vault.** *Import* lists the 2.x vaults on this PC (or
   takes a `.vault.enc` file) and copies every entry with its history and
   archive state. The 2.x file is only read; its sync settings stay with it.
-- **A security fix** (alpha.8; affects alpha.6 and alpha.7). A dishonest
-  sync server, or someone who broke into it, could hand the app a vault key
-  of its own making and read the vault the app then uploaded under it. Now
-  every vault key carries a signature of the account that made it, and the
-  app takes a key only when it is signed by your own account, by whoever
-  gave you the key you hold, or by someone whose fingerprint you checked —
-  and never an older key. Vaults from alpha.6 / alpha.7 are signed at the
-  next sync from a device that has them. Needs SecretSpace Server
-  **2.0.0-alpha.5** for anything but the Personal vault. Also: *Remove* and
-  *Change key* name the members whose fingerprint was never checked on this
-  PC, and an unencrypted `http://` address of another machine asks before
-  it is used.
-- **Recovering an account** (new in alpha.7). *Forgot your master
-  password?* on the login screen takes the account name and the 12-word
-  recovery phrase, then a new master password. The same keys open again, so
-  every vault and every share is still there. You get a **new phrase** (the
-  old one stops working) and, when this PC could not keep the old Secret Key
-  (a new PC; Linux), a new Emergency Kit. On a PC that does not have the
-  account, the account comes from its server. An account on a server is
-  changed there first; other devices then sign in again with the new
-  password. *Settings → Recovery phrase → New phrase…* replaces a phrase that
-  was lost or seen. Needs SecretSpace Server **2.0.0-alpha.4**.
-- **Sharing a vault** (new in alpha.6). An owner adds other accounts of
-  the same server to a vault in **Vaults → Members**, as *owner*, *editor*
-  or *reader* (the server refuses a reader's upload, and the app shows a
-  reader no Edit or Archive). Before the first share the app shows the
-  other person's **fingerprint**: they read theirs to you (it is at the top
-  of their Members window) and the two must match — that is what keeps a
-  dishonest server from slipping in its own key. The vault's key reaches a
-  member only wrapped to their public key; the server never holds it.
-  **Remove** takes a member out *and* gives the vault a new key in the same
-  step, so they can open nothing written afterwards (what they had already
-  seen they may have kept). A member can **leave**; an owner can change the
-  key on its own. It needs SecretSpace Server **2.0.0-alpha.3**.
-- **Who changed what** (new in alpha.6). Every save adds lines to the
-  vault's own change log — *user1 changed the password of “Mail”* — signed
-  with the author's account key, encrypted with the vault and synced with
-  it. **Vaults → Activity** shows it to every member; a line whose
-  signature does not match its author is marked. In a shared vault an
-  entry and each of its earlier versions say who changed them. Owners can
-  also read the **server log** there: uploads, members added and removed,
-  key changes, with the address they came from. Values are never recorded,
-  and neither is who looked at an entry or copied a password.
-- **Several vaults in one account** (new in alpha.5). Besides the
-  *Personal* vault an account can have more — *Home*, *Work*, a project —
-  made, renamed and deleted in the **Vaults** window. The menu above the
-  list picks which vault is shown (*All vaults* shows them together, each
-  row naming its vault, and search covers them all); a new entry goes to
-  the vault picked there, or to the one chosen in the *Add an entry*
-  window. Every vault has its own key. **Sync** covers all of them, each
-  with its own merge and conflict questions; it needs SecretSpace Server
-  **2.0.0-alpha.2** (an older 2.0 server keeps only the Personal vault, and
-  the app says so). A vault deleted on one device is **kept** on the others,
-  marked and no longer synced, until you delete it there too or put it
-  back.
-- **A smoother look** (new in alpha.4). Rounded corners are drawn smoothed
-  instead of in pixel steps, the sign-in screen's padlock and key are
-  redrawn, and an entry's coloured header has room around its tile.
-- **Sync through your own server** (new in alpha.3). *Settings → Sync →
-  Set up…* puts the account on a SecretSpace Server **2.0** (a test version
-  too) with the server's token as the sign-up code; after that the **Sync**
-  button keeps the vault in step, with the same merge and conflict choices
-  as 2.x. On another device, *Sign in from a server* on the login screen
-  asks for the address, your username and master password and — once per
-  device — the Secret Key. The server stores only what it cannot open: no
-  master password, no Secret Key, no vault key. A master password changed
-  on one device is changed on the server at the same time (it needs the
-  server to be reachable); other devices then sign in again with it.
 - Everything else in the window — entries, archive, history, 2FA codes,
-  generator, plain export — works as in 2.12.
+  generator, plain export — works as in 2.x.
 
-Not in this test version yet: adding someone to a vault before they have
-an account (they make the account first, then you share), the web admin
-for a company's server and its recovery with an admin's approval, moving
-an entry from one vault to another, and *Sync when I unlock* for accounts.
-SecretSpace for Linux has the same test version, 1.0.0-alpha.8. Coming
-next: the company setup (invites, web admin, rules for offline copies).
+**Not in 3.0:** adding someone to a vault before they have an account (they
+make the account first, then you share), a company setup (an admin console,
+invites, recovery with an admin's approval), moving an entry from one vault
+to another, and *Sync when I unlock* (2.x has it; in 3.0 you press **Sync**).
+[SecretSpace for Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux)
+1.0.0 is the same release for Linux.
+
+## Upgrading from 2.x
+
+SecretSpace 3 does not open 2.x vaults directly: you make an account and
+**import** them. **Your 2.x vaults are never converted, changed or
+deleted**, so the way back stays open.
+
+1. **Back up first.** Close SecretSpace and copy the folder
+   `%APPDATA%\SecretSpace` (or `%APPDATA%\PassMan`, if that is the one you
+   have) somewhere safe.
+2. **Install 3.0.0.** The installer upgrades the installed 2.x program in
+   place; the data folder is left as it is.
+3. **Create an account.** The login screen is empty at first — your 2.x
+   vaults are not shown there. Save the Emergency Kit and write down the
+   12-word phrase.
+4. **Import.** Press *Import*, pick a 2.x vault from the list and enter its
+   master password. Its entries arrive whole, with history and archive, in
+   the vault that is shown — make a vault for each 2.x vault first if you
+   want to keep them apart.
+5. **Sync.** A 2.x vault's sync settings are not carried over. Update your
+   server to **2.0.0** (it keeps serving 2.x apps exactly as before, with
+   the same store and token), then use *Settings → Sync → Set up…*. Your
+   other devices install 3.0.0 and use *Sign in from a server*.
+
+**Going back.** Install
+[2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0)
+again. It opens your 2.x vaults as you left them. What you added or changed
+in SecretSpace 3 stays in the account, not in the 2.x vaults: there is no
+sync between a 2.x vault and an account, so do not keep working in both.
 
 ## Running it
 
 The repository does not contain the app itself. Download
 `SecretSpace-Client-Installer.exe` from the release marked **Latest** on the
 [Releases](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases) page (a
-*Pre-release* is a test version and has the same file name), or build it
+*Pre-release* is a test version and has the same file name; the last 2.x
+installer is on the release
+[2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0)), or build it
 yourself with the [SecretSpace Builder](#building-it-yourself-windows). The
 installer is all you need: it brings Python and every library with it, so
 installing needs no source code and no Python.
@@ -240,12 +262,12 @@ SecretSpace. Python is only needed to *build* it.
 The exe is not code-signed, so Windows SmartScreen will likely warn the first
 time — "More info" then "Run anyway".
 
-Your passwords do **not** travel with the installer. The vault lives in
+Your passwords do **not** travel with the installer. The account lives in
 `%APPDATA%\SecretSpace`, so a fresh install on a new PC starts empty. To bring
-your logins across, use *Restore from server* if you sync, or copy
-`vault\<user>.vault.enc` into `%APPDATA%\SecretSpace\vault` on the new PC, or
-use Settings → *Encrypted backup* → *Save backup…* and copy that file over. The backup is still protected by
-your master password.
+your logins across, use *Sign in from a server* if you sync, or copy the
+account's folder (`accounts\<name>`) into `%APPDATA%\SecretSpace\accounts` on
+the new PC. Either way the new PC asks once for the Secret Key from your
+Emergency Kit.
 
 ## A lab copy for testing
 
@@ -274,17 +296,16 @@ robocopy build\installer\SecretSpace D:\SecretSpace-Lab /E /XD vault /XF config.
 (`/E` adds and replaces files but deletes nothing.)
 
 **Syncing a lab copy.** A lab copy can use the same server as production.
-The server keeps one vault per username, so lab vaults must have **names
-your real vaults do not use** (e.g. `test`, `lab-alice`): a lab vault with
-the same name as a real one would sync into it.
+Give lab accounts **names your real accounts do not use** (e.g. `test`,
+`lab-alice`): the server has one account per name.
 
-**Moving test vaults out of production.** Uninstalling keeps the vaults, so
-`%APPDATA%\SecretSpace\vault` may still hold vaults you made while testing. With
+**Moving 2.x test vaults out of production.** Uninstalling keeps the vaults, so
+`%APPDATA%\SecretSpace\vault` may still hold 2.x vaults you made while testing. With
 SecretSpace closed, move each `<user>.vault.enc` together with its `.bak` and
 `.base` into the lab copy's `vault` folder (and `config.json` too, if it
 names a test vault as the last user).
 
-### SecretSpace 3 (test version)
+### The SecretSpace 3 files
 
 ```
 keyset.pmk:  base64( "PMK3" || ver(1) || kdf(1) || memory_kib(4) || passes(1) || lanes(1) || salt(16) || nonce(12) || ciphertext )
@@ -334,7 +355,9 @@ SecretSpace-Client-Windows/
         └── sync_server/ a copy of the server, for the end-to-end sync tests
 ```
 
-## Upgrading from an earlier build
+## Upgrading a 2.x vault from an earlier build
+
+*(About 2.x vault files, for the 2.x line. For moving to SecretSpace 3 see [Upgrading from 2.x](#upgrading-from-2x).)*
 
 **Back up your vault before you upgrade.** Copy your `vault` folder (called
 `data` in earlier versions) somewhere safe, or open the old app and use Settings → *Save encrypted
@@ -361,55 +384,33 @@ So once any PC runs 2.0:
   pointing at that vault folder;
 - update the sync server too (see "Updating" in [SecretSpace-Server-Windows](https://github.com/usermaneGermane/SecretSpace-Server-Windows) or [SecretSpace-Server-Linux](https://github.com/usermaneGermane/SecretSpace-Server-Linux)).
 
-## Syncing two PCs
+## Syncing your devices
 
-Point both PCs at a server you run — [SecretSpace-Server-Windows](https://github.com/usermaneGermane/SecretSpace-Server-Windows) or [SecretSpace-Server-Linux](https://github.com/usermaneGermane/SecretSpace-Server-Linux) says how to set one
-up — then press **Sync**. The vault is encrypted before it leaves
-your machine, so the server stores ciphertext it has no key for and never sees
-your master password.
+Run a server — [SecretSpace-Server-Windows](https://github.com/usermaneGermane/SecretSpace-Server-Windows) or [SecretSpace-Server-Linux](https://github.com/usermaneGermane/SecretSpace-Server-Linux) says how to set one
+up, version **2.0.0** or newer — then put your account on it. Everything is
+encrypted before it leaves your machine, so the server stores what it has no
+key for and never sees your master password, your Secret Key or a vault key.
 
-- **First PC:** Settings → Sync, enter the address and token, press **Save &
-  sync**. It checks the connection first and only stores the settings once
-  the server has answered, so a typo in the address cannot leave you thinking
-  sync is set up when it is not. *Save only* stores them without contacting
-  anything, for when the server cannot be reached right now; *Test
-  connection* checks without syncing and tells you whether the next sync will
-  upload or merge.
-- **Second PC:** *Restore from server* on the login screen pulls the vault
-  down. After that, Sync on either machine.
+- **First device:** *Settings → Sync → Set up…*, enter the server's address
+  and its token as the sign-up code. The account and all its vaults are
+  uploaded.
+- **Every other device:** *Sign in from a server* on the login screen:
+  the address, your username and master password, and — once per device —
+  the Secret Key from your Emergency Kit. After that, **Sync** on any
+  device.
 
-**Sync when I unlock.** Sync is manual unless you switch this on, in
-Settings → Sync once sync is set up (off by default). With it on, SecretSpace
-syncs right after you unlock; a conflict still waits for your choice, and a
-server that cannot be reached only shows a warning — the vault opens either
-way. The switch is per vault and per PC: a merge keeps this PC's choice,
-and a vault restored onto a new PC starts with it off.
+Sync is by hand: press **Sync**. It covers every vault of the account.
 
-Sync merges per entry. A change made on only one PC is taken
+**Offline.** The account and its vaults are files on this PC. You can open
+them, read and copy passwords and make changes with no network at all; the
+changes go up at the next Sync.
+
+Sync merges per entry. A change made on only one device is taken
 silently — there is nothing to decide. Only when the **same entry changed on
-both** PCs since they last synced do you get a dialog showing both versions
+both** since they last synced do you get a dialog showing both versions
 side by side, and **whichever side you do not keep is saved in that entry's
 history** — every outcome is reversible with one click on *Revert*.
 Cancelling it changes nothing on either side.
-
-**More than one vault.** Each SecretSpace user syncs as its own, independent vault
-on the server, matched across PCs by username (exactly, including case). Set
-up sync once per vault, while that vault is unlocked; Sync only ever syncs
-the vault that is open.
-
-**If the server's address changes**, update it in Settings → Sync on every
-PC — once per vault, because the address is stored inside each vault. Keep
-the token as it is. A DHCP reservation for the server in your router stops
-this happening by surprise.
-
-**Syncing one vault with more than one server** (say a Windows and a Linux
-server) works, but the two hold separate copies. From 2.5.0, the first sync
-after you switch the address is treated like a first sync: nothing on this PC
-is deleted or reverted because the other server has an older copy. Anything
-it lacks is uploaded to it, and an entry that differs between the two comes
-up in the conflict dialog for you to choose. The same happens if a server is
-restored from an older backup. (Up to 2.4.0, such a switch could silently
-remove entries the other server never had, and bring back older passwords.)
 
 **A live entry that is missing from the server** is never removed without
 asking. Deleting goes through the Archive (below), so an entry that is still
@@ -417,33 +418,17 @@ in use here but gone from the server means the server holds an older or
 different copy. The conflict dialog shows it; keeping it (the default)
 uploads it again, and choosing the server's side moves it to the Archive.
 
-### Changing the master password of a vault you sync
+**An unencrypted address.** A plain `http://` address of another machine
+asks before it is used. On such a connection someone on the network could
+take over the account *on the server* (not read a vault). Use it on a
+network you trust or through a VPN, or give the server a certificate.
 
-Change it as usual in Settings → *Master password* → *Change…*. On that PC:
+### Changing the master password of an account you sync
 
-- the vault, its backup and its sync state are re-encrypted, and
-- **the server is updated straight away**, merging anything your other PCs
-  sent first. The option to delete the server's older copies is ticked by
-  default, because those copies still open with the old password.
-
-On each **other PC**, the next Sync says the password was changed on another
-PC and asks for the new one. Enter it and that PC switches over: from then
-on you unlock the vault there with the new password too. Anything it had not
-synced yet is merged, not lost.
-
-**Changed it while the server was unreachable?** Nothing is lost. The next
-Sync on that PC asks once for your *previous* password, reads the server's
-copy with it, and uploads everything under the new one.
-
-**Changed it on two PCs before either synced?** Whichever reached the server
-first wins. The other PC is asked for that password and switches to it.
-
-This needs the server to be up to date — update it (see "Updating" in its
-README) before changing a password.
-
-To do it without a server at all, Syncthing or a USB stick work: both PCs
-just need to see the same `vault` folder, and `PASSMAN_DATA_DIR` can point
-the app at a network share.
+Change it as usual in *Settings → Master password → Change…*. The server
+must be reachable: the account is changed there in the same step, and if it
+cannot be reached nothing changes. Your other devices then sign in again
+with the new password. The Secret Key and the recovery phrase stay the same.
 
 ### Deleting is archiving
 
@@ -493,12 +478,16 @@ needs no update for this.
 
 ## Features
 
-- AES-256-GCM encryption with a PBKDF2-HMAC-SHA256 derived key
-- Sync between machines through a server you host, with per-entry merging;
-  by hand, or each time you unlock if you switch that on
+- AES-256-GCM encryption; the key from your master password and a Secret
+  Key, through Argon2id
+- Accounts with several vaults, each with its own key
+- Sync between devices through a server you host, with per-entry merging
+- Shared vaults with roles (owner, editor, reader) and a signed record of
+  who changed what
+- Recovery with a 12-word phrase when the master password is forgotten
 - A black-and-green two-pane window: the entry list on the left, the
   selected entry's details (copy buttons, strength, notes, history) on the
-  right; the login screen shows one tile per vault on this PC. Every dialog
+  right; the login screen shows one tile per account on this PC. Every dialog
   shares the look: a header band (with the site's tile when it is about an
   entry), settings grouped in cards, and the buttons in a bar at the bottom
 - Search with Ctrl+F
@@ -513,23 +502,26 @@ needs no update for this.
 - Strength meter that accounts for repetition, sequences and common passwords
 - Import from Chrome, KeePass, LastPass, Bitwarden and other CSV/JSON exports,
   carrying notes and TOTP secrets across
-- Encrypted backups, plus a plaintext export for migrating away
+- Backups by copying the account folder, plus a plaintext export for
+  migrating away
 - Clipboard auto-clear, idle auto-lock, and a delay after repeated wrong
   master passwords
 
-## Important: your master password cannot be recovered
+## If you forget your master password
 
-*(2.11.)* In the 3.0 test version, the 12-word recovery phrase opens an
-account without its master password — the screen for that arrives in a
-later test version.
+Nobody — including whoever wrote this app — can open your account for you,
+and there is no backdoor. What opens it without the master password is the
+**12-word recovery phrase** you wrote down when you made the account:
+*Forgot your master password?* on the login screen. If you have lost the
+master password **and** the phrase, the passwords are gone.
 
-The master password *is* the encryption key. Nobody — including whoever wrote
-this app — can decrypt your vault without it, and there is no reset, no
-recovery code and no backdoor. If you forget it, the passwords are gone.
+A new PC also needs the **Secret Key** from your Emergency Kit (or the
+recovery phrase, which then makes a new one). Keep the kit and the phrase
+somewhere that is not this PC.
 
-**Make backups.** Settings → *Encrypted backup* → *Save backup…* writes a copy that is
-still protected by your master password, so it is safe to keep on another
-drive or in cloud storage.
+**Make backups.** *Settings → Backup → Open folder* shows the account's
+folder; copy it to another drive. The copy opens only with your master
+password and the Secret Key.
 
 ## Where your data lives
 
@@ -541,23 +533,23 @@ they are next to the program instead.
 
 | File | What it is |
 | --- | --- |
-| `vault/<user>.vault.enc` | your encrypted vault |
-| `vault/<user>.vault.enc.bak` | the previous version, kept automatically |
-| `vault/<user>.vault.enc.base` | what the server held at the last sync, and which server that was; only if you sync |
-| `config.json` | non-secret preferences (last username, auto-lock delay) |
-
-The 3.0 test version adds an `accounts` folder beside `vault`, and only
-reads `vault`:
-
-| File | What it is |
-| --- | --- |
-| `accounts/<name>/account.json` | nothing secret: the account's public key, its vault's id, the Secret Key as this PC keeps it (DPAPI) |
+| `accounts/<name>/account.json` | nothing secret: the account's public key, its vaults' ids and names, the Secret Key as this PC keeps it (DPAPI) |
 | `accounts/<name>/keyset.pmk` | the account's keys, under your master password + Secret Key (Argon2id, AES-256-GCM) |
 | `accounts/<name>/recovery.pmk` | the same keys, under the 12-word recovery phrase |
-| `accounts/<name>/vaults/<id>.pmv3` | your entries (+ `.bak`, the previous save) |
+| `accounts/<name>/vaults/<id>.pmv3` | one vault's entries (+ `.bak`, the previous save) |
+| `config.json` | non-secret preferences (last username, auto-lock delay) |
 
 To back an account up, copy its folder (Settings → *Backup* → *Open
 folder*); the copy opens only with the master password and the Secret Key.
+
+A `vault` folder beside `accounts` holds 2.x vaults, if you had any.
+SecretSpace 3 only reads it, for *Import*:
+
+| File | What it is |
+| --- | --- |
+| `vault/<user>.vault.enc` | a 2.x vault |
+| `vault/<user>.vault.enc.bak` | its previous version |
+| `vault/<user>.vault.enc.base` | its sync state with a 1.x server |
 
 The `.base` file is how merging tells a deletion apart from an addition. It
 is encrypted with the same master password as the vault. Deleting it is safe
@@ -575,7 +567,7 @@ If the main file is ever damaged, SecretSpace falls back to the `.bak` copy.
 
 ## Vault format
 
-*(2.x; the 3.0 container is below.)*
+*(The 2.x vault file, which Import reads. The SecretSpace 3 files are described under [The SecretSpace 3 files](#the-secretspace-3-files).)*
 
 ```
 base64( "PMV2" || kdf_id(1) || iterations(4) || salt(16) || nonce(12) || ciphertext )
@@ -592,9 +584,15 @@ transparently re-encrypted at the current cost the next time you unlock.
 
 Worth knowing about, in the interest of not overselling this:
 
-- **PBKDF2 is not memory-hard.** A memory-hard KDF (Argon2id, scrypt) resists
-  GPU cracking better. The format header exists so that migration is possible
-  without breaking anyone's vault.
+- **The server is trusted to be there, not to be honest.** It cannot read
+  a vault, and the app refuses a vault key it cannot trace to you or to
+  someone you checked. But it can refuse to serve, hand back an older copy
+  of a vault, or drop one, and it sees who is a member of what and when
+  they sync. Comparing fingerprints before the first share is what the
+  protection against a dishonest server rests on.
+- **Anyone who can read a shared vault can keep a copy.** Removing a member
+  changes the key for what is written afterwards; it cannot take back what
+  they already saw or exported.
 - **The unlocked vault lives in memory in the clear**, and Python strings
   cannot be reliably wiped. Auto-lock limits the window; it does not close it.
 - **Locking does not clear a copied password.** It stays pasteable until
@@ -622,20 +620,19 @@ Worth knowing about, in the interest of not overselling this:
   hint at your patterns, so if one leaked, use *Clear history* on that entry
   — it reaches your other PCs too. *Delete permanently* removes an entry's
   history with it.
-- **The sync token is a single trust boundary.** Anyone holding it can read
-  and overwrite every blob on your server. It is stored inside the vault,
-  which is encrypted, rather than in `config.json`, which is not — but it is
-  one shared secret, not per-user access control.
+- **The server's token is the sign-up code.** Anyone holding it can make an
+  account on your server (and, for 2.x vaults kept there, read and
+  overwrite those blobs). It does not open anyone's SecretSpace 3 account.
 - **The sync server is not a backup.** It holds one copy of a file your PCs
   also hold, and it will happily store a vault you damaged. It does keep the
   last 20 revisions, which is a safety net, not a backup strategy.
-- **Changing the master password does not re-lock existing copies.** Encrypted
-  backups you saved and a vault on a lost USB stick still open with the
-  password they were written under, and so does the server's history unless
-  you leave *delete the older copies* ticked when you change it. If you
+- **Changing the master password does not re-lock existing copies.** A copy
+  of the account folder you saved, or one on a lost USB stick, still opens
+  with the password it was written under (and the Secret Key). If you
   change it because the old one leaked, change the passwords *inside* the
   vault too — starting with email and banking.
-- **This has not been independently audited.**
+- **This has not been independently audited.** The 3.0 cryptography is new;
+  it was reviewed by its author only.
 
 ## Versioning
 
@@ -644,8 +641,7 @@ release; `VAULT_FORMAT` tracks the on-disk container (`crypto_utils.MAGIC`) and
 a test fails if the two drift apart.
 
 Bump the **major** version when an older build can no longer safely use what
-this one writes — even if the container stays `PMV2`, as in 2.0, where 1.x
-would silently drop the new entry fields. New features that older builds
+this one writes — as in 3.0, which keeps accounts instead of vault files. New features that older builds
 handle harmlessly are a minor bump; fixes are a patch.
 
 ## Development

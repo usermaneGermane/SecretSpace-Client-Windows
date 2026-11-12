@@ -74,7 +74,7 @@ def _with_server(app, work, done, failed):
             if not server.has_sharing() or not server.has_signed_keys():
                 raise account_sync.SyncError(
                     "This server cannot share vaults yet: it needs SecretSpace "
-                    "Server 2.0.0-alpha.5 or newer.")
+                    "Server 2.0.0 or newer.")
             return work(server)
         finally:
             server.logout()

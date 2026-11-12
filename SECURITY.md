@@ -15,8 +15,9 @@ Please give a reasonable time for a fix before you publish anything.
 
 | Version | Supported |
 |---|---|
-| Latest 2.x release | Yes |
-| 3.0 pre-releases (alpha) | Best effort; they are test versions |
+| Latest 3.x release | Yes |
+| 2.13.x (the last 2.x line) | Security fixes |
+| Pre-releases (alpha) | Best effort; they are test versions |
 | Older releases | No; please update first |
 
 ## Scope
