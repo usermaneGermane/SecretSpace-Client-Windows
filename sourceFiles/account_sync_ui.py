@@ -154,7 +154,7 @@ def _all_done(app, run):
         kind = "warn"
     if changes.server_too_old:
         parts.append("this server keeps only the Personal vault — the others "
-                     "need SecretSpace Server 2.0.0-alpha.5 or newer")
+                     "need SecretSpace Server 2.0.0 or newer")
         kind = "warn"
     _finish(app, "Synced — " + "; ".join(parts) if parts else "Already up to date",
             kind)
