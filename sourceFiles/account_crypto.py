@@ -572,8 +572,7 @@ def create_account(username: str, master_password: str,
         "login_key": login,
         "sealed_keyset": seal_keyset(auk, keyset, salt, KDF_ARGON2ID, passes,
                                      memory_kib, lanes),
-        "sealed_recovery": seal_keyset(recovery_key(phrase, username), keyset,
-                                       bytes(SALT_LEN), KDF_NONE, 0, 0, 0),
+        "sealed_recovery": seal_recovery(phrase, username, keyset),
     }
 
 
@@ -587,6 +586,23 @@ def unlock_account(username: str, master_password: str, secret_key: bytes,
                                      head["salt"], head["passes"],
                                      head["memory_kib"], head["lanes"])
     return open_keyset(auk, sealed_keyset), login
+
+
+def seal_recovery(phrase: str, username: str, keyset: dict) -> str:
+    """The keyset under a recovery phrase: the account's recovery copy."""
+    return seal_keyset(recovery_key(phrase, username), keyset, bytes(SALT_LEN),
+                       KDF_NONE, 0, 0, 0)
+
+
+def recovery_proof(keyset: dict) -> bytes:
+    """
+    What a device shows the server to prove it opened the account's keyset
+    (with the recovery phrase) before it may set a new password there. From
+    the keyset's private key, under its own label, so it reveals nothing
+    about that key; the server keeps only its hash.
+    """
+    return _hkdf(_unb64(keyset["x25519_private"], "account key"),
+                 b"PassMan3 recovery proof", b"PassMan3 recovery proof|v1")
 
 
 def recover_account(username: str, phrase: str, sealed_recovery: str) -> dict:

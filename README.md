@@ -28,7 +28,7 @@ SecretSpace lives in four repositories:
 
 ## SecretSpace 3 — a test version, not for real passwords yet
 
-`main` is now **3.0.0-alpha.6**, a test step of SecretSpace 3. **For your real
+`main` is now **3.0.0-alpha.7**, a test step of SecretSpace 3. **For your real
 passwords keep using [2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0)**,
 which the rest of this README describes. Do not install the test version
 over it: it opens SecretSpace 3 accounts only, so your 2.x vaults would not
@@ -50,6 +50,16 @@ What the test version has:
 - **Importing a 2.x vault.** *Import* lists the 2.x vaults on this PC (or
   takes a `.vault.enc` file) and copies every entry with its history and
   archive state. The 2.x file is only read; its sync settings stay with it.
+- **Recovering an account** (new in alpha.7). *Forgot your master
+  password?* on the login screen takes the account name and the 12-word
+  recovery phrase, then a new master password. The same keys open again, so
+  every vault and every share is still there. You get a **new phrase** (the
+  old one stops working) and, when this PC could not keep the old Secret Key
+  (a new PC; Linux), a new Emergency Kit. On a PC that does not have the
+  account, the account comes from its server. An account on a server is
+  changed there first; other devices then sign in again with the new
+  password. *Settings → Recovery phrase → New phrase…* replaces a phrase that
+  was lost or seen. Needs SecretSpace Server **2.0.0-alpha.4**.
 - **Sharing a vault** (new in alpha.6). An owner adds other accounts of
   the same server to a vault in **Vaults → Members**, as *owner*, *editor*
   or *reader* (the server refuses a reader's upload, and the app shows a
@@ -101,11 +111,10 @@ What the test version has:
 
 Not in this test version yet: adding someone to a vault before they have
 an account (they make the account first, then you share), the web admin
-for a company's server, moving an entry from one vault to another,
-recovering an account with the 12-word phrase (the phrase is made and
-checked now; the screen that uses it comes later), and *Sync when I
-unlock* for accounts. SecretSpace for Linux has the same test version,
-1.0.0-alpha.6. Coming next: recovering an account with the 12-word phrase.
+for a company's server and its recovery with an admin's approval, moving
+an entry from one vault to another, and *Sync when I unlock* for accounts.
+SecretSpace for Linux has the same test version, 1.0.0-alpha.7. Coming
+next: the company setup (invites, web admin, rules for offline copies).
 
 ## Running it
 

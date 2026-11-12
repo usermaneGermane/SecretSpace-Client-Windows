@@ -30,6 +30,7 @@ import sync_client
 import sync_ui
 import account_sync_ui
 import vaults_ui
+import recovery_ui
 import totp
 from theme import (F, BG, HEADER_BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
@@ -660,8 +661,14 @@ class PasswordManagerGUI:
                       width=10, height=32, fg_color="transparent",
                       hover_color=CARD_HOVER, text_color=GREEN,
                       font=F(13, "bold")).pack(side="right")
+        ctk.CTkButton(pad, text="Forgot your master password?",
+                      command=lambda: recovery_ui.recover_dialog(
+                          self, self._login_user or ""),
+                      width=10, height=28, fg_color="transparent",
+                      hover_color=CARD_HOVER, text_color=MUTED,
+                      font=F(12)).pack(pady=(6, 0))
         ctk.CTkLabel(pad, text=version_string(), font=F(11),
-                     text_color=MUTED).pack(pady=(14, 0))
+                     text_color=MUTED).pack(pady=(8, 0))
 
         self.password_entry.bind("<Return>", lambda e: self.unlock_vault())
         self.password_entry.focus()

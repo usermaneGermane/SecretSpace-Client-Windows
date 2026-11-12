@@ -141,9 +141,10 @@ def _secret_key_box(parent, text):
 def _emergency_kit_dialog(app, new, password):
     top = app._modal("Emergency Kit", 500, 600)
     shell = dialog_shell(top, "Your Emergency Kit",
-                         "Step 2 of 3 · With your master password, this "
-                         "Secret Key opens your account on another PC. "
-                         "SecretSpace keeps a copy on this PC only.")
+                         getattr(new, "kit_subtitle",
+                                 "Step 2 of 3 · With your master password, this "
+                                 "Secret Key opens your account on another PC. "
+                                 "SecretSpace keeps a copy on this PC only."))
     wrap = shell.body
 
     field_label(wrap, "Account")
@@ -184,9 +185,10 @@ def _emergency_kit_dialog(app, new, password):
 def _phrase_dialog(app, new, password):
     top = app._modal("Recovery phrase", 520, 600)
     shell = dialog_shell(top, "Your recovery phrase",
-                         "Step 3 of 3 · These 12 words open your account if "
-                         "you forget your master password. Write them on "
-                         "paper, in order.")
+                         getattr(new, "phrase_subtitle",
+                                 "Step 3 of 3 · These 12 words open your account "
+                                 "if you forget your master password. Write "
+                                 "them on paper, in order."))
     wrap = shell.body
 
     grid = ctk.CTkFrame(wrap, fg_color=CARD, corner_radius=16,
@@ -242,6 +244,10 @@ def _phrase_check_dialog(app, new, password):
                                (" does" if len(wrong) == 1 else " do") +
                                " not match. Look at your paper copy again.")
             return
+        if hasattr(new, "finish"):
+            # A recovery or a new phrase: it says what happens (and may use
+            # the network, off this thread).
+            return new.finish(app, top, err)
         try:
             account = new.save()
             loaded = account.load_vault()
@@ -258,8 +264,9 @@ def _phrase_check_dialog(app, new, password):
 
     app._ghost_button(shell.buttons, "Show the words again", back,
                       width=170).pack(side="left")
-    app._accent_button(shell.buttons, "Create account", finish,
-                       width=150).pack(side="right")
+    app._accent_button(shell.buttons,
+                       getattr(new, "finish_label", "Create account"), finish,
+                       width=170).pack(side="right")
     for b in boxes.values():
         b.bind("<Return>", lambda ev: finish())
     boxes[CHECK_WORDS[0]].focus()
@@ -706,6 +713,17 @@ def settings_dialog(app):
                     "Your Secret Key again — needed to open this account on "
                     "another PC.", hint),
         "Save kit…", lambda: _save_kit_again(app), width=150).pack()
+
+    def new_phrase():
+        import recovery_ui              # late: it imports this module
+        top.destroy()
+        recovery_ui.new_phrase_dialog(app)
+
+    app._ghost_button(
+        setting_row(sec, "Recovery phrase",
+                    "Make a new one if it was lost or seen. The old one stops "
+                    "working.", hint),
+        "New phrase…", new_phrase, width=150).pack()
 
     def label_for(m):
         return "Never" if m == 0 else f"{m} minute{'s' if m != 1 else ''}"
