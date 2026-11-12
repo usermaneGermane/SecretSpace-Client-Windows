@@ -28,7 +28,7 @@ SecretSpace lives in four repositories:
 
 ## SecretSpace 3 — a test version, not for real passwords yet
 
-`main` is now **3.0.0-alpha.7**, a test step of SecretSpace 3. **For your real
+`main` is now **3.0.0-alpha.8**, a test step of SecretSpace 3. **For your real
 passwords keep using [2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0)**,
 which the rest of this README describes. Do not install the test version
 over it: it opens SecretSpace 3 accounts only, so your 2.x vaults would not
@@ -50,6 +50,18 @@ What the test version has:
 - **Importing a 2.x vault.** *Import* lists the 2.x vaults on this PC (or
   takes a `.vault.enc` file) and copies every entry with its history and
   archive state. The 2.x file is only read; its sync settings stay with it.
+- **A security fix** (alpha.8; affects alpha.6 and alpha.7). A dishonest
+  sync server, or someone who broke into it, could hand the app a vault key
+  of its own making and read the vault the app then uploaded under it. Now
+  every vault key carries a signature of the account that made it, and the
+  app takes a key only when it is signed by your own account, by whoever
+  gave you the key you hold, or by someone whose fingerprint you checked —
+  and never an older key. Vaults from alpha.6 / alpha.7 are signed at the
+  next sync from a device that has them. Needs SecretSpace Server
+  **2.0.0-alpha.5** for anything but the Personal vault. Also: *Remove* and
+  *Change key* name the members whose fingerprint was never checked on this
+  PC, and an unencrypted `http://` address of another machine asks before
+  it is used.
 - **Recovering an account** (new in alpha.7). *Forgot your master
   password?* on the login screen takes the account name and the 12-word
   recovery phrase, then a new master password. The same keys open again, so
@@ -113,7 +125,7 @@ Not in this test version yet: adding someone to a vault before they have
 an account (they make the account first, then you share), the web admin
 for a company's server and its recovery with an admin's approval, moving
 an entry from one vault to another, and *Sync when I unlock* for accounts.
-SecretSpace for Linux has the same test version, 1.0.0-alpha.7. Coming
+SecretSpace for Linux has the same test version, 1.0.0-alpha.8. Coming
 next: the company setup (invites, web admin, rules for offline copies).
 
 ## Running it
