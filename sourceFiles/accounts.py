@@ -614,6 +614,11 @@ class Account:
         self.info = info
         self.login_key = login
 
+    def set_recovery(self, sealed_recovery: str) -> None:
+        """A new recovery copy (a new phrase); the old copy is replaced, not
+        kept -- a .bak of it would still open with the old phrase."""
+        _write_text(_path(self.username, RECOVERY_FILE), sealed_recovery)
+
     def sealed_files(self) -> dict:
         """The sealed keyset and recovery copy, as stored -- what a server
         keeps so another device can sign in."""
@@ -781,6 +786,21 @@ def adopt_from_server(username: str, me: dict, keyset: dict, secret: bytes,
     _write_text(os.path.join(folder, RECOVERY_FILE), me["recovery"])
     _write_info(username, info)                 # last: it makes it an account
     return Account(username, info, keyset, secret, login_key)
+
+
+def replace_keys(username: str, sealed_keyset: str, sealed_recovery: str,
+                 secret: bytes, password: str) -> None:
+    """
+    After a recovery on a PC that has the account and no server: the same
+    keys under the new password and the new phrase, and the Secret Key
+    stored for the new password. The vault files are not touched -- the
+    keys that open them have not changed.
+    """
+    info = dict(_read_info(username))
+    info["secret_key"] = secret_store.protect(secret, username, password)
+    _write_text(_path(username, KEYSET_FILE), sealed_keyset)
+    _write_text(_path(username, RECOVERY_FILE), sealed_recovery)
+    _write_info(username, info)
 
 
 def check_recovery_phrase(username: str, phrase: str) -> bool:

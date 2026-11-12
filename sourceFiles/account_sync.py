@@ -49,6 +49,9 @@ FEATURE_VAULTS = "vaults"
 #: (2.0.0-alpha.3).
 FEATURE_SHARING = "sharing"
 
+#: ... and of one that recovers an account with its phrase (2.0.0-alpha.4).
+FEATURE_RECOVERY = "recovery"
+
 
 class LoginFailed(SyncError):
     """The server did not take this username + password + Secret Key."""
@@ -102,6 +105,26 @@ class AccountServer(SyncClient):
     def has_sharing(self) -> bool:
         self.has_vaults()
         return FEATURE_SHARING in self._features
+
+    def has_recovery(self) -> bool:
+        self.has_vaults()
+        return FEATURE_RECOVERY in self._features
+
+    # -- recovery (phase 5) ----------------------------------------------------
+    def recovery_copy(self, username: str) -> dict:
+        return self._request("GET", "/v2/recovery/" + urllib.parse.quote(
+            username, safe=""))
+
+    def recover(self, body: dict) -> dict:
+        return self._request("POST", "/v2/recovery", body=body)
+
+    def put_recovery_proof(self, proof: bytes) -> None:
+        self._request("PUT", "/v2/me/recovery-proof", body={
+            "recovery_proof": base64.b64encode(proof).decode("ascii")})
+
+    def put_recovery(self, sealed_recovery: str) -> None:
+        self._request("PUT", "/v2/me/recovery",
+                      body={"recovery": sealed_recovery})
 
     # -- sharing (phase 4) ---------------------------------------------------
     def put_signing_key(self, signing_key: str) -> None:
@@ -245,6 +268,8 @@ def connect(account: accounts.Account, url: str, ca_file: str,
                 "keyset": files["keyset"], "recovery": files["recovery"],
                 "public_key": account.info["public_key"],
                 "signing_key": account.signing_key,
+                "recovery_proof": base64.b64encode(account_crypto.recovery_proof(
+                    account.keyset)).decode("ascii"),
                 "personal_vault": account.vault_id.hex()})
         except Conflict409:
             raise SyncError(
@@ -406,6 +431,14 @@ def reconcile_vaults(account: accounts.Account, server: AccountServer) -> VaultC
         # An account made before changes were signed: the server learns its
         # signing key now, once, so other members can check its lines.
         server.put_signing_key(account.signing_key)
+    if server.has_recovery() and not me.get("can_recover"):
+        # Likewise what lets the server recover the account with its phrase.
+        server.put_recovery_proof(account_crypto.recovery_proof(account.keyset))
+    sealed = me.get("recovery")
+    if sealed and sealed != account.sealed_files()["recovery"]:
+        # A new phrase was made on another device: this one takes the copy
+        # that goes with it, so the old phrase opens nothing here either.
+        account.set_recovery(sealed)
 
     for vault_id in extra_here:
         record = account.vault_record(vault_id)
