@@ -71,10 +71,10 @@ def _with_server(app, work, done, failed):
     def run():
         server = account_sync.logged_in(account)
         try:
-            if not server.has_sharing():
+            if not server.has_sharing() or not server.has_signed_keys():
                 raise account_sync.SyncError(
                     "This server cannot share vaults yet: it needs SecretSpace "
-                    "Server 2.0.0-alpha.3 or newer.")
+                    "Server 2.0.0-alpha.5 or newer.")
             return work(server)
         finally:
             server.logout()
@@ -213,6 +213,19 @@ def members_dialog(app, vault_id, changed=None):
         run(lambda server: server.put_member(vault_id, who, role),
             f"Changing what {who} may do…")
 
+    def unchecked(leaving=None):
+        """A paragraph naming the members who stay and whose keys were never
+        compared on this PC: the new key goes to whatever key the server
+        gives for them."""
+        names = [m["username"] for m in state["members"]
+                 if not m["me"] and not m["verified"]
+                 and m["username"] != leaving]
+        if not names:
+            return ""
+        return ("\n\nNot checked on this PC: " + ", ".join(names) + ". The "
+                "new key goes to the keys the server gives for them. Compare "
+                "fingerprints first (Check) if you can.")
+
     def remove(who):
         if not app._confirm(
                 f"Remove {who}",
@@ -220,7 +233,7 @@ def members_dialog(app, vault_id, changed=None):
                 "The vault gets a new key in the same step, so they can open "
                 "nothing that is written from now on. What they have already "
                 "seen they may have kept: change those passwords if it "
-                "matters.\n\nThe vault is synced first."):
+                "matters.\n\nThe vault is synced first." + unchecked(who)):
             return
         run(lambda server: account_sync.change_key(
             account, server, vault_id, app.vaults[vault_id], remove=[who]),
@@ -231,8 +244,8 @@ def members_dialog(app, vault_id, changed=None):
                 "Change the vault's key",
                 f"Give “{name}” a new key?\n\nEvery member gets it with their "
                 "next sync. Worth doing after someone left the vault, or if a "
-                "device that had it was lost. The vault is synced first.",
-                danger=False):
+                "device that had it was lost. The vault is synced first."
+                + unchecked(), danger=False):
             return
         run(lambda server: account_sync.change_key(
             account, server, vault_id, app.vaults[vault_id]),

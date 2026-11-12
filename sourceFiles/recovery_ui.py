@@ -61,6 +61,10 @@ def recover_dialog(app, username=""):
             return
         name = user_entry.get().strip()
         phrase = " ".join(words.get("1.0", "end").split())
+        import account_sync_ui          # late: it imports dialogs' users
+        if url_entry.get().strip() and not accounts.account_exists(name) \
+                and not account_sync_ui.plain_http_ok(app, url_entry.get()):
+            return
         busy["on"] = True
         err.configure(text="Opening the account — this takes a moment…",
                       text_color=MUTED)

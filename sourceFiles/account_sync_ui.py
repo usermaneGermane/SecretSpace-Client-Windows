@@ -154,10 +154,26 @@ def _all_done(app, run):
         kind = "warn"
     if changes.server_too_old:
         parts.append("this server keeps only the Personal vault — the others "
-                     "need SecretSpace Server 2.0.0-alpha.2 or newer")
+                     "need SecretSpace Server 2.0.0-alpha.5 or newer")
         kind = "warn"
     _finish(app, "Synced — " + "; ".join(parts) if parts else "Already up to date",
             kind)
+
+
+def plain_http_ok(app, url) -> bool:
+    """Ask before an unencrypted address of another machine is used. True
+    to go on (always for https:// and for this PC itself)."""
+    if not account_sync.is_plain_remote(url):
+        return True
+    return app._confirm(
+        "This connection is not encrypted",
+        "The address starts with http://, so what this PC and the server "
+        "say to each other can be read on the network in between.\n\n"
+        "Your vaults stay safe: they are encrypted on this PC before they "
+        "leave it. But someone listening could take over the account ON "
+        "THE SERVER: lock you out there, or delete what it holds.\n\n"
+        "Fine inside a network you trust (your home, your office). Anywhere "
+        "else use an https:// address.\n\nContinue?", danger=False)
 
 
 def _logout_in_background(server):
@@ -208,6 +224,8 @@ def server_dialog(app, on_done=None):
                                          "with http:// or https://",
                                     text_color=DANGER)
         token, ca_file = token_entry.get().strip(), ca_entry.get().strip()
+        if not plain_http_ok(app, url):
+            return
         status.configure(text="Contacting the server…", text_color=MUTED)
 
         def done(outcome):
@@ -276,6 +294,8 @@ def sign_in_dialog(app):
         if not (username and password):
             return status.configure(text="Enter your username and master password.",
                                     text_color=DANGER)
+        if not plain_http_ok(app, url):
+            return
         status.configure(text="Signing in — this takes a moment…", text_color=MUTED)
 
         def work():

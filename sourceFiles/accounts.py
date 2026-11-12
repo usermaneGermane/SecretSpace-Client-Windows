@@ -407,7 +407,8 @@ class Account:
         made.save({"accounts": []})
         extra = dict(self._extra())
         extra[made.hex] = {"name": name, "wrapped_key": wrapped,
-                           "created_at": vault.utc_now(), "on_server": False}
+                           "created_at": vault.utc_now(), "on_server": False,
+                           "key_signer": self.username}
         self._write_vaults(extra)                  # last: it makes it a vault
         self._vault_keys[made.hex] = key
         return made

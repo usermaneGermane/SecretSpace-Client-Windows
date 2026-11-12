@@ -25,6 +25,8 @@ these on a worker thread.
 """
 
 import base64
+import hashlib
+import json
 import os
 import urllib.parse
 
@@ -52,9 +54,20 @@ FEATURE_SHARING = "sharing"
 #: ... and of one that recovers an account with its phrase (2.0.0-alpha.4).
 FEATURE_RECOVERY = "recovery"
 
+#: ... and of one that keeps a signature with every wrapped vault key
+#: (2.0.0-alpha.5). Without it this client syncs only the personal vault:
+#: a key that comes with no signature is never taken (see check_key).
+FEATURE_SIGNED_KEYS = "signed-keys"
+
 
 class LoginFailed(SyncError):
     """The server did not take this username + password + Secret Key."""
+
+
+class KeyNotTrusted(SyncError):
+    """The server offers a vault key this device has no reason to trust: it
+    is not signed by this account or by someone known here. Nothing is
+    taken, nothing is uploaded under it."""
 
 
 class KeyChanged(SyncError):
@@ -110,6 +123,14 @@ class AccountServer(SyncClient):
         self.has_vaults()
         return FEATURE_RECOVERY in self._features
 
+    def has_signed_keys(self) -> bool:
+        self.has_vaults()
+        return FEATURE_SIGNED_KEYS in self._features
+
+    def put_key_sig(self, vault_id: str, key_sig: str) -> None:
+        self._request("PUT", f"/v2/vaults/{vault_id}/key-sig",
+                      body={"key_sig": key_sig})
+
     # -- recovery (phase 5) ----------------------------------------------------
     def recovery_copy(self, username: str) -> dict:
         return self._request("GET", "/v2/recovery/" + urllib.parse.quote(
@@ -139,10 +160,12 @@ class AccountServer(SyncClient):
         return self._request("GET", f"/v2/vaults/{vault_id}/members")
 
     def put_member(self, vault_id: str, username: str, role: str,
-                   wrapped_key: str = None) -> dict:
+                   wrapped_key: str = None, key_sig: str = None) -> dict:
         body = {"role": role}
         if wrapped_key:
             body["wrapped_key"] = wrapped_key
+        if key_sig:
+            body["key_sig"] = key_sig
         return self._request("PUT", f"/v2/vaults/{vault_id}/members/" +
                              urllib.parse.quote(username, safe=""), body=body)
 
@@ -157,9 +180,11 @@ class AccountServer(SyncClient):
         return list(self._request("GET", f"/v2/vaults/{vault_id}/log")
                     .get("lines") or [])
 
-    def create_vault(self, vault_id: str, sealed_name: str, wrapped_key: str) -> dict:
+    def create_vault(self, vault_id: str, sealed_name: str, wrapped_key: str,
+                     key_sig: str = "") -> dict:
         return self._request("POST", "/v2/vaults", body={
-            "id": vault_id, "name": sealed_name, "wrapped_key": wrapped_key})
+            "id": vault_id, "name": sealed_name, "wrapped_key": wrapped_key,
+            "key_sig": key_sig})
 
     def rename_vault(self, vault_id: str, sealed_name: str) -> dict:
         return self._request("PUT", f"/v2/vaults/{vault_id}/name",
@@ -213,6 +238,99 @@ class AccountServer(SyncClient):
         reply = self._request("PUT", f"/v2/vaults/{vault_id}", body={"blob": blob},
                               headers={"If-Match": str(revision)})
         return int(reply.get("revision", revision + 1))
+
+
+def is_plain_remote(url: str) -> bool:
+    """Is this an unencrypted (http://) address of another machine? On such
+    a connection someone on the network can take the login and act as the
+    account on the server (they still cannot read a vault)."""
+    parts = urllib.parse.urlsplit((url or "").strip())
+    if parts.scheme.lower() != "http":
+        return False
+    host = (parts.hostname or "").lower()
+    return host not in ("localhost", "::1") and not host.startswith("127.")
+
+
+# ---------------------------------------------------------------------------
+# Whose key is this? (security review, 2026-11-12)
+# ---------------------------------------------------------------------------
+# The server stores each member's copy of a vault key but must never be able
+# to choose one: if it could hand a device a key of its own making, the
+# device would encrypt the vault under it at the next sync and the server
+# could read everything. So every wrapped key carries a signature by the
+# account that wrapped it, and a device takes a key only when it is signed
+# by itself or by someone it has reason to trust.
+def key_message(vault_hex: str, generation: int, member: str, wrapped_key: str,
+                signer: str) -> bytes:
+    """What the signature on a wrapped key covers: which vault, which key
+    generation, for whom, the wrapped key itself, and who vouches."""
+    return json.dumps(["PassMan3 vault key", vault_hex, int(generation), member,
+                       hashlib.sha256(wrapped_key.encode("ascii")).hexdigest(),
+                       signer], separators=(",", ":"),
+                      ensure_ascii=True).encode("ascii")
+
+
+def sign_key(account: accounts.Account, vault_hex: str, generation: int,
+             member: str, wrapped_key: str) -> str:
+    return account_crypto.sign(account.keyset, key_message(
+        vault_hex, generation, member, wrapped_key, account.username))
+
+
+def check_key(account: accounts.Account, server: "AccountServer", there: dict,
+              name: str, held_from: str = None) -> str:
+    """
+    Decide whether to take the vault key the server lists (``there``, one
+    vault of /v2/me) or raise :class:`KeyNotTrusted`. Returns who signed it.
+
+    A key signed by this account is always its own. Otherwise:
+
+    - for a vault this device does not have yet (``held_from`` None), the
+      signer may be anyone; their keys are remembered on first sight, and
+      the vault shows as shared by someone "not checked" until the user
+      compares fingerprints;
+    - for a vault this device already has (a new key generation), the
+      signer must be whoever signed the key held now (``held_from``) or
+      someone whose fingerprint the user has compared. A name the server
+      could have introduced on its own is not enough to replace a key.
+    """
+    signer = str(there.get("key_signer") or "")
+    sig = str(there.get("key_sig") or "")
+    wrapped = str(there.get("wrapped_key") or "")
+    if not sig or not signer:
+        raise KeyNotTrusted(
+            f"The server's key for the vault “{name}” has no signature (it "
+            "was put there by an older SecretSpace). Sync once from a device "
+            "that already has this vault, or ask its owner to change the "
+            "vault's key (Members → Change key). Nothing was changed.")
+    if signer == account.username:
+        key = account_crypto.signing_key_of(account.keyset)
+    else:
+        seen = account.contact(signer)
+        new_vault = held_from is None
+        if seen is not None and (new_vault or seen["verified"]
+                                 or signer == held_from):
+            key = seen["signing_key"]
+        elif seen is None and new_vault:
+            keys = lookup_contact(account, server, signer)
+            trust_contact(account, keys, False)
+            key = keys["signing_key"]
+        else:
+            raise KeyNotTrusted(
+                f"The server offers a new key for the vault “{name}”, signed "
+                f"by “{signer}”, whose fingerprint was never checked on this "
+                f"PC. Nothing was changed. If {signer} is an owner of this "
+                "vault, compare fingerprints with them (Vaults → Members → "
+                "Check), then sync again.")
+    message = key_message(there.get("id", ""),
+                          int(there.get("key_generation", 0) or 0),
+                          account.username, wrapped, signer)
+    if not account_crypto.verify(key, message, sig):
+        raise KeyNotTrusted(
+            f"The key the server offers for the vault “{name}” is not signed "
+            f"by “{signer}” as it claims. Nothing was changed, and nothing "
+            "of this vault was sent. If this keeps happening, do not trust "
+            "this server with that vault.")
+    return signer
 
 
 def server_for(account: accounts.Account) -> AccountServer:
@@ -424,7 +542,7 @@ def reconcile_vaults(account: accounts.Account, server: AccountServer) -> VaultC
     me = server.me()
     listed = {v["id"]: v for v in me.get("vaults", [])
               if v.get("kind") != "personal" and v.get("id") != account.personal_id}
-    if not server.has_vaults():
+    if not server.has_vaults() or not server.has_signed_keys():
         changes.server_too_old = bool(extra_here)
         return changes
     if server.has_sharing() and not me.get("signing_key"):
@@ -451,20 +569,34 @@ def reconcile_vaults(account: accounts.Account, server: AccountServer) -> VaultC
                     changes.gone.append(file.name)
                 continue
             try:
-                server.create_vault(vault_id, file.sealed_name(),
-                                    record["wrapped_key"])
+                server.create_vault(
+                    vault_id, file.sealed_name(), record["wrapped_key"],
+                    sign_key(account, vault_id, file.generation,
+                             account.username, record["wrapped_key"]))
             except Conflict409:
                 raise SyncError(f"The server already has another vault with the "
                                 f"id of “{file.name}”. Nothing was changed.") from None
-            account.mark_vault(vault_id, on_server=True, gone_from_server=False)
+            account.mark_vault(vault_id, on_server=True, gone_from_server=False,
+                               key_signer=account.username)
             changes.uploaded.append(file.name)
             continue
         if not record.get("on_server") or record.get("gone_from_server"):
             account.mark_vault(vault_id, on_server=True, gone_from_server=False)
         generation = int(there.get("key_generation", 0) or 0)
-        if generation != int(record.get("key_generation", 0) or 0):
+        held = int(record.get("key_generation", 0) or 0)
+        if generation < held:
+            # An older key can only come back from a server that lies (or a
+            # restored backup): the people removed since could read again.
+            raise KeyNotTrusted(
+                f"The server offers an older key for the vault “{file.name}” "
+                "than this PC holds. Nothing was changed, and nothing of "
+                "this vault was sent.")
+        if generation > held:
             # The key was changed (someone was removed). Before anything
-            # else: the name and the entries are under the new key now.
+            # else: is it a key an owner made? Then the name and the entries
+            # are under it now.
+            signer = check_key(account, server, there, file.name,
+                               held_from=record.get("key_signer") or "")
             try:
                 account.rekey_vault(vault_id, there.get("wrapped_key", ""),
                                     generation)
@@ -472,8 +604,26 @@ def reconcile_vaults(account: accounts.Account, server: AccountServer) -> VaultC
                 raise SyncError(f"The new key of “{file.name}” cannot be "
                                 f"opened by this account ({e}). Nothing was "
                                 "changed.") from e
+            account.mark_vault(vault_id, key_signer=signer)
             changes.rekeyed.append(file.name)
             file = account.vault_file(vault_id)
+        elif there.get("wrapped_key", "") != record.get("wrapped_key", ""):
+            # The same generation with another key: nothing honest does that.
+            raise KeyNotTrusted(
+                f"The server's key for the vault “{file.name}” is not the "
+                "one this PC holds, though the vault's key was not changed. "
+                "Nothing was changed, and nothing of this vault was sent.")
+        elif not there.get("key_sig"):
+            # A vault from before keys were signed: this device vouches for
+            # the key it already holds, so the account's other devices take it.
+            try:
+                server.put_key_sig(vault_id, sign_key(
+                    account, vault_id, held, account.username,
+                    record["wrapped_key"]))
+            except SyncError:
+                pass                    # signed meanwhile: nothing to add
+            if not record.get("key_signer"):
+                account.mark_vault(vault_id, key_signer=account.username)
         role = there.get("role") if there.get("role") in accounts.ROLES \
             else accounts.ROLE_OWNER
         if role != account.vault_role(vault_id):
@@ -503,6 +653,7 @@ def reconcile_vaults(account: accounts.Account, server: AccountServer) -> VaultC
     for vault_id, there in listed.items():
         if vault_id in extra_here:
             continue
+        signer = check_key(account, server, there, "(new on the server)")
         try:
             file = account.adopt_vault(vault_id, there.get("wrapped_key", ""),
                                        there.get("name", ""),
@@ -512,6 +663,7 @@ def reconcile_vaults(account: accounts.Account, server: AccountServer) -> VaultC
         except (CryptoError, ValueError) as e:
             raise SyncError(f"The server lists a vault this account cannot "
                             f"open ({e}). Nothing was changed.") from e
+        account.mark_vault(vault_id, key_signer=signer)
         changes.added.append(file.name)
     return changes
 
@@ -519,7 +671,7 @@ def reconcile_vaults(account: accounts.Account, server: AccountServer) -> VaultC
 def syncable_vaults(account: accounts.Account, server: AccountServer) -> list:
     """Ids of the vaults a sync covers: the personal one, and every other
     that is on the server."""
-    if not server.has_vaults():
+    if not server.has_vaults() or not server.has_signed_keys():
         return [account.personal_id]
     return [v for v in account.vault_ids()
             if v == account.personal_id or (
@@ -554,7 +706,8 @@ def put_vault_back(account: accounts.Account, vault_id: str) -> None:
     again with the next sync (the user's choice, in the Vaults window)."""
     # It goes back as this account's own vault, with a first key generation.
     account.mark_vault(vault_id, on_server=False, gone_from_server=False,
-                       role=accounts.ROLE_OWNER, key_generation=0, members=1)
+                       role=accounts.ROLE_OWNER, key_generation=0, members=1,
+                       key_signer=account.username)
     try:
         os.remove(account.vault_file(vault_id).base_path)   # agreed with a vault that is gone
     except OSError:
@@ -620,7 +773,9 @@ def share_vault(account: accounts.Account, server: AccountServer, vault_id: str,
                         "vault for that.")
     wrapped = account_crypto.wrap_key(keys["public_key"], file._key, file.id,
                                       keys["username"])
-    done = server.put_member(vault_id, keys["username"], role, wrapped)
+    done = server.put_member(vault_id, keys["username"], role, wrapped,
+                             sign_key(account, vault_id, file.generation,
+                                      keys["username"], wrapped))
     trust_contact(account, keys, True)
     account.mark_vault(vault_id, members=len(server.members(vault_id)
                                              .get("members") or [1]))
@@ -694,6 +849,8 @@ def change_key(account: accounts.Account, server: AccountServer, vault_id: str,
     view = server.rotate(vault_id, {
         "generation": generation, "remove": list(remove),
         "wrapped_keys": wrapped,
+        "key_sigs": {name: sign_key(account, vault_id, generation, name, key)
+                     for name, key in wrapped.items()},
         "name": account_crypto.seal_vault_name(new_key, file.id, file.name),
         "blob": account_crypto.encrypt_vault(new_key, file.id, generation,
                                              vault.validate_vault(dict(merged))),
@@ -701,6 +858,7 @@ def change_key(account: accounts.Account, server: AccountServer, vault_id: str,
     # The server has it; now this device. (If this is interrupted, the next
     # sync finds the new generation and takes the key from the server.)
     account.rekey_vault(vault_id, wrapped[account.username], generation)
+    account.mark_vault(vault_id, key_signer=account.username)
     account.vault_file(vault_id).save_base(merged, sync_client.base_origin_for(
         server.url, int(view.get("revision", sync.revision + 1))))
     account.mark_vault(vault_id, members=len(staying))
