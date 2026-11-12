@@ -52,6 +52,12 @@ def autolock_minutes() -> int:
     return value if 0 <= value <= 24 * 60 else DEFAULT_AUTOLOCK_MINUTES
 
 
+def appearance() -> str:
+    """Light, dark or what the system uses; see theme.APPEARANCES."""
+    value = load_config().get("appearance")
+    return value if value in ("system", "light", "dark") else "system"
+
+
 def sort_order() -> str:
     """How the account list is ordered; see vault.SORT_ORDERS."""
     value = load_config().get("sort_order")

@@ -27,7 +27,8 @@ import sync_client
 import totp
 import vault
 from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, INPUT_BG, BORDER,
-                   CARD, CARD_HOVER, ON_ACCENT, MONO, DANGER, tile_colors)
+                   CARD, CARD_HOVER, ON_ACCENT, MONO, DANGER, tile_colors,
+                   apply_appearance)
 from vault import (add_account, validate_username, export_csv, export_json,
                    update_entry, find_duplicate)
 from widgets import (Tooltip, dialog_shell, section, setting_row, option_menu, note,
@@ -742,6 +743,23 @@ def settings_dialog(app):
         width=150)
     lock_menu.pack()
     lock_menu.set(label_for(appconfig.autolock_minutes()))
+
+    # ---- look ----
+    look = section(wrap, "Appearance")
+    looks = {"system": "Same as the system", "light": "Light", "dark": "Dark"}
+
+    def set_look(choice):
+        mode = next(k for k, v in looks.items() if v == choice)
+        appconfig.save_config(appearance=mode)
+        apply_appearance(mode)
+
+    look_menu = option_menu(
+        setting_row(look, "Light or dark",
+                    "Follows your system unless you choose one here.", hint,
+                    first=True),
+        list(looks.values()), set_look, width=180)
+    look_menu.pack()
+    look_menu.set(looks[appconfig.appearance()])
 
     # ---- sync ----
     syn = section(wrap, "Sync")

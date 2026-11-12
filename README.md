@@ -490,6 +490,8 @@ needs no update for this.
   right; the login screen shows one tile per account on this PC. Every dialog
   shares the look: a header band (with the site's tile when it is about an
   entry), settings grouped in cards, and the buttons in a bar at the bottom
+- Light and dark: follows Windows, or choose one in Settings → *Appearance*
+  *(3.1)*
 - Search with Ctrl+F
 - Sort the list by date modified or by name (the *Sort* menu above the
   list); the choice is remembered
@@ -667,6 +669,9 @@ every pull request and every push to `main`
 (`.github/workflows/tests.yml`).
 
 ## License
+
+The app's typeface, Manrope, is bundled under the SIL Open Font License
+(`sourceFiles/Manrope-OFL.txt`).
 
 SecretSpace (this client) is free software under the **GNU General Public
 License v3.0 only** (GPL-3.0-only) — see [LICENSE](LICENSE). You may use,

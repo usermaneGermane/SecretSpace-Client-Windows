@@ -37,6 +37,9 @@ REQUIRED_FILES = (
     os.path.join("sourceFiles", "SecretSpace-installer.spec"),
     os.path.join("sourceFiles", "SecretSpace-logo.png"),
     os.path.join("sourceFiles", "SecretSpace-logo.ico"),
+    os.path.join("sourceFiles", "Manrope-Regular.ttf"),
+    os.path.join("sourceFiles", "Manrope-Bold.ttf"),
+    os.path.join("sourceFiles", "Manrope-OFL.txt"),
     os.path.join("installer", "SecretSpace.iss"),
     os.path.join("installer", "installed"),
 )

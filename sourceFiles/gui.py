@@ -34,7 +34,8 @@ import recovery_ui
 import totp
 from theme import (F, BG, HEADER_BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
-                   ON_ACCENT, WARN, MONO,
+                   ON_ACCENT, WARN, MONO, DECOR_DISC_A, DECOR_DISC_B,
+                   DECOR_DOT, DECOR_INK, pick, apply_appearance,
                    tile_colors, asset_candidates)
 from widgets import (Tooltip, even_width, ghost_button, accent_button, field,
                      strength_widget, modal, fit_modal, safe_grab, confirm,
@@ -92,7 +93,8 @@ def backdrop_picture(w, h):
     if w < 2 or h < 2:
         return None
     k = BACKDROP_OVERSAMPLE
-    img = Image.new("RGB", (w * k, h * k), BG)
+    img = Image.new("RGB", (w * k, h * k), pick(BG))
+    green = pick(GREEN)
     d = ImageDraw.Draw(img)
 
     def box(x0, y0, x1, y1):
@@ -109,30 +111,30 @@ def backdrop_picture(w, h):
             dot(x, y, width / 2, fill)
 
     r1, r2 = max(w, h) * 0.17, max(w, h) * 0.21
-    dot(w * 0.1, h * 0.16, r1, "#0F2117")
-    dot(w * 0.93, h * 0.9, r2, "#101A14")
+    dot(w * 0.1, h * 0.16, r1, pick(DECOR_DISC_A))
+    dot(w * 0.93, h * 0.9, r2, pick(DECOR_DISC_B))
 
     # A padlock, top right: a rounded body, a shackle, a keyhole.
     x, y = w * 0.86, h * 0.2
-    d.arc(box(x - 17, y - 32, x + 17, y + 2), start=180, end=360, fill=GREEN,
+    d.arc(box(x - 17, y - 32, x + 17, y + 2), start=180, end=360, fill=green,
           width=4 * k)
-    stroke([(x - 15, y - 15), (x - 15, y - 4)], GREEN)
-    stroke([(x + 15, y - 15), (x + 15, y - 4)], GREEN)
+    stroke([(x - 15, y - 15), (x - 15, y - 4)], green)
+    stroke([(x + 15, y - 15), (x + 15, y - 4)], green)
     d.rounded_rectangle(box(x - 26, y - 6, x + 26, y + 34), radius=9 * k,
-                        outline=GREEN, width=4 * k)
-    dot(x, y + 11, 4.5, GREEN)
-    stroke([(x, y + 13), (x, y + 21)], GREEN)
+                        outline=green, width=4 * k)
+    dot(x, y + 11, 4.5, green)
+    stroke([(x, y + 13), (x, y + 21)], green)
 
     # A key, bottom left: a ring, a shaft, two teeth.
     x, y = w * 0.15, h * 0.8
-    ink = "#7BE0A6"
+    ink = pick(DECOR_INK)
     d.ellipse(box(x - 40, y - 18, x - 4, y + 18), outline=ink, width=4 * k)
     stroke([(x - 5, y), (x + 44, y)], ink)
     stroke([(x + 30, y), (x + 30, y + 15)], ink)
     stroke([(x + 42, y), (x + 42, y + 11)], ink)
 
     for fx, fy in ((0.3, 0.1), (0.7, 0.92), (0.96, 0.48), (0.05, 0.55)):
-        dot(w * fx, h * fy, 4, "#1F3A2A")
+        dot(w * fx, h * fy, 4, pick(DECOR_DOT))
     return img.resize((w, h), Image.LANCZOS)
 
 
@@ -588,7 +590,8 @@ class PasswordManagerGUI:
 
         # A drawn backdrop behind the card: shapes only, redrawn to the
         # window's size.
-        backdrop = tk.Canvas(self.root, bg=BG, highlightthickness=0, bd=0)
+        backdrop = tk.Canvas(self.root, bg=pick(BG), highlightthickness=0,
+                             bd=0)
         backdrop.place(relx=0, rely=0, relwidth=1, relheight=1)
         backdrop.bind("<Configure>",
                       lambda e: self._backdrop_resized(backdrop, e.width,
@@ -711,27 +714,28 @@ class PasswordManagerGUI:
 
     @staticmethod
     def _draw_backdrop_plain(canvas, w, h):
+        green, ink = pick(GREEN), pick(DECOR_INK)
         r1, r2 = max(w, h) * 0.17, max(w, h) * 0.21
         canvas.create_oval(w * 0.1 - r1, h * 0.16 - r1, w * 0.1 + r1,
-                           h * 0.16 + r1, fill="#0F2117", outline="")
+                           h * 0.16 + r1, fill=pick(DECOR_DISC_A), outline="")
         canvas.create_oval(w * 0.93 - r2, h * 0.9 - r2, w * 0.93 + r2,
-                           h * 0.9 + r2, fill="#101A14", outline="")
+                           h * 0.9 + r2, fill=pick(DECOR_DISC_B), outline="")
         # A lock, top right.
         x, y = w * 0.86, h * 0.2
-        canvas.create_rectangle(x - 26, y - 6, x + 26, y + 34, outline=GREEN,
+        canvas.create_rectangle(x - 26, y - 6, x + 26, y + 34, outline=green,
                                 width=4)
         canvas.create_arc(x - 17, y - 32, x + 17, y + 2, start=0, extent=180,
-                          style="arc", outline=GREEN, width=4)
+                          style="arc", outline=green, width=4)
         # A key, bottom left.
         x, y = w * 0.15, h * 0.8
-        canvas.create_oval(x - 40, y - 18, x - 4, y + 18, outline="#7BE0A6",
+        canvas.create_oval(x - 40, y - 18, x - 4, y + 18, outline=ink,
                            width=4)
-        canvas.create_line(x - 4, y, x + 44, y, fill="#7BE0A6", width=4)
-        canvas.create_line(x + 30, y, x + 30, y + 16, fill="#7BE0A6", width=4)
-        canvas.create_line(x + 42, y, x + 42, y + 12, fill="#7BE0A6", width=4)
+        canvas.create_line(x - 4, y, x + 44, y, fill=ink, width=4)
+        canvas.create_line(x + 30, y, x + 30, y + 16, fill=ink, width=4)
+        canvas.create_line(x + 42, y, x + 42, y + 12, fill=ink, width=4)
         for fx, fy in ((0.3, 0.1), (0.7, 0.92), (0.96, 0.48), (0.05, 0.55)):
             canvas.create_oval(w * fx - 4, h * fy - 4, w * fx + 4, h * fy + 4,
-                               fill="#1F3A2A", outline="")
+                               fill=pick(DECOR_DOT), outline="")
 
     def _draw_login_tiles(self, users):
         """One tile per account on this PC, plus one to create another."""
@@ -1682,6 +1686,7 @@ class PasswordManagerGUI:
 
 
 if __name__ == "__main__":
+    apply_appearance(appconfig.appearance())
     root = ctk.CTk()
     app = PasswordManagerGUI(root)
     root.mainloop()
