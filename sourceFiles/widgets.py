@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import customtkinter as ctk
 
-from theme import (tile_colors, F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
+from theme import (tile_colors, strength_color, F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
                    GREEN_HOVER, DANGER, DANGER_HOVER, INPUT_BG, BORDER,
                    CARD_HOVER, ON_ACCENT)
 from password_generator import estimate_strength
@@ -199,7 +199,8 @@ def strength_widget(parent):
     label.pack(side="left", padx=(6, 0))
 
     def update(password):
-        name, frac, color = estimate_strength(password)
+        name, frac, _ = estimate_strength(password)
+        color = strength_color(name)
         lit = max(round(frac * STRENGTH_SEGMENTS), 1) if password else 0
         for n, seg in enumerate(segments):
             seg.configure(fg_color=color if n < lit else BORDER)
@@ -305,8 +306,10 @@ def section(parent, title, danger=False, first=False):
     ctk.CTkLabel(parent, text=title, font=F(12, "bold"),
                  text_color=DANGER if danger else MUTED,
                  anchor="w").pack(anchor="w", pady=(10 if first else 22, 6))
+    # A card needs no outline on the window colour; a dangerous one keeps
+    # its red line.
     card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=16,
-                        border_width=1, border_color=DANGER if danger else BORDER)
+                        border_width=1 if danger else 0, border_color=DANGER)
     card.pack(fill="x")
     return card
 
