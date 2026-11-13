@@ -192,8 +192,7 @@ def _phrase_dialog(app, new, password):
                                  "them on paper, in order."))
     wrap = shell.body
 
-    grid = ctk.CTkFrame(wrap, fg_color=CARD, corner_radius=16,
-                        border_width=1, border_color=BORDER)
+    grid = ctk.CTkFrame(wrap, fg_color=CARD, corner_radius=16)
     grid.pack(fill="x", pady=(14, 0))
     for c in range(3):
         grid.grid_columnconfigure(c, weight=1, uniform="word")

@@ -491,6 +491,7 @@ needs no update for this.
   one tile per account on this PC. Every dialog shares the look: a header
   band (with the tile of the entry or vault it is about), settings grouped
   in cards, and the buttons in a bar at the bottom
+- Its own line icons, drawn by the app in the colour of the text
 - Light and dark: follows Windows, or choose one in Settings → *Appearance*
   *(3.1)*
 - Search with Ctrl+F
