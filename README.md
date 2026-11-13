@@ -119,6 +119,20 @@ to another, and *Sync when I unlock* (2.x has it; in 3.0 you press **Sync**).
 [SecretSpace for Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux)
 1.0.0 is the same release for Linux.
 
+## New in 3.1: the look
+
+- **Light and dark.** The app follows Windows; *Settings → Appearance*
+  chooses one.
+- **A typeface of its own**, Manrope, and line icons the app draws itself.
+- **The main window has three columns:** your vaults down the left (with
+  how many entries each has, and "shared" where other people are in it),
+  the entries, and the selected entry. *Sync* and *Lock* sit with your
+  account at the bottom left.
+- Entries, vaults and members are cards of their own, with pastel tiles.
+- Nothing changes in what the app does or stores: it opens the same
+  accounts, and going back to the release before it is just installing
+  that again.
+
 ## Upgrading from 2.x
 
 SecretSpace 3 does not open 2.x vaults directly: you make an account and
