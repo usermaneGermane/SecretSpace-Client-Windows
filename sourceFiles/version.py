@@ -12,7 +12,7 @@ has 0).
 
 import re
 
-__version__ = "3.1.0-alpha.3"
+__version__ = "3.1.0"
 
 #: The container a 3.0 account's vaults are written in (account_crypto).
 VAULT_FORMAT = "PMV3"
