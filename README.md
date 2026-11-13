@@ -485,11 +485,12 @@ needs no update for this.
 - Shared vaults with roles (owner, editor, reader) and a signed record of
   who changed what
 - Recovery with a 12-word phrase when the master password is forgotten
-- A black-and-green two-pane window: the entry list on the left, the
-  selected entry's details (copy buttons, strength, notes, history) on the
-  right; the login screen shows one tile per account on this PC. Every dialog
-  shares the look: a header band (with the site's tile when it is about an
-  entry), settings grouped in cards, and the buttons in a bar at the bottom
+- A three-column window *(3.1)*: your vaults down the left, the entries of the
+  one you picked in the middle, and the selected entry's details (copy
+  buttons, strength, notes, history) on the right; the login screen shows
+  one tile per account on this PC. Every dialog shares the look: a header
+  band (with the tile of the entry or vault it is about), settings grouped
+  in cards, and the buttons in a bar at the bottom
 - Light and dark: follows Windows, or choose one in Settings → *Appearance*
   *(3.1)*
 - Search with Ctrl+F

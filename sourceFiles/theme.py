@@ -43,6 +43,14 @@ DANGER_HOVER = ("#9E2A24", "#C23B34")
 ON_ACCENT = ("#FFFFFF", "#05230F")       # text drawn on top of the green accent
 WARN = ("#8A5300", "#F2B955")
 
+# How strong a password is, by the name estimate_strength gives it.
+STRENGTH = {
+    "Weak": DANGER,
+    "Fair": WARN,
+    "Good": ("#1F8A55", "#67C090"),
+    "Strong": GREEN,
+}
+
 # The drawn login backdrop (Pillow / a Tk canvas: use pick()).
 DECOR_DISC_A = ("#DCE8E1", "#17211B")
 DECOR_DISC_B = ("#E1E6EB", "#1A1D21")
@@ -116,6 +124,11 @@ def pick(color):
 def apply_appearance(mode):
     """Switch to "system", "light" or "dark"; anything else means system."""
     ctk.set_appearance_mode(mode if mode in APPEARANCES else "system")
+
+
+def strength_color(name):
+    """The colour of a strength's name and its meter, in both modes."""
+    return STRENGTH.get(name, MUTED)
 
 
 def tile_colors(s):

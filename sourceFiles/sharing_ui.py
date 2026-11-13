@@ -18,7 +18,6 @@ widgets are touched only on the main one.
 """
 
 import customtkinter as ctk
-import pyperclip
 
 import account_sync
 import accounts
@@ -133,8 +132,8 @@ def members_dialog(app, vault_id, changed=None):
                      text_color=TEXT).pack(anchor="w")
 
         def copy_fingerprint():
-            pyperclip.copy(account.fingerprint)
-            app.toast("Fingerprint copied")
+            # The app's own copy: the clipboard differs per system.
+            app._copy(account.fingerprint, "Fingerprint copied")
 
         small_button(fp, "Copy", copy_fingerprint, width=70).grid(
             row=0, column=1, padx=(0, 14), pady=(10, 0))

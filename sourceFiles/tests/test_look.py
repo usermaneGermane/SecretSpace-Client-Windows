@@ -139,3 +139,62 @@ def test_the_bundled_font_is_used():
     here = os.path.dirname(os.path.abspath(theme.__file__))
     assert all(os.path.isfile(os.path.join(here, f)) for f in theme.FONT_FILES)
     assert theme.FONT == "Manrope"
+
+
+# ---- the vault list at the left of the main window --------------------------
+@pytest.fixture(scope="module")
+def window():
+    """One Tk window for the module: Tk does not like a second one."""
+    import customtkinter as ctk
+    try:
+        root = ctk.CTk()
+    except Exception:                      # no display (a bare CI runner)
+        pytest.skip("no display")
+    root.withdraw()
+    yield root
+    root.destroy()
+
+
+@pytest.fixture
+def nav(window):
+    picked = []
+    return gui.VaultNav(window, picked.append), picked
+
+
+def test_vault_nav_speaks_like_the_menu_it_replaced(nav):
+    menu, picked = nav
+    menu.configure(values=["All vaults", "Personal", "Work"],
+                   notes={"All vaults": "5", "Personal": "3", "Work": "2"})
+    menu.set("All vaults")
+    assert menu.cget("values") == ["All vaults", "Personal", "Work"]
+    assert menu.get() == "All vaults" and picked == []      # set() only shows
+    menu._dropdown_callback("Work")                          # a click
+    assert menu.get() == "Work" and picked == ["Work"]
+    assert menu.winfo_exists()
+
+
+def test_vault_nav_marks_the_picked_row_only(nav):
+    menu, _ = nav
+    menu.configure(values=["Personal", "Work"], notes={})
+    menu.set("Work")
+    marked = [label for label, row in menu._rows.items()
+              if row.cget("fg_color") == theme.CARD]
+    assert marked == ["Work"]
+
+
+def test_vault_nav_keeps_its_rows_when_nothing_changed(nav):
+    menu, _ = nav
+    menu.configure(values=["Personal", "Work"], notes={"Work": "2"})
+    before = dict(menu._rows)
+    menu.configure(values=["Personal", "Work"], notes={"Work": "2"})
+    assert menu._rows == before                              # not rebuilt
+    menu.configure(values=["Personal", "Work"], notes={"Work": "3"})
+    assert menu._rows != before                              # a count changed
+
+
+@pytest.mark.parametrize("name", ["Weak", "Fair", "Good", "Strong"])
+@pytest.mark.parametrize("i", [0, 1])
+def test_strength_colours_show_on_a_card_in_both_modes(name, i):
+    """A meter and its word, not body text: 3 to 1 is the bar for those."""
+    assert _contrast(theme.strength_color(name)[i], theme.CARD[i]) >= 3
+    assert theme.strength_color("") == theme.MUTED

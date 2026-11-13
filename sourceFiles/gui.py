@@ -32,12 +32,13 @@ import account_sync_ui
 import vaults_ui
 import recovery_ui
 import totp
-from theme import (F, BG, HEADER_BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
+from theme import (F, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    ON_ACCENT, WARN, MONO, DECOR_DISC_A, DECOR_DISC_B,
                    DECOR_DOT, DECOR_INK, pick, apply_appearance,
+                   strength_color,
                    tile_colors, asset_candidates)
-from widgets import (Tooltip, even_width, ghost_button, accent_button, field,
+from widgets import (Tooltip, ghost_button, accent_button, field,
                      strength_widget, modal, fit_modal, safe_grab, confirm,
                      STRENGTH_SEGMENTS)
 from password_generator import estimate_strength
@@ -160,12 +161,91 @@ def _initials(name):
     return (name[:2] or "?").upper()
 
 
+class VaultNav:
+    """
+    The vaults down the left side of the main window: one row each, with its
+    tile, its name and how many entries it has. It answers to the few calls
+    an option menu takes (``configure(values=)``, ``cget("values")``,
+    ``get``, ``set``), which is what the rest of the window speaks.
+    """
+
+    def __init__(self, parent, command):
+        self.frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.frame.grid_columnconfigure(0, weight=1)
+        self._command = command
+        self._values, self._notes, self._current = [], {}, None
+        self._rows = {}
+
+    def winfo_exists(self):
+        return self.frame.winfo_exists()
+
+    def cget(self, key):
+        if key != "values":
+            raise ValueError(key)
+        return list(self._values)
+
+    def get(self):
+        return self._current
+
+    def configure(self, values=None, notes=None):
+        """``notes``: what stands at the right of each row (a count)."""
+        values = self._values if values is None else list(values)
+        notes = self._notes if notes is None else dict(notes)
+        if values == self._values and notes == self._notes and self._rows:
+            return
+        self._values, self._notes = values, notes
+        for child in self.frame.winfo_children():
+            child.destroy()
+        self._rows = {}
+        for i, label in enumerate(values):
+            self._rows[label] = self._row(i, label)
+        self._paint()
+
+    def set(self, label):
+        self._current = label
+        self._paint()
+
+    def _dropdown_callback(self, label):
+        self.set(label)
+        self._command(label)
+
+    def _paint(self):
+        for label, row in self._rows.items():
+            row.configure(fg_color=CARD if label == self._current
+                          else "transparent")
+
+    def _row(self, index, label):
+        row = ctk.CTkFrame(self.frame, fg_color="transparent",
+                           corner_radius=12, height=44)
+        row.grid(row=index, column=0, sticky="ew", pady=2)
+        row.grid_columnconfigure(1, weight=1)
+        if label == ALL_VAULTS:
+            bg, ink, letter = GREEN, ON_ACCENT, "≡"
+        else:
+            bg, ink, _ = tile_colors(label)
+            letter = label[:1].upper() or "?"
+        tile = ctk.CTkLabel(row, text=letter, width=28, height=28,
+                            corner_radius=8, fg_color=bg, text_color=ink,
+                            font=F(12, "bold"))
+        tile.grid(row=0, column=0, padx=(10, 10), pady=8)
+        name = ctk.CTkLabel(row, text=_clip(label, 16), anchor="w",
+                            font=F(13, "bold"), text_color=TEXT)
+        name.grid(row=0, column=1, sticky="w")
+        note = ctk.CTkLabel(row, text=self._notes.get(label, ""), font=F(11),
+                            text_color=MUTED)
+        note.grid(row=0, column=2, padx=(6, 12))
+        for w in (row, tile, name, note):
+            w.bind("<Button-1>",
+                   lambda e, label=label: self._dropdown_callback(label))
+        return row
+
+
 class PasswordManagerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title(window_title())
-        self.root.geometry("1180x760")
-        self.root.minsize(980, 640)
+        self.root.geometry("1320x800")
+        self.root.minsize(1120, 640)
         self.root.configure(fg_color=BG)
 
         # Every vault of the open account, by id, as account.vault_ids()
@@ -598,7 +678,7 @@ class PasswordManagerGUI:
                                                        e.height))
 
         card = ctk.CTkFrame(backdrop, fg_color=CARD, corner_radius=24,
-                            bg_color=BG, border_width=1, border_color=BORDER)
+                            bg_color=BG)
         card.place(relx=0.5, rely=0.5, anchor="center")
         pad = ctk.CTkFrame(card, fg_color="transparent")
         pad.pack(padx=40, pady=36)
@@ -952,142 +1032,130 @@ class PasswordManagerGUI:
     # ==================================================================
     # Main window
     # ==================================================================
+    def _nav_button(self, parent, text, command):
+        """A quiet row of the side bar."""
+        return ctk.CTkButton(
+            parent, text=text, command=command, height=38, corner_radius=12,
+            fg_color="transparent", hover_color=CARD_HOVER, anchor="w",
+            text_color=MUTED, font=F(13, "bold"))
+
     def show_main_window(self):
         self._clear()
         self.root.grid_columnconfigure(0, weight=1)
         self.root.grid_rowconfigure(1, weight=1)
 
-        # ---- top bar ----
-        bar = ctk.CTkFrame(self.root, fg_color=HEADER_BG, corner_radius=0,
-                           height=72)
-        bar.grid(row=0, column=0, sticky="ew")
-        bar.grid_propagate(False)
-        bar.grid_rowconfigure(0, weight=1)
-        bar.grid_columnconfigure(2, weight=1)
+        # Three columns: the vaults, the entries of the one picked, and the
+        # selected entry.
+        shell = ctk.CTkFrame(self.root, fg_color="transparent")
+        shell.grid(row=1, column=0, sticky="nsew", padx=16, pady=16)
+        shell.grid_rowconfigure(0, weight=1)
+        shell.grid_columnconfigure(1, weight=1, minsize=320)
+        shell.grid_columnconfigure(2, weight=2, minsize=520)
 
-        brand = ctk.CTkFrame(bar, fg_color="transparent")
-        brand.grid(row=0, column=0, padx=(24, 14))
+        # ---- side bar ----
+        side = ctk.CTkFrame(shell, fg_color="transparent", width=204)
+        side.grid(row=0, column=0, sticky="ns", padx=(0, 16))
+        side.pack_propagate(False)
+
+        brand = ctk.CTkFrame(side, fg_color="transparent")
+        brand.pack(fill="x", padx=8, pady=(6, 18))
         self._logo(brand, small=True).pack(side="left")
         ctk.CTkLabel(brand, text="SecretSpace", font=F(17, "bold"),
                      text_color=TEXT).pack(side="left", padx=(10, 0))
 
+        # Which vault the list shows. New entries go to the one picked.
+        self.vault_menu = VaultNav(side, self._on_vault_pick)
+        self.vault_menu.frame.pack(fill="x")
+        manage = self._nav_button(side, "Manage vaults…", self.vaults_dialog)
+        manage.pack(fill="x", pady=(6, 0))
+        Tooltip(manage, "Add, rename, share or delete vaults")
+
+        # Bottom up: the account, then the places you go occasionally.
+        ctk.CTkLabel(side, text=version_string(), font=F(11),
+                     text_color=MUTED).pack(side="bottom", pady=(6, 0))
+        me = ctk.CTkFrame(side, fg_color=CARD, corner_radius=14)
+        me.pack(side="bottom", fill="x")
         bg, ink, _ = tile_colors(self.current_user)
-        chip = ctk.CTkFrame(bar, fg_color=INPUT_BG, corner_radius=20,
-                            border_width=1, border_color=BORDER, height=40)
-        chip.grid(row=0, column=1)
-        self._circle(chip, _initials(self.current_user), 30, bg, ink,
-                     F(11, "bold"))[0].pack(side="left", padx=(5, 8), pady=5)
-        ctk.CTkLabel(chip, text=_clip(self.current_user, 24),
+        who = ctk.CTkFrame(me, fg_color="transparent")
+        who.pack(fill="x", padx=12, pady=(12, 8))
+        self._circle(who, _initials(self.current_user), 34, bg, ink,
+                     F(12, "bold"))[0].pack(side="left")
+        ctk.CTkLabel(who, text=_clip(self.current_user, 16),
                      font=F(13, "bold"), text_color=TEXT).pack(
-            side="left", padx=(0, 14))
-        Tooltip(chip, "The account you unlocked. Lock to switch to "
-                      "another.")
-
-        self.search_entry = ctk.CTkEntry(
-            bar, height=44, corner_radius=22, fg_color=INPUT_BG,
-            border_color=INPUT_BG, font=F(14),
-            placeholder_text="Search sites and usernames   (Ctrl+F)")
-        self.search_entry.grid(row=0, column=2, sticky="ew", padx=24)
-        self.search_entry.bind("<KeyRelease>", self._on_search)
-
-        controls = ctk.CTkFrame(bar, fg_color="transparent")
-        controls.grid(row=0, column=3, padx=(0, 24))
-        syn = self._ghost_button(controls, "Sync", self.sync_now, width=70)
-        syn.pack(side="left", padx=(0, 8))
+            side="left", padx=(10, 0))
+        Tooltip(who, "The account you unlocked. Lock to switch to another.")
+        pair = ctk.CTkFrame(me, fg_color="transparent")
+        pair.pack(fill="x", padx=12, pady=(0, 12))
+        pair.grid_columnconfigure((0, 1), weight=1, uniform="pair")
+        syn = self._small_button(pair, "Sync", self.sync_now)
+        syn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         Tooltip(syn, "Sync this account with its server (Settings → Sync)")
-        imp = self._ghost_button(controls, "Import", self.import_dialog, width=80)
-        imp.pack(side="left", padx=(0, 8))
-        Tooltip(imp, "Import a PassMan 2.x vault, or a CSV or JSON file")
-        gen = self._ghost_button(controls, "Generate", self.generator_dialog,
-                                 width=92)
-        gen.pack(side="left", padx=(0, 8))
-        Tooltip(gen, "Make a strong password")
-        gear = self._ghost_button(controls, "⚙", self.settings_dialog, width=44)
-        gear.pack(side="left", padx=(0, 8))
-        Tooltip(gear, "Settings")
-        lock = self._ghost_button(controls, "Lock", self.lock_vault, width=70)
-        lock.pack(side="left")
+        lock = self._small_button(pair, "Lock", self.lock_vault)
+        lock.grid(row=0, column=1, sticky="ew", padx=(4, 0))
         Tooltip(lock, "Lock the account and sign out")
 
-        # ---- body: the list on the left, the selected entry on the right ----
-        body = ctk.CTkFrame(self.root, fg_color="transparent")
-        body.grid(row=1, column=0, sticky="nsew", padx=24, pady=20)
-        body.grid_rowconfigure(0, weight=1)
-        body.grid_columnconfigure(0, weight=2, minsize=340)
-        body.grid_columnconfigure(1, weight=3, minsize=480)
+        gear = self._nav_button(side, "Settings", self.settings_dialog)
+        gear.pack(side="bottom", fill="x", pady=(0, 10))
+        imp = self._nav_button(side, "Import", self.import_dialog)
+        imp.pack(side="bottom", fill="x")
+        Tooltip(imp, "Import a PassMan 2.x vault, or a CSV or JSON file")
+        gen = self._nav_button(side, "Password generator",
+                               self.generator_dialog)
+        gen.pack(side="bottom", fill="x")
+        Tooltip(gen, "Make a strong password")
+        # The archive: somewhere you go occasionally; its count tells you
+        # there is something in it.
+        self.archive_btn = self._nav_button(side, "Archive",
+                                            self.archive_dialog)
+        self.archive_btn.pack(side="bottom", fill="x")
+        Tooltip(self.archive_btn, "Entries you removed, kept so they can be "
+                                  "restored")
 
-        left = ctk.CTkFrame(body, fg_color="transparent")
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 20))
+        # ---- the entries ----
+        left = ctk.CTkFrame(shell, fg_color="transparent")
+        left.grid(row=0, column=1, sticky="nsew", padx=(0, 16))
         left.grid_rowconfigure(2, weight=1)
         left.grid_columnconfigure(0, weight=1)
 
-        # Which vault the list shows, and the way to the Vaults window.
-        vault_row = ctk.CTkFrame(left, fg_color="transparent")
-        vault_row.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        vault_row.grid_columnconfigure(0, weight=1)
-        self.vault_menu = ctk.CTkOptionMenu(
-            vault_row, height=34, corner_radius=10, values=[ALL_VAULTS],
-            fg_color=INPUT_BG, button_color=BORDER,
-            button_hover_color=CARD_HOVER, text_color=TEXT, font=F(12, "bold"),
-            dropdown_fg_color=CARD, dropdown_hover_color=CARD_HOVER,
-            dropdown_text_color=TEXT, anchor="w", command=self._on_vault_pick)
-        self.vault_menu.grid(row=0, column=0, sticky="ew")
-        Tooltip(self.vault_menu, "Which vault the list shows. New entries go "
-                                 "to the vault picked here.")
-        manage = ctk.CTkButton(
-            vault_row, text="Vaults", command=self.vaults_dialog, width=76,
-            height=34, corner_radius=10, fg_color="transparent",
-            border_width=1, border_color=BORDER, hover_color=CARD_HOVER,
-            text_color=TEXT, font=F(12, "bold"))
-        manage.grid(row=0, column=1, padx=(8, 0))
-        Tooltip(manage, "Add, rename or delete vaults")
+        top = ctk.CTkFrame(left, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="ew")
+        top.grid_columnconfigure(0, weight=1)
+        self.search_entry = ctk.CTkEntry(
+            top, height=46, corner_radius=12, fg_color=CARD,
+            border_color=CARD, font=F(14),
+            placeholder_text="Search   (Ctrl+F)")
+        self.search_entry.grid(row=0, column=0, sticky="ew")
+        self.search_entry.bind("<KeyRelease>", self._on_search)
+        add = ctk.CTkButton(
+            top, text="+", command=self.add_account_dialog, width=46,
+            height=46, corner_radius=12, fg_color=GREEN,
+            hover_color=GREEN_HOVER, text_color=ON_ACCENT, font=F(22, "bold"))
+        add.grid(row=0, column=1, padx=(10, 0))
+        Tooltip(add, "Add an entry")
 
-        chips = ctk.CTkFrame(left, fg_color="transparent")
-        chips.grid(row=1, column=0, sticky="ew", pady=(0, 12))
-        self.all_chip = ctk.CTkLabel(chips, text="All", height=34,
-                                     corner_radius=17, fg_color=GREEN,
-                                     text_color=ON_ACCENT, font=F(12, "bold"))
-        self.all_chip.pack(side="left")
-        # The archive sits beside the count: somewhere you go occasionally,
-        # next to the number that tells you there is something in it.
-        self.archive_btn = ctk.CTkButton(
-            chips, text="Archive", command=self.archive_dialog, width=90,
-            height=34, corner_radius=17, fg_color="transparent",
-            border_width=1, border_color=BORDER, hover_color=CARD_HOVER,
-            text_color=TEXT, font=F(12, "bold"))
-        self.archive_btn.pack(side="left", padx=(8, 0))
-        Tooltip(self.archive_btn, "Entries you removed, kept so they can be "
-                                  "restored")
+        info = ctk.CTkFrame(left, fg_color="transparent")
+        info.grid(row=1, column=0, sticky="ew", pady=(12, 6))
+        self.all_chip = ctk.CTkLabel(info, text="", font=F(12, "bold"),
+                                     text_color=MUTED)
+        self.all_chip.pack(side="left", padx=(6, 0))
         sort_menu = ctk.CTkOptionMenu(
-            chips, width=160, height=34, corner_radius=10,
+            info, width=160, height=32, corner_radius=10,
             values=[SORT_LABELS[o] for o in SORT_ORDERS],
-            fg_color=INPUT_BG, button_color=BORDER,
+            fg_color=CARD, button_color=CARD,
             button_hover_color=CARD_HOVER, text_color=TEXT, font=F(12),
             dropdown_fg_color=CARD, dropdown_hover_color=CARD_HOVER,
             dropdown_text_color=TEXT, command=self._on_sort)
         sort_menu.set(SORT_LABELS[self.sort_order])
         sort_menu.pack(side="right")
 
-        list_card = ctk.CTkFrame(left, fg_color=CARD, corner_radius=20,
-                                 border_width=1, border_color=BORDER)
-        list_card.grid(row=2, column=0, sticky="nsew")
-        self.list_frame = ctk.CTkScrollableFrame(list_card, fg_color=CARD,
+        # Rows are cards of their own, straight on the window colour.
+        self.list_frame = ctk.CTkScrollableFrame(left, fg_color="transparent",
                                                  corner_radius=0)
-        self.list_frame.pack(fill="both", expand=True, padx=6, pady=8)
+        self.list_frame.grid(row=2, column=0, sticky="nsew")
         self.list_frame.grid_columnconfigure(0, weight=1)
 
-        add_row = ctk.CTkFrame(left, fg_color="transparent", height=48)
-        add_row.grid(row=3, column=0, sticky="ew", pady=(12, 0))
-        add = self._accent_button(add_row, "+  Add an entry",
-                                  self.add_account_dialog)
-        add.configure(height=48, corner_radius=16, font=F(14, "bold"))
-        even_width(add, add_row)
-        ctk.CTkLabel(left, text=version_string(), font=F(11),
-                     text_color=MUTED).grid(row=4, column=0, pady=(8, 0))
-
-        self.detail = ctk.CTkFrame(body, fg_color=CARD, corner_radius=24,
-                                   border_width=1, border_color=BORDER)
-        self.detail.grid(row=0, column=1, sticky="nsew")
+        self.detail = ctk.CTkFrame(shell, fg_color=CARD, corner_radius=20)
+        self.detail.grid(row=0, column=2, sticky="nsew")
 
         self.refresh_account_list()
         self._start_idle_timer()
@@ -1132,9 +1200,17 @@ class PasswordManagerGUI:
         if self.vault_menu is None or not self.vault_menu.winfo_exists():
             return
         names = [self.vault_name(v) for v in self.vaults]
+        notes, everything = {}, 0
+        for vault_id, name in zip(self.vaults, names):
+            count = len(active_accounts(self.vaults[vault_id]))
+            everything += count
+            notes[name] = (f"shared · {count}"
+                           if self.account.is_shared(vault_id) else str(count))
+        notes[ALL_VAULTS] = str(everything)
         # One vault needs no "all of them".
         self.vault_menu.configure(
-            values=names if len(names) < 2 else [ALL_VAULTS] + names)
+            values=names if len(names) < 2 else [ALL_VAULTS] + names,
+            notes=notes)
         self.vault_menu.set(self.vault_name(self.vault_filter)
                             if self.vault_filter in self.vaults
                             else (ALL_VAULTS if len(names) > 1 else names[0]))
@@ -1170,7 +1246,8 @@ class PasswordManagerGUI:
                         if q in a["site"].lower() or q in a["username"].lower()]
         accounts = sort_accounts(accounts, self.sort_order)
 
-        self.all_chip.configure(text=f"   All  {total}   ")
+        self.all_chip.configure(
+            text=f"{total} entr{'y' if total == 1 else 'ies'}")
         self.archive_btn.configure(text=f"Archive  {archived}" if archived
                                    else "Archive")
 
@@ -1219,7 +1296,7 @@ class PasswordManagerGUI:
             i, acc = pending.pop(0)
             cached = self._rows.get(acc["id"])
             if cached:
-                cached[1].grid(row=i, column=0, sticky="ew", pady=2, padx=2)
+                cached[1].grid(row=i, column=0, sticky="ew", pady=3, padx=2)
                 cached[2] = i
             else:
                 self._rows[acc["id"]] = [_row_signature(acc,
@@ -1255,14 +1332,14 @@ class PasswordManagerGUI:
         row = ctk.CTkFrame(
             self.list_frame, corner_radius=14,
             fg_color=SELECTED if acc["id"] == self._selected_id else CARD)
-        row.grid(row=i, column=0, sticky="ew", pady=2, padx=2)
+        row.grid(row=i, column=0, sticky="ew", pady=3, padx=2)
         row.grid_columnconfigure(1, weight=1)
 
         bg, ink, _ = tile_colors(acc["site"])
         tile = ctk.CTkLabel(row, text=(acc["site"][:1].upper() or "?"),
                             width=42, height=42, corner_radius=12,
                             fg_color=bg, text_color=ink, font=F(16, "bold"))
-        tile.grid(row=0, column=0, padx=(10, 12), pady=9)
+        tile.grid(row=0, column=0, padx=(12, 12), pady=11)
 
         info = ctk.CTkFrame(row, fg_color="transparent")
         info.grid(row=0, column=1, sticky="w")
@@ -1371,11 +1448,13 @@ class PasswordManagerGUI:
         # In a vault other people are in, a change has a name.
         if line and acc.get("updated_by") and self.account.is_shared(home):
             line += " by " + _clip(acc["updated_by"], 24)
+        # The vault's name on a line of its own: beside the date it ran
+        # under the buttons.
         if len(self.vaults) > 1:
-            line += ("  ·  " if line else "") + _clip(self.vault_name(
-                self._entry_vault.get(acc["id"])), 24)
+            line += ("\n" if line else "") + "In " + _clip(self.vault_name(
+                self._entry_vault.get(acc["id"])), 28)
         ctk.CTkLabel(names, text=line, font=F(12), text_color=MUTED,
-                     anchor="w").pack(anchor="w")
+                     anchor="w", justify="left").pack(anchor="w")
         actions = ctk.CTkFrame(band, fg_color="transparent")
         actions.grid(row=0, column=2, padx=(8, 22))
         if writable:
@@ -1563,7 +1642,8 @@ class PasswordManagerGUI:
         return box
 
     def _strength_row(self, parent, password):
-        name, frac, color = estimate_strength(password)
+        name, frac, _ = estimate_strength(password)
+        color = strength_color(name)
         row = ctk.CTkFrame(parent, fg_color="transparent")
         row.pack(fill="x", padx=8, pady=(16, 0))
         ctk.CTkLabel(row, text="Strength", font=F(12, "bold"),
