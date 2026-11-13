@@ -25,6 +25,7 @@ import appconfig
 import changelog
 import dialogs
 import history_ui
+from icons import icon
 import lockout
 import sync_client
 import sync_ui
@@ -58,6 +59,7 @@ ROW_SLICE_SECONDS = 0.1         # list work per step before redrawing the window
 LOGIN_TILES_PER_ROW = 3
 
 BACKDROP_REDRAW_MS = 60         # the login backdrop waits for a resize to settle
+BACKDROP_MODE_MS = 1000         # how often the login screen looks for a mode change
 BACKDROP_OVERSAMPLE = 3         # painted this many times larger, then scaled down
 
 #: The vault filter's entry that shows every vault of the account.
@@ -278,6 +280,7 @@ class PasswordManagerGUI:
         self._idle_job = None
         self._lockout_job = None
         self._backdrop_job = None
+        self._mode_job = None
         self._last_activity = time.monotonic()
         self._autolock_seconds = appconfig.DEFAULT_AUTOLOCK_MINUTES * 60
         self._syncing = False
@@ -495,6 +498,9 @@ class PasswordManagerGUI:
         if self._backdrop_job:
             self.root.after_cancel(self._backdrop_job)
             self._backdrop_job = None
+        if self._mode_job:
+            self.root.after_cancel(self._mode_job)
+            self._mode_job = None
         for w in self.root.winfo_children():
             w.destroy()
         self._toast = None
@@ -673,6 +679,7 @@ class PasswordManagerGUI:
         backdrop = tk.Canvas(self.root, bg=pick(BG), highlightthickness=0,
                              bd=0)
         backdrop.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self._watch_backdrop_mode(backdrop)
         backdrop.bind("<Configure>",
                       lambda e: self._backdrop_resized(backdrop, e.width,
                                                        e.height))
@@ -774,6 +781,23 @@ class PasswordManagerGUI:
             if canvas.winfo_exists():
                 self._draw_backdrop(canvas, w, h)
         self._backdrop_job = self.root.after(BACKDROP_REDRAW_MS, draw)
+
+    def _watch_backdrop_mode(self, canvas, seen=None):
+        """
+        The backdrop is a painting, not a widget, so it does not turn light
+        or dark by itself: look once a second while the login screen shows,
+        and paint it again when the mode has changed.
+        """
+        self._mode_job = None
+        if not canvas.winfo_exists():
+            return
+        now = ctk.get_appearance_mode()
+        if seen is not None and now != seen:
+            canvas.configure(bg=pick(BG))
+            self._draw_backdrop(canvas, canvas.winfo_width(),
+                                canvas.winfo_height())
+        self._mode_job = self.root.after(
+            BACKDROP_MODE_MS, lambda: self._watch_backdrop_mode(canvas, now))
 
     def _draw_backdrop(self, canvas, w, h):
         """
@@ -1032,12 +1056,13 @@ class PasswordManagerGUI:
     # ==================================================================
     # Main window
     # ==================================================================
-    def _nav_button(self, parent, text, command):
-        """A quiet row of the side bar."""
+    def _nav_button(self, parent, text, command, picture):
+        """A quiet row of the side bar: an icon and a name."""
         return ctk.CTkButton(
             parent, text=text, command=command, height=38, corner_radius=12,
             fg_color="transparent", hover_color=CARD_HOVER, anchor="w",
-            text_color=MUTED, font=F(13, "bold"))
+            text_color=MUTED, font=F(13, "bold"),
+            image=icon(picture, 18, MUTED), compound="left")
 
     def show_main_window(self):
         self._clear()
@@ -1066,7 +1091,8 @@ class PasswordManagerGUI:
         # Which vault the list shows. New entries go to the one picked.
         self.vault_menu = VaultNav(side, self._on_vault_pick)
         self.vault_menu.frame.pack(fill="x")
-        manage = self._nav_button(side, "Manage vaults…", self.vaults_dialog)
+        manage = self._nav_button(side, "Manage vaults…", self.vaults_dialog,
+                                  "vaults")
         manage.pack(fill="x", pady=(6, 0))
         Tooltip(manage, "Add, rename, share or delete vaults")
 
@@ -1088,25 +1114,28 @@ class PasswordManagerGUI:
         pair.pack(fill="x", padx=12, pady=(0, 12))
         pair.grid_columnconfigure((0, 1), weight=1, uniform="pair")
         syn = self._small_button(pair, "Sync", self.sync_now)
+        syn.configure(image=icon("sync", 16), compound="left")
         syn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         Tooltip(syn, "Sync this account with its server (Settings → Sync)")
         lock = self._small_button(pair, "Lock", self.lock_vault)
+        lock.configure(image=icon("lock", 16), compound="left")
         lock.grid(row=0, column=1, sticky="ew", padx=(4, 0))
         Tooltip(lock, "Lock the account and sign out")
 
-        gear = self._nav_button(side, "Settings", self.settings_dialog)
+        gear = self._nav_button(side, "Settings", self.settings_dialog,
+                                "settings")
         gear.pack(side="bottom", fill="x", pady=(0, 10))
-        imp = self._nav_button(side, "Import", self.import_dialog)
+        imp = self._nav_button(side, "Import", self.import_dialog, "import")
         imp.pack(side="bottom", fill="x")
         Tooltip(imp, "Import a PassMan 2.x vault, or a CSV or JSON file")
         gen = self._nav_button(side, "Password generator",
-                               self.generator_dialog)
+                               self.generator_dialog, "key")
         gen.pack(side="bottom", fill="x")
         Tooltip(gen, "Make a strong password")
         # The archive: somewhere you go occasionally; its count tells you
         # there is something in it.
         self.archive_btn = self._nav_button(side, "Archive",
-                                            self.archive_dialog)
+                                            self.archive_dialog, "archive")
         self.archive_btn.pack(side="bottom", fill="x")
         Tooltip(self.archive_btn, "Entries you removed, kept so they can be "
                                   "restored")
@@ -1458,11 +1487,15 @@ class PasswordManagerGUI:
         actions = ctk.CTkFrame(band, fg_color="transparent")
         actions.grid(row=0, column=2, padx=(8, 22))
         if writable:
-            self._ghost_button(actions, "Edit", lambda: self.account_dialog(acc),
-                               width=74).pack(side="left", padx=(0, 8))
+            edit = self._ghost_button(actions, "Edit",
+                                      lambda: self.account_dialog(acc),
+                                      width=92)
+            edit.configure(image=icon("edit", 16), compound="left")
+            edit.pack(side="left", padx=(0, 8))
             arch = self._ghost_button(actions, "Archive",
                                       lambda: self._archive_account(acc),
-                                      width=88)
+                                      width=112)
+            arch.configure(image=icon("archive", 16), compound="left")
             arch.pack(side="left")
             Tooltip(arch, "Move to archive — restorable, and it still syncs "
                           "the removal to your other PCs")

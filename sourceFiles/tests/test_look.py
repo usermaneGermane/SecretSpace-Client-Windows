@@ -153,6 +153,12 @@ def window():
     root.withdraw()
     yield root
     root.destroy()
+    # Collect what the window left behind here, in the thread Tk lives in.
+    # Fonts and images delete themselves through Tk; collected later from
+    # another thread (a test server's, say) each waits a second for a main
+    # loop that no test runs, and the request being served times out.
+    import gc
+    gc.collect()
 
 
 @pytest.fixture
@@ -198,3 +204,47 @@ def test_strength_colours_show_on_a_card_in_both_modes(name, i):
     """A meter and its word, not body text: 3 to 1 is the bar for those."""
     assert _contrast(theme.strength_color(name)[i], theme.CARD[i]) >= 3
     assert theme.strength_color("") == theme.MUTED
+
+
+# ---- icons -------------------------------------------------------------------
+import icons                                                     # noqa: E402
+
+
+@pytest.mark.parametrize("name", sorted(icons.SHAPES))
+def test_every_icon_draws_something_inside_its_square(name):
+    picture = icons.picture(name, "#16181D", 36)
+    assert picture.size == (36, 36) and picture.mode == "RGBA"
+    alpha = picture.getchannel("A")
+    box = alpha.getbbox()
+    assert box is not None                                  # not empty
+    assert box[2] - box[0] >= 14 and box[3] - box[1] >= 10   # not a speck
+    edge = [alpha.getpixel((x, y)) for x in range(36) for y in (0, 35)]
+    edge += [alpha.getpixel((x, y)) for y in range(36) for x in (0, 35)]
+    assert max(edge) < 64                                   # not cut off
+
+
+def test_an_icon_is_drawn_in_the_colour_asked_for():
+    picture = icons.picture("lock", "#FF0000", 36)
+    r, g, b, alpha = picture.split()
+    assert alpha.getextrema()[1] == 255                     # something solid
+    # Red is full and the rest is nothing wherever the stroke is solid.
+    solid = alpha.point(lambda v: 255 if v == 255 else 0)
+    for channel, wanted in ((r, 255), (g, 0), (b, 0)):
+        seen = {channel.getpixel(xy) for xy in
+                ((x, y) for x in range(36) for y in range(36))
+                if solid.getpixel(xy)}
+        assert seen == {wanted}
+
+
+def test_icons_follow_the_mode_and_are_made_once(window):
+    one = icons.icon("sync", 16)
+    assert one is icons.icon("sync", 16)                    # cached
+    assert one is not icons.icon("sync", 18)
+    light, dark = one.cget("light_image"), one.cget("dark_image")
+    assert light.size == dark.size == (32, 32)              # kept at 2x
+    assert light.tobytes() != dark.tobytes()
+
+
+def test_an_unknown_icon_is_an_error():
+    with pytest.raises(KeyError):
+        icons.picture("no-such-icon", "#000000", 24)

@@ -17,7 +17,7 @@ import account_sync
 import accounts
 import sharing_ui
 from sync_ui import _in_background
-from theme import F, TEXT, MUTED, CARD, BORDER, WARN
+from theme import F, TEXT, MUTED, CARD, WARN, tile_colors
 from widgets import (dialog_shell, ghost_button, accent_button, small_button,
                      field, error_label)
 
@@ -105,23 +105,28 @@ def _vault_row(app, parent, index, vault_id, changed):
     name = app.vault_name(vault_id)
     record = account.vault_record(vault_id)
 
-    row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14,
-                       border_width=1, border_color=BORDER)
+    row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14)
     row.grid(row=index, column=0, sticky="ew", padx=2,
              pady=(10 if index == 0 else 4, 4))
-    row.grid_columnconfigure(0, weight=1)
+    row.grid_columnconfigure(1, weight=1)
 
+    # The vault's tile, as in the list at the left of the main window.
+    tile_bg, tile_ink, _ = tile_colors(name)
+    ctk.CTkLabel(row, text=(name[:1].upper() or "?"), width=40, height=40,
+                 corner_radius=12, fg_color=tile_bg, text_color=tile_ink,
+                 font=F(15, "bold")).grid(row=0, column=0, padx=(14, 0),
+                                          pady=12)
     info = ctk.CTkFrame(row, fg_color="transparent")
-    info.grid(row=0, column=0, sticky="w", padx=(16, 8), pady=12)
+    info.grid(row=0, column=1, sticky="w", padx=(12, 8), pady=12)
     ctk.CTkLabel(info, text=name, anchor="w", font=F(14, "bold"),
                  text_color=TEXT).pack(anchor="w")
     text, colour = _status(app, vault_id)
     ctk.CTkLabel(info, text=f"{_count(app.vaults.get(vault_id, {}))}  ·  {text}",
-                 anchor="w", justify="left", wraplength=290, font=F(12),
+                 anchor="w", justify="left", wraplength=240, font=F(12),
                  text_color=colour).pack(anchor="w")
 
     side = ctk.CTkFrame(row, fg_color="transparent")
-    side.grid(row=0, column=1, padx=(0, 14), pady=8)
+    side.grid(row=0, column=2, padx=(0, 14), pady=8)
     upper = ctk.CTkFrame(side, fg_color="transparent")
     upper.pack(anchor="e")
     owner = account.vault_role(vault_id) == accounts.ROLE_OWNER

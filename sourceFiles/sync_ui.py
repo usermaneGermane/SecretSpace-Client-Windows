@@ -20,7 +20,7 @@ import sync
 import sync_client
 import vault
 from history_ui import local_time
-from theme import (F, TEXT, MUTED, GREEN, DANGER, INPUT_BG, BORDER, CARD,
+from theme import (F, TEXT, MUTED, GREEN, DANGER, INPUT_BG, CARD,
                    CARD_HOVER, ACCENT_DEEP, WARN, MONO, tile_colors)
 from widgets import (ghost_button, accent_button, small_button, field, note,
                      check, error_label, dialog_shell)
@@ -300,8 +300,7 @@ def _conflict_row(parent, index, conflict, answers):
     if index == 0:
         _secret_labels.clear()
 
-    card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=16,
-                        border_width=1, border_color=BORDER)
+    card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=16)
     card.grid(row=index + 1, column=0, sticky="ew", pady=6, padx=2)
     card.grid_columnconfigure((0, 1), weight=1, uniform="sides")
 
@@ -541,8 +540,7 @@ def archive_dialog(app):
 
 def _archive_row(app, parent, index, entry, rebuild):
     """A row like the main list's: tile, site, who and when, then actions."""
-    row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14,
-                       border_width=1, border_color=BORDER)
+    row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14)
     row.grid(row=index, column=0, sticky="ew", pady=(10 if index == 0 else 4,
                                                      4), padx=2)
     row.grid_columnconfigure(1, weight=1)
