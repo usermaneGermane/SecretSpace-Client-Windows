@@ -132,7 +132,7 @@ def field_label(parent, text):
 
 def entry(parent, show=None, placeholder="", height=44, font=None):
     return ctk.CTkEntry(parent, height=height, corner_radius=12,
-                        fg_color=INPUT_BG, border_width=1, border_color=BORDER,
+                        fg_color=CARD, border_width=1, border_color=BORDER,
                         show=show, font=font or F(14),
                         placeholder_text=placeholder)
 
