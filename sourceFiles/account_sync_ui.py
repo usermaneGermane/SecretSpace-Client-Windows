@@ -12,6 +12,7 @@ import threading
 
 import customtkinter as ctk
 
+import account_crypto
 import account_sync
 import accounts
 import sync_client
@@ -67,8 +68,38 @@ def run_sync(app):
 
 def _next_vault(app, run, attempt):
     if not run["queue"]:
-        return _all_done(app, run)
+        return _convert_step(app, run, attempt)
     _sync_step(app, run, attempt, run["queue"].pop(0), retry_allowed=True)
+
+
+def _convert_step(app, run, attempt):
+    """
+    After every vault is in step: the vaults this account owns that are
+    still in the format of SecretSpace 3 move to the current one, where
+    every member has converted (account_sync.convert_vaults). For an account
+    that has none left this asks the server nothing.
+    """
+    account = run["account"]
+    waiting = [v for v in account.vault_ids()
+               if v != account.personal_id and v in app.vaults
+               and account.vault_format(v) is not account_crypto.NOW
+               and account.vault_role(v) == accounts.ROLE_OWNER]
+    if not waiting:
+        return _all_done(app, run)
+    local = {v: app.vaults[v] for v in waiting}
+
+    def done(converted):
+        if not _still_open(app, attempt):
+            return _logout_in_background(run["server"])
+        for vault_id, data in converted.items():
+            app.set_vault_data(vault_id, data, saved=True)
+        run["converted"] = [app.vault_name(v) for v in converted]
+        _all_done(app, run)
+
+    _in_background(app, lambda: account_sync.convert_vaults(
+        account, run["server"], local), done,
+        on_error=lambda e: _all_done(app, run)
+        if _still_open(app, attempt) else _logout_in_background(run["server"]))
 
 
 def _sync_step(app, run, attempt, vault_id, retry_allowed):
@@ -129,7 +160,8 @@ def _all_done(app, run):
     _logout_in_background(run["server"])
     app.refresh_account_list()
     changes, updated = run["changes"], run["updated"]
-    if not run["many"] and not changes:
+    converted = run.get("converted") or []
+    if not run["many"] and not changes and not converted:
         # An account with only its personal vault: what phase 2 said.
         return _finish(app, run["summary"] or "Already up to date")
     parts = []
@@ -144,6 +176,8 @@ def _all_done(app, run):
         parts.append(f"“{old}” is now “{new}”")
     if changes.rekeyed:
         parts.append("new key for: " + ", ".join(changes.rekeyed))
+    if converted:
+        parts.append("moved to the new format: " + ", ".join(converted))
     for name, role in changes.roles:
         parts.append(f"you are now {role} of “{name}”")
     kind = "info"
@@ -276,14 +310,14 @@ def sign_in_dialog(app):
     user_entry = field(wrap, "Username")
     pw_entry = field(wrap, "Master password", show="•")
     key_entry = field(wrap, "Secret Key (from the Emergency Kit)",
-                      placeholder="A3-XXXXXX-XXXXX-…")
+                      placeholder="A4-XXXXX-XXXXX-…")
     note(wrap, "Already have this account on this PC? Leave the Secret Key "
          "empty; this PC keeps it.", shell.text_width, size=11, pady=(8, 0))
     status = ctk.CTkLabel(wrap, text="", font=F(12), text_color=DANGER,
                           wraplength=shell.text_width, justify="left", anchor="w")
     status.pack(anchor="w", fill="x", pady=(10, 0))
 
-    def sign_in():
+    def sign_in(convert=False):
         url = url_entry.get().strip()
         username = user_entry.get().strip()
         password = pw_entry.get()
@@ -300,7 +334,8 @@ def sign_in_dialog(app):
 
         def work():
             return account_sync.sign_in(url, ca_entry.get().strip(), username,
-                                        password, key_entry.get().strip() or None)
+                                        password, key_entry.get().strip() or None,
+                                        convert)
 
         def done(payload):
             account, data = payload
@@ -312,6 +347,14 @@ def sign_in_dialog(app):
                 run_sync(app)
 
         def failed(e):
+            if isinstance(e, accounts.NeedsConversion):
+                # Right details, and an account still as SecretSpace 3 left
+                # it: signing in converts it on the server. Ask first.
+                import conversion_ui    # late: it imports this module's users
+                status.configure(text="")
+                if conversion_ui.ask_conversion(app, username, on_server=True):
+                    sign_in(convert=True)
+                return
             if isinstance(e, accounts.SecretKeyNeeded):
                 text = ("Enter the Secret Key from your Emergency Kit — this PC "
                         "does not have it for this password.")

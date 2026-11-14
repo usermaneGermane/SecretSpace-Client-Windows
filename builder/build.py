@@ -282,18 +282,13 @@ def remove_previous(project: str) -> None:
     """Delete the old outputs first, so a failed build cannot look like a
     successful one because last time's files are still there."""
     import shutil
-    # PassMan.exe here is the portable exe of 2.2 and earlier, no longer
-    # built, and the PassMan-* names are those from before the rename to
-    # SecretSpace: removed so none of them can pass for a current build.
-    for name in ("SecretSpace.exe", "SecretSpace-Client-Installer.exe",
-                 "PassMan.exe", "PassMan-Client-Installer.exe"):
+    for name in ("SecretSpace.exe", "SecretSpace-Client-Installer.exe"):
         path = os.path.join(project, name)
         if os.path.exists(path):
             os.remove(path)
-    for folder in (os.path.join(project, "build", "installer", "SecretSpace"),
-                   os.path.join(project, "build", "installer", "PassMan")):
-        if os.path.isdir(folder):
-            shutil.rmtree(folder)
+    folder = os.path.join(project, "build", "installer", "SecretSpace")
+    if os.path.isdir(folder):
+        shutil.rmtree(folder)
 
 
 def build_steps(project: str, py: "Python", iscc: str, version: str) -> list:

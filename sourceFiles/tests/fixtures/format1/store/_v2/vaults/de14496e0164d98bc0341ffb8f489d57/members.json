@@ -1,0 +1,23 @@
+{
+  "created_at": "2026-11-14T09:12:34Z",
+  "created_by": "alice",
+  "key_generation": 0,
+  "kind": "shared",
+  "members": {
+    "alice": {
+      "key_sig": "gOqZ7WnVUf4gQaY7uSkOe+EI7Yr1JRQNX/xYWh7x6Z1SW9AnmZ+umNpK+5Kgt1CSmSgmdGgzyePhasdCb3VfAA==",
+      "key_signer": "alice",
+      "role": "owner",
+      "wrapped_key": "AZXgJ1629y7+sSNRDFFrKSwzAan0Ix+A6rFclxRalehbQjs4EsoKEmy5xj8AWFzmqvpqetUt5vC+2+V5sgUO65v8DUKNkxJifS19Gbf1O5mcWl6fUnEAupW1WcbB"
+    },
+    "bob": {
+      "added_at": "2026-11-14T09:12:36Z",
+      "added_by": "alice",
+      "key_sig": "zSybr/2Vz7MpaLxVgssEyvdGEelhhm59FcQJlxoJo0l96fSR5/fOcC+nEe0Bn9s1OqS7mcQLz8nq4Lu38FqqCw==",
+      "key_signer": "alice",
+      "role": "editor",
+      "wrapped_key": "ARVdJyKBv33DmMALW2xesKN8tRUunfRZVbUWG7M0u5Q6gXPqak4HmXbnMCeFVg10/vhJVmDHRxEq9i7gEslutDuq9yBXPMkVF3L57ozUKem7qdVXzROwEsdyiSKE"
+    }
+  },
+  "name": "vLUTyGNs0Povmlz+GSCffk5SU9SteDrwxMrOwFFfcWI="
+}

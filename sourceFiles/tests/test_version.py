@@ -45,4 +45,5 @@ def test_long_version_mentions_app_and_format():
 def test_declared_format_matches_what_we_actually_write():
     """The label must not drift from the container the code emits."""
     assert version.VAULT_FORMAT.encode() == account_crypto.VAULT_MAGIC
-    assert version.LEGACY_VAULT_FORMAT.encode() == crypto_utils.MAGIC
+    assert [name.encode() for name in version.OLDER_VAULT_FORMATS] == [
+        account_crypto.OLD.vault_magic, crypto_utils.MAGIC]

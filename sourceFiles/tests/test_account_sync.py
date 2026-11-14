@@ -2,7 +2,7 @@
 Phase 2 end to end: SecretSpace 3 accounts on a real copy of the sync server.
 
 Two "devices" are two data folders on one machine, switched with
-PASSMAN_DATA_DIR. The server is the copy in sync_server/, run on a free port,
+SECRETSPACE_DATA_DIR. The server is the copy in sync_server/, run on a free port,
 exactly as test_sync_server.py runs it for 2.x.
 """
 
@@ -21,7 +21,7 @@ import accounts                                                 # noqa: E402
 import secret_store                                             # noqa: E402
 import sync                                                     # noqa: E402
 import sync_client                                              # noqa: E402
-import passman_server                                           # noqa: E402
+import secretspace_server                                           # noqa: E402
 from account_sync import LoginFailed                            # noqa: E402
 from sync_client import SyncError                               # noqa: E402
 
@@ -37,9 +37,9 @@ def cheap_argon2(monkeypatch):
 
 @pytest.fixture
 def server(tmp_path):
-    httpd = passman_server.ThreadingHTTPServer(("127.0.0.1", 0),
-                                               passman_server.Handler)
-    httpd.store = passman_server.Store(str(tmp_path / "store"))
+    httpd = secretspace_server.ThreadingHTTPServer(("127.0.0.1", 0),
+                                               secretspace_server.Handler)
+    httpd.store = secretspace_server.Store(str(tmp_path / "store"))
     httpd.token = TOKEN
     os.makedirs(httpd.store.root, exist_ok=True)
     thread = threading.Thread(target=httpd.serve_forever,
@@ -58,7 +58,7 @@ def server(tmp_path):
 def device(tmp_path, monkeypatch):
     """device("a") makes that PC's data folder the current one."""
     def use(name):
-        monkeypatch.setenv("PASSMAN_DATA_DIR", str(tmp_path / name / "data"))
+        monkeypatch.setenv("SECRETSPACE_DATA_DIR", str(tmp_path / name / "data"))
     use("a")
     return use
 
@@ -139,9 +139,9 @@ def test_an_account_with_another_personal_vault_is_not_joined(server, device,
 
 def test_a_server_without_accounts_says_so(server, device, monkeypatch):
     monkeypatch.setattr(account_sync.AccountServer, "health",
-                        lambda self: {"ok": True, "service": "passman-sync"})
+                        lambda self: {"ok": True, "service": "secretspace-sync"})
     account = new_account().save()
-    with pytest.raises(SyncError, match="2.0 or newer"):
+    with pytest.raises(SyncError, match="2.1.0 or newer"):
         account_sync.connect(account, server.url, "", TOKEN)
 
 

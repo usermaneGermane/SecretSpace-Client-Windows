@@ -8,6 +8,7 @@ import hashlib
 import tempfile
 from datetime import datetime, timedelta, timezone
 
+import legacy_names
 from crypto_utils import encrypt, decrypt, blob_iterations, DEFAULT_ITERATIONS
 
 #: Suffix of the previous-generation copy kept beside every vault.
@@ -75,6 +76,9 @@ def legacy_id(site: str, username: str) -> str:
 #: Where vaults live, relative to the project root / the folder holding the exe.
 VAULT_DIR_NAME = "vault"
 
+#: Tests and tools point the app at another data folder with this variable.
+DATA_DIR_VARIABLE = "SECRETSPACE_DATA_DIR"
+
 #: What that folder was called in earlier versions. Still honoured so an
 #: existing installation is not orphaned by the rename.
 LEGACY_DIR_NAME = "data"
@@ -113,7 +117,8 @@ def get_home_dir() -> str:
     Portable (no installer marker): the app folder, so the app and its data
     travel together on a USB stick. Installed: %APPDATA%\\SecretSpace, which
     survives upgrades and uninstalling and does not need the program folder
-    to be writable -- or %APPDATA%\\PassMan, see ``appdata_home``.
+    to be writable. (A folder from before the rename is moved there at
+    start: see ``settle_home``.)
     """
     if is_installed():
         base = os.environ.get("APPDATA") or os.path.join(
@@ -122,23 +127,65 @@ def get_home_dir() -> str:
     return get_app_dir()
 
 
-#: The folder name before the rename to SecretSpace (2026-11).
-OLD_HOME_NAME = "PassMan"
+#: The data folder's name, and what it was before the rename (2026-11).
 HOME_NAME = "SecretSpace"
+OLD_HOME_NAME = legacy_names.DATA_FOLDER_WINDOWS
+
+#: What move_home can say happened.
+HOME_MOVED, HOME_BUSY, HOME_BOTH = "moved", "busy", "both"
 
 
 def appdata_home(base: str) -> str:
     """
-    The data folder under ``base``: SecretSpace, unless only the folder of
-    the old name, PassMan, exists -- then that one, so an upgrade finds the
-    vaults where they are. Nothing is moved or renamed; the installer's
-    DataHome makes the same choice.
+    The data folder under ``base``: the current name -- unless only the
+    folder of the old name is there, which means it could not be moved at
+    start (``move_home``); it is then used where it is, so the vaults are
+    never out of reach.
     """
     new = os.path.join(base, HOME_NAME)
     old = os.path.join(base, OLD_HOME_NAME)
     if not os.path.isdir(new) and os.path.isdir(old):
         return old
     return new
+
+
+def move_home(base: str, old_name: str = OLD_HOME_NAME,
+              new_name: str = HOME_NAME):
+    """
+    Give a data folder from before the rename its current name. One rename
+    on the same disk: nothing is copied, so there is never a second copy of
+    a vault. Returns HOME_MOVED; HOME_BUSY when the folder could not be
+    renamed (something has it open) -- it is used where it is and the next
+    start tries again; HOME_BOTH when a folder of each name exists -- the
+    current one is used and the old one is left alone, for the user to look
+    at; None when there was nothing to do.
+    """
+    old = os.path.join(base, old_name)
+    new = os.path.join(base, new_name)
+    if not os.path.isdir(old):
+        return None
+    if os.path.exists(new):
+        return HOME_BOTH
+    try:
+        os.rename(old, new)
+    except OSError:
+        return HOME_BUSY
+    return HOME_MOVED
+
+
+def settle_home():
+    """
+    Called once at start, before anything is read: move the installed
+    copy's data folder to its current name. A lab copy or a source run keeps
+    its data beside itself, which has no name to change. Returns
+    (what move_home said, the old folder, the new folder).
+    """
+    if not is_installed() or os.environ.get(DATA_DIR_VARIABLE):
+        return None, None, None
+    base = os.environ.get("APPDATA") or os.path.join(
+        os.path.expanduser("~"), "AppData", "Roaming")
+    return (move_home(base), os.path.join(base, OLD_HOME_NAME),
+            os.path.join(base, HOME_NAME))
 
 
 APP_TITLE = "SecretSpace - Password Manager"
@@ -170,9 +217,9 @@ def get_data_dir() -> str:
     installation keeps working, and the user can rename the folder themselves
     whenever they like.
 
-    PASSMAN_DATA_DIR overrides the location (used by tests).
+    SECRETSPACE_DATA_DIR overrides the location (used by tests).
     """
-    override = os.environ.get("PASSMAN_DATA_DIR")
+    override = os.environ.get(DATA_DIR_VARIABLE)
     if override:
         return override
 

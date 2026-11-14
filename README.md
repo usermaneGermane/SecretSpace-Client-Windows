@@ -7,22 +7,25 @@ online service behind it: it works offline, and if you want several devices
 in step, or a vault shared with other people, you run the sync server
 yourself, on your own hardware.
 
-**This README describes SecretSpace 3** (3.0.0 and later). The 2.x line —
-one vault file per user, last release
+**This README describes SecretSpace 4** (4.0.0). It has everything
+SecretSpace 3 had — accounts, several vaults, sharing, recovery, the look
+of 3.1 — in a new file format. Coming from 3.x? Read
+[Upgrading from 3.x](#upgrading-from-3x) first: your account is converted
+the first time you unlock it. Coming from 2.x? Read
+[Upgrading from 2.x](#upgrading-from-2x). The 2.x line — one vault file per
+user, last release
 [2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0) —
-has its own README on the branch
+is finished; its README is on the branch
 [`release-2.x`](https://github.com/usermaneGermane/SecretSpace-Client-Windows/tree/release-2.x).
-Coming from 2.x? Read [Upgrading from 2.x](#upgrading-from-2x) first.
 
 **Formerly PassMan.** The project was renamed to SecretSpace in November
-2026, because another password manager already uses the name PassMan.
-Releases up to 2.11.0 and 3.0.0-alpha.1 still carry the old name: their
-installer is `PassMan-Client-Installer.exe`, the program `PassMan.exe`, and
-the data folder `%APPDATA%\PassMan`. Upgrading from them is an ordinary
-upgrade: the installer replaces the PassMan program and shortcuts with
-SecretSpace's, and your vaults stay in `%APPDATA%\PassMan`, which
-SecretSpace keeps using (nothing is moved or renamed). The vault files are
-the same.
+2026, because another password manager already uses the name PassMan. The
+names you see changed then; SecretSpace 3 still carried the old name where
+nobody looks — in the labels its keys are made with, in the markers at the
+start of its files, in the name of its data folder. **Since 4.0.0 nothing
+the app makes carries the old name.** That is why 4.0.0 has a new file
+format and converts an account from SecretSpace 3; the cryptography itself
+is unchanged.
 
 SecretSpace lives in four repositories:
 
@@ -35,14 +38,15 @@ SecretSpace lives in four repositories:
 
 ![SecretSpace](sourceFiles/SecretSpace-logo.png)
 
-## What SecretSpace 3 is
+## What SecretSpace is
 
-SecretSpace 3 replaces "one vault file per user" with **accounts**. An
+Since version 3, SecretSpace has **accounts** in place of "one vault file
+per user". An
 account has a master password, a Secret Key and a recovery phrase, and holds
 one or more vaults.
 
 - **Accounts.** *Create an account* asks for a name and a master password,
-  then shows your **Emergency Kit** (a *Secret Key*, `A3-XXXXX-…`) and a
+  then shows your **Emergency Kit** (a *Secret Key*, `A4-XXXXX-…`) and a
   **12-word recovery phrase**, which you type three words of back. Nothing
   is written until that last step.
 - **A stronger lock.** The key comes from your master password *and* the
@@ -61,7 +65,7 @@ one or more vaults.
   vault deleted on one device is **kept** on the others, marked and no
   longer synced, until you delete it there too or put it back.
 - **Sync through your own server.** *Settings → Sync → Set up…* puts the
-  account on a SecretSpace Server **2.0.0** or newer, with the server's token
+  account on a SecretSpace Server **2.1.0** or newer, with the server's token
   as the sign-up code; after that the **Sync** button keeps every vault in
   step, each with its own merge and conflict questions. On another device,
   *Sign in from a server* on the login screen asks for the address, your
@@ -112,10 +116,10 @@ one or more vaults.
 - Everything else in the window — entries, archive, history, 2FA codes,
   generator, plain export — works as in 2.x.
 
-**Not in 3.0:** adding someone to a vault before they have an account (they
+**Not yet:** adding someone to a vault before they have an account (they
 make the account first, then you share), a company setup (an admin console,
 invites, recovery with an admin's approval), moving an entry from one vault
-to another, and *Sync when I unlock* (2.x has it; in 3.0 you press **Sync**).
+to another, and *Sync when I unlock* (2.x had it; here you press **Sync**).
 [SecretSpace for Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux)
 1.0.0 is the same release for Linux.
 
@@ -133,17 +137,66 @@ to another, and *Sync when I unlock* (2.x has it; in 3.0 you press **Sync**).
   accounts, and going back to the release before it is just installing
   that again.
 
+## Upgrading from 3.x
+
+4.0.0 writes accounts in a new format and **converts an account from
+SecretSpace 3 the first time you unlock it**. Your entries, vaults, master
+password and 12 recovery words stay the same. What you need to know first:
+
+- **SecretSpace 3.0 and 3.1 cannot open a converted account.** Update
+  SecretSpace on **every device** that uses the account before you sync
+  them again; a device still on 3.x is refused by the server afterwards
+  (its message speaks of a changed master password — it means "update me").
+- **The sync server must be 2.1.0 or newer.** Update it first; it keeps
+  serving 3.x and 2.x apps. Until it is updated, 4.0.0 works on your PC and
+  says the server is too old when you press Sync.
+- **Your Emergency Kit stays valid.** A Secret Key printed by SecretSpace 3
+  starts with `A3-`; 4.0.0 accepts it and shows the same key as `A4-…`.
+- **Fingerprint digits change.** The digits two people compare before
+  sharing a vault are new in this version. Nothing you already compared
+  has to be compared again, but compare with someone only once you have
+  both updated: an older app shows other digits for the same account.
+
+The steps:
+
+1. **Back up first.** Close SecretSpace and copy the folder
+   `%APPDATA%\SecretSpace` (or `%APPDATA%\PassMan`, if that is the one you
+   have) somewhere safe.
+2. **Update the server** to 2.1.0, if you sync.
+3. **Install 4.0.0.** The installer upgrades in place. At its first start
+   the app renames the data folder `%APPDATA%\PassMan` to
+   `%APPDATA%\SecretSpace`, if yours still had the old name (it is renamed,
+   not copied; if something has it open it is used where it is and renamed
+   at a later start).
+4. **Unlock.** After your master password, SecretSpace says the account
+   will be converted. *Save a copy first…* puts a copy of the account as it
+   is in a folder you choose; *Convert* does it. It takes a moment and needs
+   no network.
+5. **Type your 12 recovery words once**, when asked. The recovery copy opens
+   only with those words, so only you can have it converted; the words stay
+   the same. You can do it later (Settings → Security → *Recovery copy*);
+   until then the words work for a recovery exactly as before.
+6. **Sync.** The server is told about the conversion, and your vaults are
+   stored in the new format. A vault you **share** moves to the new format
+   by itself once every member has updated and unlocked once; until then it
+   stays readable for a member still on SecretSpace 3.
+
+**Going back.** Install 3.1.0 again and put back the copy of the account
+you saved in step 4 (or the backup from step 1). If the server was already
+told, sign in from it is no longer possible with 3.1.0 for that account.
+
 ## Upgrading from 2.x
 
-SecretSpace 3 does not open 2.x vaults directly: you make an account and
+SecretSpace does not open 2.x vaults directly: you make an account and
 **import** them. **Your 2.x vaults are never converted, changed or
 deleted**, so the way back stays open.
 
 1. **Back up first.** Close SecretSpace and copy the folder
    `%APPDATA%\SecretSpace` (or `%APPDATA%\PassMan`, if that is the one you
    have) somewhere safe.
-2. **Install 3.0.0.** The installer upgrades the installed 2.x program in
-   place; the data folder is left as it is.
+2. **Install 4.0.0.** The installer upgrades the installed 2.x program in
+   place. The data folder keeps its content; if it still had the old name
+   it is renamed to `%APPDATA%\SecretSpace` at the first start.
 3. **Create an account.** The login screen is empty at first — your 2.x
    vaults are not shown there. Save the Emergency Kit and write down the
    12-word phrase.
@@ -152,14 +205,14 @@ deleted**, so the way back stays open.
    the vault that is shown — make a vault for each 2.x vault first if you
    want to keep them apart.
 5. **Sync.** A 2.x vault's sync settings are not carried over. Update your
-   server to **2.0.0** (it keeps serving 2.x apps exactly as before, with
+   server to **2.1.0** (it keeps serving 2.x apps exactly as before, with
    the same store and token), then use *Settings → Sync → Set up…*. Your
-   other devices install 3.0.0 and use *Sign in from a server*.
+   other devices install 4.0.0 and use *Sign in from a server*.
 
 **Going back.** Install
 [2.13.0](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases/tag/v2.13.0)
 again. It opens your 2.x vaults as you left them. What you added or changed
-in SecretSpace 3 stays in the account, not in the 2.x vaults: there is no
+in SecretSpace 4 stays in the account, not in the 2.x vaults: there is no
 sync between a 2.x vault and an account, so do not keep working in both.
 
 ## Running it
@@ -180,11 +233,12 @@ desktop shortcut. It needs Windows 10 or 11 (64-bit) and installs for your
 Windows user only, so it needs no admin rights. You get a Start Menu entry
 and an uninstaller under Settings → Apps; the program it installs is
 `SecretSpace.exe`. The vault lives in **`%APPDATA%\SecretSpace`**, not in the
-program folder, so upgrading or uninstalling never touches it. A copy first
-installed as PassMan keeps `%APPDATA%\PassMan` instead.
+program folder, so upgrading or uninstalling never touches it. (A folder
+`%APPDATA%\PassMan` from an install before the rename is renamed to that
+at the app's first start.)
 
-If you used the portable `PassMan.exe` of 2.2 or earlier, the installer can
-move your vaults across. They are moved, not copied, and a vault already in
+If you used the portable program of 2.2 or earlier (it was called PassMan
+then), the installer can move your vaults across. They are moved, not copied, and a vault already in
 `%APPDATA%\SecretSpace` is never overwritten. The portable single-file exe is
 no longer made: it unpacked itself to a temporary folder on every launch,
 which made it slow to start.
@@ -319,12 +373,32 @@ SecretSpace closed, move each `<user>.vault.enc` together with its `.bak` and
 `.base` into the lab copy's `vault` folder (and `config.json` too, if it
 names a test vault as the last user).
 
-### The SecretSpace 3 files
+### The account files
 
 ```
-keyset.pmk:  base64( "PMK3" || ver(1) || kdf(1) || memory_kib(4) || passes(1) || lanes(1) || salt(16) || nonce(12) || ciphertext )
-vault .pmv3: base64( "PMV3" || ver(1) || vault_id(16) || key_generation(4) || nonce(12) || ciphertext )
+keyset.ssk: base64( "SSK4" || ver(1) || kdf(1) || memory_kib(4) || passes(1) || lanes(1) || salt(16) || nonce(12) || ciphertext )
+vault .ssv: base64( "SSV4" || ver(1) || vault_id(16) || key_generation(4) || nonce(12) || ciphertext )
 ```
+
+That is **format 2**, which 4.0.0 writes. **Format 1** is what SecretSpace 3
+wrote: the same layouts with the markers `PMK3` / `PMV3`, the file names
+`keyset.pmk`, `recovery.pmk` and `<id>.pmv3`, and every key and signature
+made with a label that began `PassMan3`. In format 2 the labels begin
+`SecretSpace4`. A label keeps two keys made from one secret apart, so a new
+label means new keys: an account is converted by opening everything the
+old way once and writing it again.
+
+- The keyset is sealed again with the **same salt**, so every device of an
+  account arrives at the same new login key on its own.
+- An account's **signing key** and its **recovery proof** used to be
+  derived (with the old labels) from its private key. They are now stored
+  in the keyset — for a converted account the very values it always had, so
+  everything it ever signed, and everyone's record of its keys, stay valid.
+- A vault you share keeps format 1 while a member's account is not
+  converted, and 4.0.0 reads and writes it that way; its owner's app gives
+  it a new key in format 2 once every member has converted.
+- The old names are in one module, `legacy_names.py`, and are only read —
+  with that one exception.
 
 Both headers are AES-GCM associated data. The keyset key is HKDF over
 Argon2id(master password), with the Secret Key as its salt; the keyset holds the
@@ -351,8 +425,10 @@ SecretSpace-Client-Windows/
     ├── widgets.py       reusable widgets and modal plumbing
     ├── theme.py         palette, fonts, asset lookup
     ├── vault.py         atomic file handling, schema validation, export
-    ├── crypto_utils.py  the 2.x container (PMV2), key derivation, encrypt/decrypt
-    ├── account_crypto.py  3.0: Argon2id, Secret Key, keyset, PMV3, recovery phrase
+    ├── crypto_utils.py  the 2.x vault file (read by Import), key derivation
+    ├── legacy_names.py  the names from before the rename: read, never written
+    ├── account_crypto.py  Argon2id, Secret Key, keyset, vaults, recovery phrase; the two formats
+    ├── conversion_ui.py  the windows of a conversion from SecretSpace 3
     ├── accounts.py      3.0: account folders, unlock, password change, Emergency Kit
     ├── account_sync.py  3.0: the account on a server (API v2): connect, sync, sign in
     ├── account_sync_ui.py  3.0: its screens (Set up, Sync, Sign in from a server)
@@ -371,7 +447,7 @@ SecretSpace-Client-Windows/
 
 ## Upgrading a 2.x vault from an earlier build
 
-*(About 2.x vault files, for the 2.x line. For moving to SecretSpace 3 see [Upgrading from 2.x](#upgrading-from-2x).)*
+*(About 2.x vault files, for the 2.x line. For moving to accounts see [Upgrading from 2.x](#upgrading-from-2x).)*
 
 **Back up your vault before you upgrade.** Copy your `vault` folder (called
 `data` in earlier versions) somewhere safe, or open the old app and use Settings → *Save encrypted
@@ -401,7 +477,7 @@ So once any PC runs 2.0:
 ## Syncing your devices
 
 Run a server — [SecretSpace-Server-Windows](https://github.com/usermaneGermane/SecretSpace-Server-Windows) or [SecretSpace-Server-Linux](https://github.com/usermaneGermane/SecretSpace-Server-Linux) says how to set one
-up, version **2.0.0** or newer — then put your account on it. Everything is
+up, version **2.1.0** or newer — then put your account on it. Everything is
 encrypted before it leaves your machine, so the server stores what it has no
 key for and never sees your master password, your Secret Key or a vault key.
 
@@ -543,8 +619,7 @@ password and the Secret Key.
 
 ## Where your data lives
 
-The files below are in `%APPDATA%\SecretSpace` (in `%APPDATA%\PassMan` if
-that folder was there first, from before the rename). An installed copy is
+The files below are in `%APPDATA%\SecretSpace`. An installed copy is
 recognised by the `installed` file that the installer puts next to its exe;
 without it — running from source, or a portable exe from 2.2 or earlier —
 they are next to the program instead.
@@ -552,16 +627,16 @@ they are next to the program instead.
 | File | What it is |
 | --- | --- |
 | `accounts/<name>/account.json` | nothing secret: the account's public key, its vaults' ids and names, the Secret Key as this PC keeps it (DPAPI) |
-| `accounts/<name>/keyset.pmk` | the account's keys, under your master password + Secret Key (Argon2id, AES-256-GCM) |
-| `accounts/<name>/recovery.pmk` | the same keys, under the 12-word recovery phrase |
-| `accounts/<name>/vaults/<id>.pmv3` | one vault's entries (+ `.bak`, the previous save) |
+| `accounts/<name>/keyset.ssk` | the account's keys, under your master password + Secret Key (Argon2id, AES-256-GCM) |
+| `accounts/<name>/recovery.ssk` | the same keys, under the 12-word recovery phrase |
+| `accounts/<name>/vaults/<id>.ssv` | one vault's entries (+ `.bak`, the previous save) |
 | `config.json` | non-secret preferences (last username, auto-lock delay) |
 
 To back an account up, copy its folder (Settings → *Backup* → *Open
 folder*); the copy opens only with the master password and the Secret Key.
 
 A `vault` folder beside `accounts` holds 2.x vaults, if you had any.
-SecretSpace 3 only reads it, for *Import*:
+SecretSpace only reads it, for *Import*:
 
 | File | What it is |
 | --- | --- |
@@ -585,11 +660,14 @@ If the main file is ever damaged, SecretSpace falls back to the `.bak` copy.
 
 ## Vault format
 
-*(The 2.x vault file, which Import reads. The SecretSpace 3 files are described under [The SecretSpace 3 files](#the-secretspace-3-files).)*
+*(The 2.x vault file, which Import reads. The account files are described under [The account files](#the-account-files).)*
 
 ```
 base64( "PMV2" || kdf_id(1) || iterations(4) || salt(16) || nonce(12) || ciphertext )
 ```
+
+(Its marker is from the project's old name. The 2.x line is finished, so
+that format is not changed; SecretSpace only reads it.)
 
 The 9-byte header is passed to AES-GCM as additional authenticated data, so the
 stored KDF parameters are covered by the authentication tag and cannot be
@@ -640,7 +718,7 @@ Worth knowing about, in the interest of not overselling this:
   history with it.
 - **The server's token is the sign-up code.** Anyone holding it can make an
   account on your server (and, for 2.x vaults kept there, read and
-  overwrite those blobs). It does not open anyone's SecretSpace 3 account.
+  overwrite those blobs). It does not open anyone's SecretSpace account.
 - **The sync server is not a backup.** It holds one copy of a file your PCs
   also hold, and it will happily store a vault you damaged. It does keep the
   last 20 revisions, which is a safety net, not a backup strategy.
@@ -672,8 +750,10 @@ python -m pytest -q
 See the project layout above for what each module does. `gui.py` is
 presentation only and never touches the cipher.
 
-Tests point `PASSMAN_DATA_DIR` at a temporary directory, so running them
-never touches a real vault.
+Tests point `SECRETSPACE_DATA_DIR` at a temporary directory, so running them
+never touches a real vault. The conversion is tested on accounts that
+SecretSpace 3.1.0 really wrote: `tests/fixtures/format1/`, made by
+`tests/fixtures/make_format1.py`.
 
 `test_sync_server.py` syncs two simulated PCs through a real server on a
 free port. The server is a copy in `sourceFiles/tests/sync_server/`; refresh

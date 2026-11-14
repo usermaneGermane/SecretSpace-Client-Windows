@@ -1,0 +1,15 @@
+{
+  "created_at": "2026-11-14T09:12:34Z",
+  "created_by": "alice",
+  "key_generation": 0,
+  "kind": "shared",
+  "members": {
+    "alice": {
+      "key_sig": "71ppEpSLuNIy23BDk0LVs4mSZKCBLW5bsoVWiA3aXSws1IHgM8yv9PgLMSccXeCHSAD/gnsyFf5/ZWrey+3HCQ==",
+      "key_signer": "alice",
+      "role": "owner",
+      "wrapped_key": "Ad14VpbAMj1fQsM8NfBbnX2+mbaf0swxufFkTV28E2Is1L8mq3gbaH9lg3taO2t56qvZWDMcf68fb8HE6Ne91utsZ7zBjL+v09QFviAN2MdHlMG699pS7uVVQ6Wc"
+    }
+  },
+  "name": "fbk+/R7gSoD1Zs+g96/lgK6diiwgOegywf9ftlQ4YAA="
+}

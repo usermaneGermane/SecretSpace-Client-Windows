@@ -2,13 +2,13 @@
 Recovering an account with its 12-word phrase (phase 5), and making a new
 phrase.
 
-The phrase opens a second copy of the account's keyset (recovery.pmk on the
+The phrase opens a second copy of the account's keyset (recovery.ssk on the
 device, "recovery" on the server). With the keyset open, nothing is lost:
 the same keys are sealed under a new master password, and a new phrase
 replaces the old one -- which opens nothing from then on.
 
 Where the copy comes from:
-- this PC has the account: its own recovery.pmk;
+- this PC has the account: its own recovery.ssk;
 - it does not (a new or reinstalled PC): the account's server hands it out
   (GET /v2/recovery/<name>; it opens only with the phrase).
 
@@ -102,7 +102,8 @@ class Pending:
             loaded = data if data is not None else account.load_vault()
             return account, loaded
         accounts.replace_keys(self.username, self.sealed_keyset,
-                              self.sealed_recovery, self._secret, self.password)
+                              self.sealed_recovery, self._secret, self.password,
+                              self.opened.keyset)
         account = accounts.unlock(self.username, self.password)
         return account, account.load_vault()
 
@@ -123,9 +124,8 @@ def open_with_phrase(username: str, phrase: str, url: str = "",
         raise ValueError("Enter the account name.")
     account_crypto.phrase_to_entropy(phrase)          # typos first, offline
     if accounts.account_exists(username):
-        info = accounts._read_info(username)
-        sealed = accounts._read_text(accounts._path(username,
-                                                    accounts.RECOVERY_FILE))
+        info = accounts._read_any_info(username)
+        sealed = accounts.read_recovery_copy(username)
         server = info.get("server")
         server = server if isinstance(server, dict) and server.get("url") else None
         local = True
@@ -173,7 +173,7 @@ def prepare(opened: Opened, new_password: str) -> Pending:
             # DPAPI (Windows) reads it without the master password; the
             # password scheme (Linux) cannot, as that password is forgotten.
             secret = secret_store.unprotect(
-                accounts._read_info(opened.username).get("secret_key"),
+                accounts._read_any_info(opened.username).get("secret_key"),
                 opened.username, "")
         except (secret_store.Unavailable, CryptoError, ValueError, OSError):
             secret = None
@@ -189,6 +189,30 @@ def prepare(opened: Opened, new_password: str) -> Pending:
                    sealed_keyset, login,
                    account_crypto.seal_recovery(phrase, opened.username,
                                                 opened.keyset))
+
+
+# ---------------------------------------------------------------------------
+# The recovery copy of an account converted from SecretSpace 3
+# ---------------------------------------------------------------------------
+def convert_copy(account: accounts.Account, phrase: str) -> None:
+    """
+    Seal the recovery copy again in the current format, under the SAME 12
+    words. A conversion cannot do this by itself: the copy opens only with
+    the words. As with a new phrase, the server (if any) gets it first, so
+    this PC and the server never hold different copies. CryptoError when the
+    words are mistyped or not this account's.
+    """
+    account_crypto.recover_account(
+        account.username, phrase, accounts.read_recovery_copy(account.username))
+    sealed = account_crypto.seal_recovery(phrase, account.username,
+                                          account.keyset)
+    if account.server:
+        remote = account_sync.logged_in(account)
+        try:
+            remote.put_recovery(sealed)
+        finally:
+            remote.logout()
+    account.set_recovery(sealed)
 
 
 # ---------------------------------------------------------------------------

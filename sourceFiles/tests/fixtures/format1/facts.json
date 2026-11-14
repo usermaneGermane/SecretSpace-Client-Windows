@@ -1,0 +1,74 @@
+{
+  "accounts": {
+    "alice": {
+      "fingerprint": "4568 4190 1731 1316 3189 9396",
+      "password": "correct horse battery staple",
+      "personal_vault": "3a3880dafb35690bf7b05c8886099ce6",
+      "phrase": "armed casual sound sibling squirrel attract cause gasp favorite affair burden trouble",
+      "public_key": "mRrtkVLrJhdUXVBg468CekE84qKOwIUkhwCUlo2H+F0=",
+      "recovery_proof": "DI4t9F0vcI3MXOpNXPKyA+LuRfMyxOzW0GanS3b6R5Q=",
+      "secret_key": "A3-4IP4D-IVCTH-GDPMJ-65YXQE-CKTVMJ",
+      "signing_key": "SgUKQ3tjle8RefuDFebVRFloYFDDiVRbOYNKUUz7+g4="
+    },
+    "bob": {
+      "fingerprint": "7880 1825 4016 0098 6643 6449",
+      "password": "bob's own master password",
+      "personal_vault": "f0b486df14d88813822845953c4e6b02",
+      "phrase": "system lunch spatial report balcony clip fatal cry rough tiger general network",
+      "public_key": "34mwEYgX6nDhPrIoehLAfcIUFW/ftm6Kj6Mrr/Wl9Qw=",
+      "recovery_proof": "OUH44EbCOeOiMVj2F7H88J2Th/LihyrLVKrAG+5spLg=",
+      "secret_key": "A3-VJG2P-WXHFA-JGKOO-3COVQY-2KJTYX",
+      "signing_key": "hDwTgizvA+jMrf0V9V4T114Q45EpYY0LD2THCVGhLn4="
+    },
+    "carol": {
+      "fingerprint": "1810 0779 3872 6806 2859 1479",
+      "password": "carol never syncs",
+      "personal_vault": "3497bc4903532ca15aee33a5357f60a0",
+      "phrase": "fiber build feel judge senior million fruit eternal scan quality month middle",
+      "public_key": "QUSTLe0bMMIrZ+uDAdqFGnvMj5wx9yTmN2JjLqh/6xk=",
+      "recovery_proof": "99CVIV7B4i5dxAoWoW9gebwvfoklrtAuMG0b9KpwLBc=",
+      "secret_key": "A3-KLUVQ-WD3UT-V4OBU-X544OO-NDR54U",
+      "signing_key": "TaNn6v2tW+GP5MgTEguTDsEYDnZFXr+bihnvKtfPMlk="
+    }
+  },
+  "entries": {
+    "alice": {
+      "Solo": [
+        "Notes"
+      ],
+      "Team": [
+        "Printer",
+        "Router"
+      ],
+      "personal": [
+        "Bank",
+        "Mail"
+      ]
+    },
+    "bob": {
+      "Team": [
+        "Printer",
+        "Router"
+      ],
+      "personal": [
+        "Forum"
+      ]
+    },
+    "carol": {
+      "Box": [
+        "Spare key"
+      ],
+      "personal": [
+        "Diary"
+      ]
+    }
+  },
+  "made_with": "3.1.0",
+  "token": "fixture-token-that-is-long-enough",
+  "url": "http://127.0.0.1:46349",
+  "vaults": {
+    "Box": "73399c6b749a6bd0920c5a6cffbd3d01",
+    "Solo": "abecdcdbbc86d06c42fd0ce0cce415b3",
+    "Team": "de14496e0164d98bc0341ffb8f489d57"
+  }
+}

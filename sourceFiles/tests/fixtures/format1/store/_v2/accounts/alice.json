@@ -1,0 +1,34 @@
+{
+  "created_at": "2026-11-14T09:12:33Z",
+  "disabled": false,
+  "kdf": {
+    "lanes": 1,
+    "memory_kib": 64,
+    "passes": 1,
+    "salt": "+A1kNAgaJvGtBj0LY6XcDg=="
+  },
+  "keyset": "UE1LMwEBAAAAQAEB+A1kNAgaJvGtBj0LY6XcDqONi0MuX41s9o4B37bihECYAjmdjvKZYZdrzHF1+NAVc0PuL2Yk3VAklo75ovyjm+KK0CoY8GfSmdFw3dWNUJrqo91skNtrzWsl1dr1hdw0e0dkG8aqYps2l7K3aqPZ68ItNWVJY0SMcx0UDhdOOfQxNUvaRfkwacQWoJWmjXQfZ61QJJi5k+dyelmonkJhB/SHZzqGTc07akNAolCoJlJU",
+  "login": {
+    "hash": "CF+AR7z2Pzvd8h9ZfuCM0w0wd34M53ttLxl1o5BfKfE=",
+    "n": 16384,
+    "p": 1,
+    "r": 8,
+    "salt": "qUTz3C+n2JYf9em3glXbQw=="
+  },
+  "personal_vault": "3a3880dafb35690bf7b05c8886099ce6",
+  "public_key": "mRrtkVLrJhdUXVBg468CekE84qKOwIUkhwCUlo2H+F0=",
+  "recovery": "UE1LMwEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJ1zSBkRSsrOtXyVpXysMPU72gFvS1VZIpKm12Xko0GBhT2wHcbhouURSUCcVdM84XYmFbIMxOARX81mahlKTbPbw87RhHHU+eSMNO74lKZTdmAn/jwGVoNHP6mWGb3Vc2eNBJUCTIn/3uZEtzlqPx4F/ozZwi/OSzjOb4Mnq+MRL9yipoKeMx3TixWpNbURvyNcblVLHMSlMLHAKY5s2gVF",
+  "recovery_check": {
+    "hash": "1M/dNXT1ZmF0oho9naFwCqs01v9BwFbOEfsStHdmgzc=",
+    "n": 16384,
+    "p": 1,
+    "r": 8,
+    "salt": "snAuwGKVe4OVFn3mTR0c2A=="
+  },
+  "signing_key": "SgUKQ3tjle8RefuDFebVRFloYFDDiVRbOYNKUUz7+g4=",
+  "username": "alice",
+  "vaults": [
+    "abecdcdbbc86d06c42fd0ce0cce415b3",
+    "de14496e0164d98bc0341ffb8f489d57"
+  ]
+}

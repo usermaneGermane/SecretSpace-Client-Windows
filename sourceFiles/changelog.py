@@ -19,6 +19,11 @@ of a vault hold the vault's key, so without a signature any of them could
 write a line under someone else's name; with it, a line whose signature
 does not match its author's key is shown as such.
 
+A line says which format it was signed in (``v``; none means 1, from
+SecretSpace 3). Lines are never signed again -- only their author could --
+so an old line keeps being checked the way it was signed, and a vault that
+a member with an older app still opens gets its new lines the old way too.
+
 Pure: dicts in, dicts out. Nothing here touches a file, a server or a widget.
 """
 
@@ -77,6 +82,8 @@ def _clean(line):
         "count": count,
         "sig": str(line.get("sig", "") or "")[:200],
     }
+    if account_crypto.format_of(line.get("v")) is account_crypto.NOW:
+        clean["v"] = account_crypto.NOW.number
     if not clean["id"] or not clean["at"] or not clean["by"]:
         return None
     return clean
@@ -169,7 +176,8 @@ def message(vault_hex: str, line: dict) -> bytes:
     in -- so a line cannot be copied into another vault, or its author, time
     or entry changed, without the signature failing.
     """
-    return json.dumps(["PassMan3 change", vault_hex, line["id"], line["at"],
+    label = account_crypto.format_of(line.get("v")).label("change")
+    return json.dumps([label.decode("ascii"), vault_hex, line["id"], line["at"],
                        line["by"], line["action"], line["entry"], line["title"],
                        list(line["fields"]), int(line["count"])],
                       separators=(",", ":"), ensure_ascii=True).encode("ascii")
@@ -191,12 +199,13 @@ def check(line: dict, vault_hex: str, signing_key) -> str:
 
 
 def record(data: dict, before: dict, username: str, keyset: dict,
-           vault_hex: str) -> int:
+           vault_hex: str, fmt=account_crypto.NOW) -> int:
     """
     Note in ``data`` what ``username`` changed since ``before`` (the vault as
     it was last saved): signed lines in the log, ``updated_by`` on each entry
     they touched, and ``by`` on each earlier version that became history.
     Returns how many lines were added. ``data`` is changed in place.
+    ``fmt`` is the vault's format (see the module docstring).
     """
     found = diff(before, data)
     if not found:
@@ -207,6 +216,8 @@ def record(data: dict, before: dict, username: str, keyset: dict,
         line = dict(item)
         line.update({"id": os.urandom(8).hex(), "at": vault.history_now(),
                      "by": username, "sig": ""})
+        if fmt is account_crypto.NOW:
+            line["v"] = fmt.number
         line["sig"] = account_crypto.sign(keyset, message(vault_hex, line))
         lines.append(line)
         entry = new.get(item["entry"])

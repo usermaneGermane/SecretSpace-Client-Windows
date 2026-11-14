@@ -282,8 +282,9 @@ def ask_secret_key(app, username):
                          f"This PC does not hold the Secret Key of "
                          f"“{username}” — it is new here, or it can no "
                          "longer read the copy it kept. It is on your "
-                         "Emergency Kit and starts with A3-.")
-    box = app._field(shell.body, "Secret Key", placeholder="A3-XXXXX-XXXXX-…")
+                         "Emergency Kit and starts with A4- (A3- on a kit "
+                         "from SecretSpace 3; that one works too).")
+    box = app._field(shell.body, "Secret Key", placeholder="A4-XXXXX-XXXXX-…")
     box.configure(font=ctk.CTkFont(family=MONO, size=14))
     err = error_label(shell.body, shell.text_width)
     out = {"text": None}
@@ -321,7 +322,7 @@ def import_dialog(app):
         top.destroy()
         action()
 
-    two = section(wrap, "PassMan 2.x vaults on this PC", first=True)
+    two = section(wrap, "2.x vaults on this PC", first=True)
     names = vault.list_users()
     if not names:
         setting_row(two, "None found",
@@ -354,7 +355,7 @@ def import_dialog(app):
 
 def _import_2x_file(app):
     path = filedialog.askopenfilename(
-        parent=app.root, title="Import a PassMan 2.x vault",
+        parent=app.root, title="Import a 2.x vault",
         filetypes=[("SecretSpace vault", "*.enc *.vault *.bak"),
                    ("All files", "*.*")])
     if path:
@@ -724,6 +725,18 @@ def settings_dialog(app):
                     "Make a new one if it was lost or seen. The old one stops "
                     "working.", hint),
         "New phrase…", new_phrase, width=150).pack()
+
+    if app.account is not None and not app.account.recovery_converted:
+        def convert_copy():
+            import conversion_ui        # late: it imports this module's users
+            top.destroy()
+            conversion_ui.offer_recovery_conversion(app, asked=True)
+
+        app._ghost_button(
+            setting_row(sec, "Recovery copy",
+                        "Still in the format of SecretSpace 3. Type your 12 "
+                        "words once to convert it; they stay the same.", hint),
+            "Convert…", convert_copy, width=150).pack()
 
     def label_for(m):
         return "Never" if m == 0 else f"{m} minute{'s' if m != 1 else ''}"

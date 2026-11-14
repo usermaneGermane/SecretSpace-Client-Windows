@@ -57,7 +57,7 @@ def test_secret_key_round_trip_and_shape():
     for _ in range(50):
         raw = ac.new_secret_key()
         text = ac.format_secret_key(raw)
-        assert text.startswith("A3-") and len(text.replace("-", "")) == 29
+        assert text.startswith("A4-") and len(text.replace("-", "")) == 29
         assert [len(g) for g in text.split("-")] == [2, 5, 5, 5, 6, 6]
         assert ac.parse_secret_key(text) == raw
 
@@ -84,7 +84,7 @@ def test_typos_read_as_typos_almost_always():
                 continue
             tried += 1
             try:
-                ac.parse_secret_key("A3" + body[:i] + c + body[i + 1:])
+                ac.parse_secret_key("A4" + body[:i] + c + body[i + 1:])
             except ac.CryptoError:
                 continue
             missed += 1
@@ -94,9 +94,10 @@ def test_typos_read_as_typos_almost_always():
 
 @pytest.mark.parametrize("text,words", [
     ("", "Enter your Secret Key"),
-    ("B3-AAAAA", "starts with A3"),
-    ("A3-AAAAA-AAAAA", "27 characters"),
-    ("A3-AAAA0-AAAAA-AAAAA-AAAAAA-AAAAAA", "never used"),
+    ("B3-AAAAA", "starts with A4"),
+    ("A4-AAAAA-AAAAA", "27 characters after A4-"),
+    ("A3-AAAAA-AAAAA", "27 characters after A3-"),
+    ("A4-AAAA0-AAAAA-AAAAA-AAAAAA-AAAAAA", "never used"),
 ])
 def test_secret_key_mistakes_say_what_is_wrong(text, words):
     with pytest.raises(ac.CryptoError, match=words):
@@ -151,7 +152,7 @@ def test_keyset_round_trip_and_header():
     assert ac.open_keyset(b"a" * 32, blob) == {"x": 1}
     head = ac.keyset_header(blob)
     assert head == {"kdf": ac.KDF_ARGON2ID, "memory_kib": 64, "passes": 1,
-                    "lanes": 1, "salt": SALT}
+                    "lanes": 1, "salt": SALT, "format": 2}
 
 
 def test_wrong_key_reads_as_wrong_password_or_secret_key():
@@ -178,7 +179,7 @@ def test_an_absurd_cost_is_refused_before_any_work(cost):
 
 
 @pytest.mark.parametrize("mangle,words", [
-    (lambda r: b"PMV2" + r[4:], "not a SecretSpace 3 account"),
+    (lambda r: b"PMV2" + r[4:], "not a SecretSpace account"),
     (lambda r: r[:4] + b"\x09" + r[5:], "newer SecretSpace"),
     (lambda r: r[:30], "too short"),
 ])
@@ -229,7 +230,8 @@ DATA = {"accounts": [{"id": "1", "site": "Router", "password": "pässwörd"}]}
 def test_vault_round_trip_and_header():
     blob = ac.encrypt_vault(b"V" * 32, VID, 3, DATA)
     assert ac.decrypt_vault(b"V" * 32, blob, VID) == DATA
-    assert ac.vault_header(blob) == {"vault_id": VID, "key_generation": 3}
+    assert ac.vault_header(blob) == {"vault_id": VID, "key_generation": 3,
+                                     "format": 2}
 
 
 def test_a_vault_from_another_vault_is_refused():
@@ -250,11 +252,11 @@ def test_wrong_vault_key():
         ac.decrypt_vault(b"W" * 32, ac.encrypt_vault(b"V" * 32, VID, 0, DATA))
 
 
-def test_a_2x_vault_is_not_mistaken_for_pmv3():
+def test_a_2x_vault_is_not_mistaken_for_an_account_vault():
     import crypto_utils
     blob = crypto_utils.encrypt("pw", DATA, iterations=1000)
     blob = blob.decode() if isinstance(blob, bytes) else blob
-    with pytest.raises(ac.CryptoError, match="not a SecretSpace 3 vault"):
+    with pytest.raises(ac.CryptoError, match="not a SecretSpace vault"):
         ac.vault_header(blob)
 
 

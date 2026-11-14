@@ -27,12 +27,7 @@ config.json
 # What the SecretSpace Builder writes here: the installer it packs from
 # installer\SecretSpace.iss, and the builder itself (py builder\build.py
 # --builder). Publish them as release assets rather than committing them.
-# PassMan.exe is the portable exe of 2.2 and earlier, no longer built; still
-# ignored in case an old copy is around.
 SecretSpace.exe
-PassMan.exe
-PassMan-Client-Installer.exe
-PassMan-Builder.exe
 SecretSpace-Client-Installer.exe
 SecretSpace-Builder.exe
 

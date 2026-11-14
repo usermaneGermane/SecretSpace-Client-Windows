@@ -18,7 +18,10 @@ here afterwards, so unlocking needs only the master password (as in
 
 A record is a small dict stored in ``account.json``; ``scheme`` says which
 of the two it is, so a file written on one OS is recognised (and refused
-cleanly) on the other.
+cleanly) on the other. ``v`` says how the record is bound to its account:
+2 is the current way; a record without it was written by SecretSpace 3,
+under the project's old name (legacy_names), and is read so the account can
+be converted -- ``protect`` only ever writes the current one.
 """
 
 import os
@@ -28,10 +31,14 @@ import unicodedata
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 import account_crypto
+import legacy_names
 from account_crypto import CryptoError, _b64, _unb64
 
 SCHEME_DPAPI = "dpapi"
 SCHEME_PASSWORD = "password"
+RECORD_VERSION = 2
+#: What Windows shows as the description of the protected data.
+DPAPI_DESCRIPTION = "SecretSpace Secret Key"
 
 
 class Unavailable(Exception):
@@ -42,10 +49,20 @@ def default_scheme() -> str:
     return SCHEME_DPAPI if sys.platform == "win32" else SCHEME_PASSWORD
 
 
-def _context(username: str) -> bytes:
+def _context(username: str, version: int = RECORD_VERSION) -> bytes:
     # Binds a record to its account, so one copied into another account's
     # file does not open there.
-    return b"PassMan 3 Secret Key\x00" + username.encode("utf-8")
+    start = b"SecretSpace 4 Secret Key\x00" if version >= RECORD_VERSION \
+        else legacy_names.DEVICE_CONTEXT
+    return start + username.encode("utf-8")
+
+
+def record_version(record) -> int:
+    """How a stored record is bound to its account (1: by SecretSpace 3)."""
+    try:
+        return int(record.get("v", 1))
+    except (AttributeError, TypeError, ValueError):
+        return 1
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +88,7 @@ def _dpapi(data: bytes, entropy: bytes, protect: bool) -> bytes:
     out = Blob()
     ui_forbidden = 0x1
     if protect:
-        ok = crypt32.CryptProtectData(ctypes.byref(data_in), "PassMan Secret Key",
+        ok = crypt32.CryptProtectData(ctypes.byref(data_in), DPAPI_DESCRIPTION,
                                       ctypes.byref(extra), None, None,
                                       ui_forbidden, ctypes.byref(out))
     else:
@@ -103,7 +120,7 @@ def protect(secret: bytes, username: str, password: str,
     """A record that gives ``secret`` back to this device (see the module doc)."""
     scheme = scheme or default_scheme()
     if scheme == SCHEME_DPAPI:
-        return {"scheme": SCHEME_DPAPI,
+        return {"scheme": SCHEME_DPAPI, "v": RECORD_VERSION,
                 "blob": _b64(_dpapi(secret, _context(username), True))}
     if scheme == SCHEME_PASSWORD:
         salt = os.urandom(account_crypto.SALT_LEN)
@@ -111,7 +128,8 @@ def protect(secret: bytes, username: str, password: str,
         cost = (account_crypto.ARGON2_PASSES, account_crypto.ARGON2_MEMORY_KIB,
                 account_crypto.ARGON2_LANES)
         key = _password_key(password, salt, *cost)
-        return {"scheme": SCHEME_PASSWORD, "salt": _b64(salt),
+        return {"scheme": SCHEME_PASSWORD, "v": RECORD_VERSION,
+                "salt": _b64(salt),
                 "nonce": _b64(nonce), "passes": cost[0],
                 "memory_kib": cost[1], "lanes": cost[2],
                 "sealed": _b64(AESGCM(key).encrypt(nonce, secret,
@@ -129,6 +147,7 @@ def unprotect(record, username: str, password: str) -> bytes:
     if not isinstance(record, dict):
         raise Unavailable("This PC does not hold the Secret Key yet.")
     scheme = record.get("scheme")
+    context = _context(username, record_version(record))
     if scheme == SCHEME_DPAPI:
         if sys.platform != "win32":
             raise Unavailable("The Secret Key was stored by Windows.")
@@ -136,7 +155,7 @@ def unprotect(record, username: str, password: str) -> bytes:
             blob = _unb64(record.get("blob"), "Secret Key")
         except CryptoError:
             raise Unavailable("The stored Secret Key is damaged.") from None
-        raw = _dpapi(blob, _context(username), False)
+        raw = _dpapi(blob, context, False)
     elif scheme == SCHEME_PASSWORD:
         try:
             salt = _unb64(record["salt"], "Secret Key")
@@ -148,7 +167,7 @@ def unprotect(record, username: str, password: str) -> bytes:
             raise Unavailable("The stored Secret Key is damaged.") from None
         key = _password_key(password, salt, *cost)
         try:
-            raw = AESGCM(key).decrypt(nonce, sealed, _context(username))
+            raw = AESGCM(key).decrypt(nonce, sealed, context)
         except Exception:
             raise CryptoError("Wrong master password or Secret Key.") from None
     else:

@@ -21,7 +21,7 @@ from sync_client import SyncError
 # Reused from the phase 2 sync tests: the server, the "device" switch, the
 # cheap Argon2 settings and the two-device helpers.
 from test_account_sync import (PW, TOKEN, alice, cheap_argon2, device,  # noqa: F401
-                               entry, new_account, passman_server, server)
+                               entry, new_account, secretspace_server, server)
 
 
 # ---------------------------------------------------------------------------
@@ -98,9 +98,9 @@ def read_file(path):
 
 
 def start_server(path):
-    httpd = passman_server.ThreadingHTTPServer(("127.0.0.1", 0),
-                                               passman_server.Handler)
-    httpd.store = passman_server.Store(str(path))
+    httpd = secretspace_server.ThreadingHTTPServer(("127.0.0.1", 0),
+                                               secretspace_server.Handler)
+    httpd.store = secretspace_server.Store(str(path))
     httpd.token = TOKEN
     os.makedirs(httpd.store.root, exist_ok=True)
     thread = threading.Thread(target=httpd.serve_forever,
@@ -339,7 +339,7 @@ def test_a_bad_name_creates_nothing():
             acc.create_vault(bad)
     assert acc.vault_ids() == [acc.personal_id]
     assert os.listdir(os.path.dirname(acc.vault_path)) == [
-        acc.personal_id + ".pmv3"]
+        acc.personal_id + ".ssv"]
 
 
 def test_rename_a_vault():
@@ -731,18 +731,27 @@ def test_a_vault_never_on_a_server_is_deleted_without_asking_it(server, device,
 
 
 def _health_without_features(self):
-    return {"ok": True, "service": "passman-sync", "api": [1, 2]}
+    return {"ok": True, "service": "secretspace-sync", "api": [1, 2]}
 
 
-@pytest.mark.parametrize("how", ["no_features_in_health", "has_vaults_false"])
+def test_a_server_older_than_this_version_needs_is_refused_before_login(
+        server, device, alice, monkeypatch):
+    """A server that does not list the current format cannot hold what this
+    version writes: say so, and send it nothing."""
+    monkeypatch.setattr(account_sync.AccountServer, "health",
+                        _health_without_features)
+    work = alice.create_vault("Work")
+    with pytest.raises(SyncError, match="2.1.0 or newer"):
+        reconcile(alice)
+    assert not alice.vault_record(work.hex).get("on_server")
+    assert not os.path.exists(os.path.join(server.accounts.vaults.root, work.hex))
+
+
+@pytest.mark.parametrize("how", ["has_vaults_false"])
 def test_a_server_without_vaults_keeps_extra_vaults_here(server, device, alice,
                                                          monkeypatch, how):
-    if how == "no_features_in_health":
-        monkeypatch.setattr(account_sync.AccountServer, "health",
-                            _health_without_features)
-    else:
-        monkeypatch.setattr(account_sync.AccountServer, "has_vaults",
-                            lambda self: False)
+    monkeypatch.setattr(account_sync.AccountServer, "has_vaults",
+                        lambda self: False)
     work = alice.create_vault("Work")
     put_entry(alice, work.hex, "local-entry")
     put_entry(alice, alice.personal_id, "personal-entry")
