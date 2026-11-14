@@ -317,7 +317,7 @@ def sign_in_dialog(app):
                           wraplength=shell.text_width, justify="left", anchor="w")
     status.pack(anchor="w", fill="x", pady=(10, 0))
 
-    def sign_in():
+    def sign_in(convert=False):
         url = url_entry.get().strip()
         username = user_entry.get().strip()
         password = pw_entry.get()
@@ -334,7 +334,8 @@ def sign_in_dialog(app):
 
         def work():
             return account_sync.sign_in(url, ca_entry.get().strip(), username,
-                                        password, key_entry.get().strip() or None)
+                                        password, key_entry.get().strip() or None,
+                                        convert)
 
         def done(payload):
             account, data = payload
@@ -346,6 +347,14 @@ def sign_in_dialog(app):
                 run_sync(app)
 
         def failed(e):
+            if isinstance(e, accounts.NeedsConversion):
+                # Right details, and an account still as SecretSpace 3 left
+                # it: signing in converts it on the server. Ask first.
+                import conversion_ui    # late: it imports this module's users
+                status.configure(text="")
+                if conversion_ui.ask_conversion(app, username, on_server=True):
+                    sign_in(convert=True)
+                return
             if isinstance(e, accounts.SecretKeyNeeded):
                 text = ("Enter the Secret Key from your Emergency Kit — this PC "
                         "does not have it for this password.")

@@ -865,13 +865,36 @@ def test_a_converted_account_signs_in_on_a_new_device(online):
     assert sites(account, TEAM) == ["Printer", "Router"]
 
 
+def test_signing_in_does_not_convert_an_account_without_being_told_to(online):
+    """Converting on the server locks out the account's devices that still
+    run SecretSpace 3: the sign-in says so and changes nothing, anywhere."""
+    online.device("new")
+    before = tree(os.path.join(online.root, "store", "_v2", "accounts"))
+    with pytest.raises(accounts.NeedsConversion):
+        account_sync.sign_in(online.server.url, "", "bob", pw("bob"),
+                             FACTS["accounts"]["bob"]["secret_key"])
+    assert tree(os.path.join(online.root, "store", "_v2", "accounts")) == before
+    assert not accounts.account_exists("bob")
+    # ... and bob's device with SecretSpace 3 still gets in: the login key
+    # the server expects is the one it always had.
+    server = account_sync.AccountServer(online.server.url)
+    old_login = account_crypto.derive_account_keys(
+        pw("bob"), account_crypto.parse_secret_key(
+            FACTS["accounts"]["bob"]["secret_key"]),
+        "bob", base64.b64decode(server.prelogin("bob")["kdf"]["salt"]),
+        1, 64, 1, OLD)[1]
+    server.login("bob", old_login)
+    server.logout()
+
+
 def test_signing_in_to_an_account_nobody_converted_converts_it(online):
     """A new device with SecretSpace 4, an account still as 3 left it on the
-    server: the sign-in converts it there and then."""
+    server: once the user has agreed, the sign-in converts it there and
+    then."""
     online.device("new")
     account, data = account_sync.sign_in(
         online.server.url, "", "bob", pw("bob"),
-        FACTS["accounts"]["bob"]["secret_key"])
+        FACTS["accounts"]["bob"]["secret_key"], convert=True)
     assert sorted(e["site"] for e in data["accounts"]) == ["Forum"]
     record = online.stored_json("accounts", "bob.json")
     assert record["format"] == 2 and marker(record["keyset"]) == b"SSK4"
@@ -897,7 +920,7 @@ def test_signing_in_over_an_unconverted_copy_on_this_pc_converts_it(online):
     has the account as SecretSpace 3 left it."""
     online.device("new")
     account_sync.sign_in(online.server.url, "", "bob", pw("bob"),
-                         FACTS["accounts"]["bob"]["secret_key"])
+                         FACTS["accounts"]["bob"]["secret_key"], convert=True)
     account = accounts.unlock("bob", pw("bob"))
     account_sync.change_password(account, "bob's second password")
 

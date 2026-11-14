@@ -24,10 +24,12 @@ from theme import F, MUTED, GREEN
 from widgets import dialog_shell, error_label, field_label, note
 
 
-def ask_conversion(app, username) -> bool:
+def ask_conversion(app, username, on_server=False) -> bool:
     """
     Tell the user their account is about to be converted and let them save
     a copy first. True to go ahead, False to stay locked (nothing changed).
+    ``on_server``: asked while signing in from a server, where it is the
+    server's copy of the account that gets converted.
     """
     top = app._modal("Convert this account", 520, 420)
     shell = dialog_shell(
@@ -39,9 +41,16 @@ def ask_conversion(app, username) -> bool:
     note(wrap, "Afterwards SecretSpace 3.0 and 3.1 can no longer open this "
          "account. If you use it on other devices, update SecretSpace there "
          "too before you sync them again.", shell.text_width, pady=(0, 10))
-    note(wrap, "To be able to go back, save a copy of the account as it is "
-         "now. It is a folder of encrypted files; keep it or delete it as "
-         "you like.", shell.text_width, size=11)
+    has_copy = accounts.account_exists(username)
+    if on_server:
+        note(wrap, "Signing in converts the account on the server now. A "
+             "device that still runs SecretSpace 3 cannot sync it after "
+             "that until it is updated.", shell.text_width, size=11,
+             pady=(0, 8))
+    if has_copy:
+        note(wrap, "To be able to go back, save a copy of the account as it "
+             "is on this PC now. It is a folder of encrypted files; keep it "
+             "or delete it as you like.", shell.text_width, size=11)
     saved = ctk.CTkLabel(wrap, text="", font=F(11), text_color=GREEN,
                          wraplength=shell.text_width, justify="left")
     saved.pack(anchor="w", pady=(8, 0))
@@ -70,8 +79,9 @@ def ask_conversion(app, username) -> bool:
                       width=100).pack(side="left")
     app._accent_button(shell.buttons, "Convert", convert,
                        width=120).pack(side="right")
-    app._ghost_button(shell.buttons, "Save a copy first…", save_copy,
-                      width=170).pack(side="right", padx=(0, 8))
+    if has_copy:
+        app._ghost_button(shell.buttons, "Save a copy first…", save_copy,
+                          width=170).pack(side="right", padx=(0, 8))
     top.bind("<Escape>", lambda e: top.destroy())
     app.root.wait_window(top)
     return out["go"]

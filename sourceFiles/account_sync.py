@@ -959,10 +959,17 @@ def convert_vaults(account: accounts.Account, server: AccountServer,
 # Signing in from a server
 # ---------------------------------------------------------------------------
 def sign_in(url: str, ca_file: str, username: str, password: str,
-            secret_key_text: str = None):
+            secret_key_text: str = None, convert: bool = False):
     """
     Bring an account from the server onto this device -- a new device, or
     this one after the master password was changed on another.
+
+    An account that no device has converted from SecretSpace 3 yet is
+    converted on the server by this sign-in -- which locks out every device
+    of it that still runs SecretSpace 3. So that only happens with
+    ``convert=True``; without it accounts.NeedsConversion is raised, the
+    details having been right and nothing having been changed, for the
+    caller to ask the user.
 
     ``secret_key_text`` comes from the Emergency Kit; it may be left out when
     this device already has the account and keeps its Secret Key. Returns
@@ -1006,6 +1013,9 @@ def sign_in(url: str, ca_file: str, username: str, password: str,
         except LoginFailed:
             raise LoginFailed("Wrong username, master password or Secret "
                               "Key.") from None
+        if not convert:
+            server.logout()
+            raise accounts.NeedsConversion(username)
     me = server.me()
     try:
         keyset = account_crypto.open_keyset(old_auk or auk, me["keyset"])
