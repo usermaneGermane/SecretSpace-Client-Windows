@@ -59,6 +59,10 @@ FEATURE_RECOVERY = "recovery"
 #: a key that comes with no signature is never taken (see check_key).
 FEATURE_SIGNED_KEYS = "signed-keys"
 
+#: ... and of one that holds accounts and vaults in the current format
+#: (SecretSpace Server 2.1.0). This version syncs with nothing older.
+FEATURE_FORMAT_2 = "format-2"
+
 
 class LoginFailed(SyncError):
     """The server did not take this username + password + Secret Key."""
@@ -103,10 +107,13 @@ class AccountServer(SyncClient):
     # -- calls -------------------------------------------------------------
     def check_api(self) -> None:
         health = self.health()
-        if API_VERSION not in (health.get("api") or [1]):
-            raise SyncError("This server cannot hold SecretSpace 3 accounts yet: "
-                            "it needs SecretSpace Server 2.0 or newer. (2.x "
-                            "vaults sync with it as before.)")
+        self._features = list(health.get("features") or [])
+        if API_VERSION not in (health.get("api") or [1]) or \
+                FEATURE_FORMAT_2 not in self._features:
+            raise SyncError("This server is too old for this SecretSpace: it "
+                            "needs SecretSpace Server 2.1.0 or newer. Update "
+                            "the server, then sync again. Nothing was "
+                            "changed; your vaults are on this PC.")
 
     def has_vaults(self) -> bool:
         """Can this server keep more than the personal vault? Asked once
@@ -264,7 +271,10 @@ def key_message(vault_hex: str, generation: int, member: str, wrapped_key: str,
                 signer: str) -> bytes:
     """What the signature on a wrapped key covers: which vault, which key
     generation, for whom, the wrapped key itself, and who vouches."""
-    return json.dumps(["PassMan3 vault key", vault_hex, int(generation), member,
+    # In the format the key itself is wrapped in: a member whose app is
+    # still SecretSpace 3 gets a key and a signature it can check.
+    label = account_crypto.wrap_format(wrapped_key).label("vault key")
+    return json.dumps([label.decode("ascii"), vault_hex, int(generation), member,
                        hashlib.sha256(wrapped_key.encode("ascii")).hexdigest(),
                        signer], separators=(",", ":"),
                       ensure_ascii=True).encode("ascii")
@@ -346,14 +356,34 @@ def logged_in(account: accounts.Account, server: AccountServer = None) -> Accoun
     server = server or server_for(account)
     if account.login_key is None:
         raise SyncError("Lock and unlock the account once, then sync.")
+    server.check_api()
     try:
-        server.login(account.username, account.login_key)
+        _login(server, account)
     except LoginFailed:
         raise LoginFailed(
             "The server did not accept this account's login. If the master "
             "password was changed on another device, use “Sign in from a "
             "server” on the login screen with the new password.") from None
     return server
+
+
+def _login(server: AccountServer, account: accounts.Account) -> None:
+    """
+    Log in. An account converted from SecretSpace 3 has a new login key; a
+    server that has not heard of the conversion still expects the old one.
+    Then log in with that, and hand over the converted keyset and the new
+    login key -- from here on the server holds the account in the current
+    format. If another device was first, the new key simply works.
+    """
+    try:
+        server.login(account.username, account.login_key)
+    except LoginFailed:
+        if account.old_login_key is None:
+            raise
+        server.login(account.username, account.old_login_key)
+        server.put_keyset(account.login_key, account.sealed_files()["keyset"])
+    if account.server_conversion_pending:
+        account.server_converted()
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +403,7 @@ def connect(account: accounts.Account, url: str, ca_file: str,
     server.check_api()
     outcome = "joined"
     try:
-        server.login(account.username, account.login_key)
+        _login(server, account)
     except LoginFailed:
         if not server_token:
             raise LoginFailed("The server has no such account yet. Enter the "
@@ -430,6 +460,10 @@ class AccountSync:
         self._fingerprint = None
         self._remote_log = []
         self._log_in = self._log_out = False
+        # The server still holds this vault as SecretSpace 3 wrote it, and
+        # the vault itself is in the current format (the personal vault of
+        # a converted account): it is uploaded again as it is here.
+        self._reformat = False
 
     def prepare(self, local_vault: dict):
         self.server = logged_in(self.account, self.server)
@@ -445,6 +479,8 @@ class AccountSync:
                 remote = self.file.decrypt(blob)
             except (CryptoError, ValueError) as e:
                 raise SyncError(f"The vault on the server cannot be read: {e}") from e
+            self._reformat = account_crypto.vault_header(blob)["format"] \
+                < self.file.fmt.number
         # The 2.x rules for the base (sync_client.SyncSession.prepare): none
         # when the server is empty, and none if it was agreed elsewhere.
         self.base_ignored = False
@@ -468,7 +504,8 @@ class AccountSync:
     def has_work(self) -> bool:
         return (self.result is not None and self.result.changed) \
             or self.base_ignored or self.first_push \
-            or self._log_in or (self._log_out and self.file.can_write)
+            or self._log_in \
+            or ((self._log_out or self._reformat) and self.file.can_write)
 
     def commit(self, local_vault: dict, choices=None) -> dict:
         if self.result is None:
@@ -486,10 +523,11 @@ class AccountSync:
         self.file.save(merged)
         # A reader only ever takes: the server would refuse its upload, and
         # it has nothing of its own to give.
-        if (self.result.needs_push or self.first_push or self._log_out) \
-                and self.file.can_write:
+        if (self.result.needs_push or self.first_push or self._log_out
+                or self._reformat) and self.file.can_write:
             self.revision = self.server.put_vault(
-                self.file.hex, self.file.encrypt(merged), self.revision)
+                self.file.hex, self.file.encrypt_for_server(merged),
+                self.revision)
         self.file.save_base(merged, sync_client.base_origin_for(
             self.server.url, self.revision))
         return merged
@@ -772,7 +810,7 @@ def share_vault(account: accounts.Account, server: AccountServer, vault_id: str,
         raise SyncError("The personal vault cannot be shared; make another "
                         "vault for that.")
     wrapped = account_crypto.wrap_key(keys["public_key"], file._key, file.id,
-                                      keys["username"])
+                                      keys["username"], file.fmt)
     done = server.put_member(vault_id, keys["username"], role, wrapped,
                              sign_key(account, vault_id, file.generation,
                                       keys["username"], wrapped))
@@ -829,6 +867,11 @@ def change_key(account: accounts.Account, server: AccountServer, vault_id: str,
     if missing:
         raise SyncError("Not a member any more: " + ", ".join(missing) + ".")
     staying = [name for name in names if name not in remove]
+    # The vault moves to the current format with its new key when every
+    # member who stays has converted their account; otherwise it keeps the
+    # old one, which their apps can still read.
+    fmt = account_crypto.NOW if members_converted(listing, staying) \
+        else account_crypto.OLD
     new_key = account_crypto.new_vault_key()
     generation = file.generation + 1
     wrapped = {}
@@ -845,15 +888,18 @@ def change_key(account: accounts.Account, server: AccountServer, vault_id: str,
             if keys["status"] == "new":
                 trust_contact(account, keys, False)
             public = keys["public_key"]
-        wrapped[name] = account_crypto.wrap_key(public, new_key, file.id, name)
+        wrapped[name] = account_crypto.wrap_key(public, new_key, file.id, name,
+                                                fmt)
     view = server.rotate(vault_id, {
         "generation": generation, "remove": list(remove),
         "wrapped_keys": wrapped,
         "key_sigs": {name: sign_key(account, vault_id, generation, name, key)
                      for name, key in wrapped.items()},
-        "name": account_crypto.seal_vault_name(new_key, file.id, file.name),
+        "name": account_crypto.seal_vault_name(new_key, file.id, file.name,
+                                               fmt),
         "blob": account_crypto.encrypt_vault(new_key, file.id, generation,
-                                             vault.validate_vault(dict(merged))),
+                                             vault.validate_vault(dict(merged)),
+                                             fmt),
         "revision": sync.revision})
     # The server has it; now this device. (If this is interrupted, the next
     # sync finds the new generation and takes the key from the server.)
@@ -863,6 +909,50 @@ def change_key(account: accounts.Account, server: AccountServer, vault_id: str,
         server.url, int(view.get("revision", sync.revision + 1))))
     account.mark_vault(vault_id, members=len(staying))
     return merged
+
+
+def members_converted(listing: dict, names=None) -> bool:
+    """Has every member (or every one of ``names``) of a vault, as the
+    server lists them, an account in the current format?"""
+    members = [m for m in listing.get("members") or []
+               if names is None or m.get("username", "") in names]
+    return bool(members) and all(
+        account_crypto.format_of(m.get("format")) is account_crypto.NOW
+        for m in members)
+
+
+def convert_vaults(account: accounts.Account, server: AccountServer,
+                   local_vaults: dict) -> dict:
+    """
+    Move every vault this account owns from the format of SecretSpace 3 to
+    the current one, where that is possible now: when every member's
+    account is converted. It is done by changing the vault's key
+    (:func:`change_key` with nobody removed), which writes the key for each
+    member, its signature, the name and the vault itself anew in one step.
+
+    ``local_vaults`` maps vault id to its data on this device. Returns
+    {vault id: its data afterwards} for the vaults that were converted. A
+    vault that cannot be converted yet -- a member has not updated, or it
+    needs a sync decision first -- is left for the next sync; nothing here
+    is an error the user must act on.
+    """
+    done = {}
+    for vault_id in account.vault_ids():
+        if vault_id == account.personal_id or vault_id not in local_vaults:
+            continue
+        record = account.vault_record(vault_id)
+        if account.vault_format(vault_id) is account_crypto.NOW \
+                or not record.get("on_server") or record.get("gone_from_server") \
+                or account.vault_role(vault_id) != accounts.ROLE_OWNER:
+            continue
+        try:
+            if not members_converted(server.members(vault_id)):
+                continue
+            done[vault_id] = change_key(account, server, vault_id,
+                                        local_vaults[vault_id])
+        except (SyncError, CryptoError):
+            continue
+    return done
 
 
 # ---------------------------------------------------------------------------
@@ -895,24 +985,41 @@ def sign_in(url: str, ca_file: str, username: str, password: str,
     kdf = pre["kdf"]
     try:
         salt = base64.b64decode(kdf["salt"])
+        cost = (int(kdf["passes"]), int(kdf["memory_kib"]), int(kdf["lanes"]))
         auk, login = account_crypto.derive_account_keys(
-            password, secret, username, salt, int(kdf["passes"]),
-            int(kdf["memory_kib"]), int(kdf["lanes"]))
+            password, secret, username, salt, *cost)
     except (KeyError, TypeError, ValueError) as e:
         if isinstance(e, CryptoError):
             raise
         raise SyncError("The server sent sign-in details this version cannot "
                         "use.") from e
+    old_auk = None
     try:
         server.login(username, login)
     except LoginFailed:
-        raise LoginFailed("Wrong username, master password or Secret Key.") from None
+        # The same password and Secret Key give another login key in the
+        # format of SecretSpace 3: an account no device has converted yet.
+        old_auk, old_login = account_crypto.derive_account_keys(
+            password, secret, username, salt, *cost, account_crypto.OLD)
+        try:
+            server.login(username, old_login)
+        except LoginFailed:
+            raise LoginFailed("Wrong username, master password or Secret "
+                              "Key.") from None
     me = server.me()
     try:
-        keyset = account_crypto.open_keyset(auk, me["keyset"])
+        keyset = account_crypto.open_keyset(old_auk or auk, me["keyset"])
     except CryptoError:
         raise SyncError("The server's copy of the account does not open with "
                         "these details. Nothing was changed.") from None
+    if old_auk is not None:
+        # Converted here and now: the same keys, sealed in the current
+        # format with the same salt, and the server told at once.
+        sealed = account_crypto.seal_keyset(auk, keyset, salt,
+                                            account_crypto.KDF_ARGON2ID, *cost)
+        server.put_keyset(login, sealed)
+        me = dict(me)
+        me["keyset"] = sealed
 
     had_it = accounts.account_exists(username)
     account = accounts.adopt_from_server(

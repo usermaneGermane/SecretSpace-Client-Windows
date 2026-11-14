@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-11-14T09:12:39Z",
+  "fingerprints_seen": {},
+  "format": 1,
+  "mode": "personal",
+  "personal_vault": "3497bc4903532ca15aee33a5357f60a0",
+  "public_key": "QUSTLe0bMMIrZ+uDAdqFGnvMj5wx9yTmN2JjLqh/6xk=",
+  "secret_key": {
+    "lanes": 1,
+    "memory_kib": 64,
+    "nonce": "cz/Q9EvBNEzbw/6G",
+    "passes": 1,
+    "salt": "th4oQJjgrMhfCZbCZy/vyQ==",
+    "scheme": "password",
+    "sealed": "Mjh/ZZ3f+McGUrGlSuuaJGUHlggIVPChZiM+x/AewAM="
+  },
+  "server": null,
+  "username": "carol",
+  "vaults": {
+    "73399c6b749a6bd0920c5a6cffbd3d01": {
+      "created_at": "2026-11-14T09:12:40Z",
+      "key_signer": "carol",
+      "name": "Box",
+      "on_server": false,
+      "wrapped_key": "AVbEUKLSchIo4Bx8zFyXF5BNrZQaERkkmrqSEWeEalcrqd2EMDHbqq3UVKDRzX5a4NTzMpNbPIaqUW0XFfyMxja2p4q9n9KiAB84FrFWQFHKR2fAV2fAwraIFN2g"
+    }
+  }
+}

@@ -1,19 +1,24 @@
 """
-SecretSpace 3.0 accounts on this device. Since phase 2 an account may also
-live on a sync server (account_sync.py); this module stays files only.
+SecretSpace accounts on this device. An account may also live on a sync
+server (account_sync.py); this module stays files only.
 
 An account replaces the 2.x "one vault file per user". It is a folder::
 
     <home>/accounts/<username>/
-        account.json        nothing secret: mode, public key, the personal
-                            vault's id, the Secret Key as this device keeps
-                            it (secret_store), fingerprints seen
-        keyset.pmk          the keyset, under master password + Secret Key
-        recovery.pmk        the same keyset, under the 12-word phrase
-        vaults/<id>.pmv3    a vault (+ .bak, the previous save, + .base,
+        account.json        nothing secret: format, mode, public key, the
+                            personal vault's id, the Secret Key as this
+                            device keeps it (secret_store), fingerprints seen
+        keyset.ssk          the keyset, under master password + Secret Key
+        recovery.ssk        the same keyset, under the 12-word phrase
+        vaults/<id>.ssv     a vault (+ .bak, the previous save, + .base,
                             the state last agreed with the server): the
-                            personal one, and since phase 3 any further
-                            vaults the account has (account.json "vaults")
+                            personal one, and any further vaults the account
+                            has (account.json "vaults")
+
+That is format 2. An account made by SecretSpace 3 is format 1: the same
+folder with files named after the project's old name and sealed with its
+old labels (legacy_names). It is opened once more the old way and written
+again in the current format -- ``convert`` -- and never used unconverted.
 
 ``<home>`` is the folder that holds the 2.x ``vault`` folder (beside the app
 for a lab copy, %APPDATA%\\SecretSpace when installed). 2.x vault files are only
@@ -27,17 +32,19 @@ import os
 import shutil
 
 import account_crypto
+import legacy_names
 import secret_store
 import vault
 from account_crypto import CryptoError
 
 ACCOUNTS_DIR_NAME = "accounts"
 ACCOUNT_FILE = "account.json"
-KEYSET_FILE = "keyset.pmk"
-RECOVERY_FILE = "recovery.pmk"
+KEYSET_FILE = "keyset.ssk"
+RECOVERY_FILE = "recovery.ssk"
 VAULTS_DIR = "vaults"
-VAULT_SUFFIX = ".pmv3"
-ACCOUNT_FORMAT = 1
+VAULT_SUFFIX = ".ssv"
+ACCOUNT_FORMAT = account_crypto.NOW.number
+OLD_ACCOUNT_FORMAT = account_crypto.OLD.number
 MODE_PERSONAL = "personal"
 
 #: What the personal vault is called wherever vaults are listed. It has no
@@ -47,6 +54,14 @@ PERSONAL_NAME = "Personal"
 #: What a member of a vault may do (the server enforces it; the app follows).
 ROLE_OWNER, ROLE_EDITOR, ROLE_READER = "owner", "editor", "reader"
 ROLES = (ROLE_OWNER, ROLE_EDITOR, ROLE_READER)
+
+
+class NeedsConversion(Exception):
+    """
+    The account was made by SecretSpace 3 and is still in its format. The
+    password (and Secret Key) given were right; ask the user, then call
+    :func:`convert`. Nothing has been changed.
+    """
 
 
 class SecretKeyNeeded(Exception):
@@ -61,7 +76,7 @@ class SecretKeyNeeded(Exception):
 # Where things are
 # ---------------------------------------------------------------------------
 def accounts_dir() -> str:
-    """Beside the 2.x vault folder, so PASSMAN_DATA_DIR moves both."""
+    """Beside the 2.x vault folder, so SECRETSPACE_DATA_DIR moves both."""
     return os.path.join(os.path.dirname(os.path.abspath(vault.get_data_dir())),
                         ACCOUNTS_DIR_NAME)
 
@@ -105,7 +120,8 @@ def _read_text(path: str) -> str:
         return f.read().strip()
 
 
-def _read_info(username: str) -> dict:
+def _read_any_info(username: str) -> dict:
+    """account.json in either format (see :func:`account_format`)."""
     try:
         with open(_path(username, ACCOUNT_FILE), "r", encoding="utf-8") as f:
             info = json.load(f)
@@ -114,10 +130,24 @@ def _read_info(username: str) -> dict:
                                 "PC.") from None
     except (OSError, ValueError):
         raise ValueError(f"The account file of “{username}” is damaged.") from None
-    if not isinstance(info, dict) or info.get("format") != ACCOUNT_FORMAT:
-        raise ValueError(f"The account “{username}” was made by another "
-                         "SecretSpace version.")
+    if not isinstance(info, dict) or \
+            info.get("format") not in (ACCOUNT_FORMAT, OLD_ACCOUNT_FORMAT):
+        raise ValueError(f"The account “{username}” was made by a newer "
+                         "SecretSpace; update this one.")
     return info
+
+
+def _read_info(username: str) -> dict:
+    """account.json of an account in the current format."""
+    info = _read_any_info(username)
+    if info["format"] != ACCOUNT_FORMAT:
+        raise NeedsConversion(username)
+    return info
+
+
+def account_format(username: str) -> int:
+    """2, or 1 for an account from SecretSpace 3 that is not converted yet."""
+    return _read_any_info(username)["format"]
 
 
 def _write_info(username: str, info: dict) -> None:
@@ -150,7 +180,12 @@ class VaultFile:
     """
 
     def __init__(self, username: str, vault_id: bytes, key: bytes, name: str,
-                 personal: bool, generation: int = 0, role: str = ROLE_OWNER):
+                 personal: bool, generation: int = 0, role: str = ROLE_OWNER,
+                 fmt: account_crypto.Format = account_crypto.NOW):
+        # The format the vault has on the server and for its other members
+        # (see Account.vault_format). The file on this device is always in
+        # the current one.
+        self.fmt = fmt
         self.id = vault_id
         self.hex = vault_id.hex()
         self.name = name
@@ -178,12 +213,18 @@ class VaultFile:
         return self.role != ROLE_READER
 
     def encrypt(self, data: dict) -> str:
-        """``data`` as a PMV3 blob under this vault's key."""
+        """``data`` under this vault's key, as this device stores it."""
         return account_crypto.encrypt_vault(self._key, self.id, self.generation,
                                             vault.validate_vault(data))
 
+    def encrypt_for_server(self, data: dict) -> str:
+        """``data`` under this vault's key, as the server and the other
+        members' apps expect it: in the vault's own format."""
+        return account_crypto.encrypt_vault(self._key, self.id, self.generation,
+                                            vault.validate_vault(data), self.fmt)
+
     def decrypt(self, blob: str) -> dict:
-        """A PMV3 blob of this vault (it must name this vault)."""
+        """A blob of this vault, in either format (it must name this vault)."""
         return vault.validate_vault(account_crypto.decrypt_vault(
             self._key, blob, self.id))
 
@@ -225,7 +266,8 @@ class VaultFile:
 
     def sealed_name(self) -> str:
         """The name as the server keeps it (it cannot read it)."""
-        return account_crypto.seal_vault_name(self._key, self.id, self.name)
+        return account_crypto.seal_vault_name(self._key, self.id, self.name,
+                                              self.fmt)
 
     def open_name(self, sealed: str) -> str:
         return account_crypto.open_vault_name(self._key, self.id, sealed)
@@ -245,7 +287,7 @@ class Account:
     """An unlocked account: its keys in memory, its files on disk."""
 
     def __init__(self, username: str, info: dict, keyset: dict, secret: bytes,
-                 login_key: bytes = None):
+                 login_key: bytes = None, old_login_key: bytes = None):
         self.username = username
         self.info = info
         self.keyset = keyset
@@ -254,6 +296,9 @@ class Account:
         # unlock from the password and the Secret Key, so it is kept only in
         # memory, like the keys it travels with.
         self.login_key = login_key
+        # Only while a converted account's server has not been told yet
+        # (``server_conversion_pending``): what that server still expects.
+        self.old_login_key = old_login_key
         self.vault_id = bytes.fromhex(info["personal_vault"])
         self._vault_key = account_crypto._unb64(keyset["personal_vault_key"],
                                                 "vault key")
@@ -319,6 +364,46 @@ class Account:
         """For the Emergency Kit again (Settings)."""
         return account_crypto.format_secret_key(self._secret)
 
+    # -- after a conversion from SecretSpace 3 -------------------------------------
+    @property
+    def server_conversion_pending(self) -> bool:
+        """The account was converted on this device and its server may still
+        hold the old keyset and login key."""
+        return bool((self.info.get("convert") or {}).get("server"))
+
+    def server_converted(self) -> None:
+        """The server holds the converted account (told by this device, or
+        found so because another device was first)."""
+        if "convert" in self.info:
+            info = dict(self.info)
+            del info["convert"]
+            _write_info(self.username, info)
+            self.info = info
+        self.old_login_key = None
+
+    @property
+    def recovery_converted(self) -> bool:
+        """Is the recovery copy in the current format? (False until the 12
+        words have been typed once after a conversion.)"""
+        try:
+            sealed = _read_text(_path(self.username, RECOVERY_FILE))
+            return account_crypto.keyset_format(sealed) is account_crypto.NOW
+        except (CryptoError, OSError):
+            return True                       # nothing here to convert
+
+    def convert_recovery(self, phrase: str) -> str:
+        """
+        The recovery copy sealed again in the current format, under the SAME
+        12 words -- which only the user has, so this cannot be part of
+        :func:`convert`. Returns the new copy (for the server). CryptoError
+        when the words are not this account's.
+        """
+        sealed = _read_text(_path(self.username, RECOVERY_FILE))
+        account_crypto.recover_account(self.username, phrase, sealed)
+        fresh = account_crypto.seal_recovery(phrase, self.username, self.keyset)
+        self.set_recovery(fresh)
+        return fresh
+
     # -- its vaults -----------------------------------------------------------
     @property
     def personal_id(self) -> str:
@@ -351,6 +436,23 @@ class Account:
     def can_write(self, vault_id: str) -> bool:
         return self.vault_role(vault_id) != ROLE_READER
 
+    def vault_format(self, vault_id: str = None) -> account_crypto.Format:
+        """
+        The format a vault has for the server and its other members. The
+        personal vault is the account's own, so the current one. A further
+        vault has the format its key is wrapped in: a vault that came from
+        SecretSpace 3 keeps the old one -- so a member who has not updated
+        can still open it -- until an owner changes its key, which happens
+        by itself once every member has converted (account_sync).
+        """
+        if vault_id is None or vault_id == self.personal_id:
+            return account_crypto.NOW
+        wrapped = self._extra().get(vault_id, {}).get("wrapped_key")
+        try:
+            return account_crypto.wrap_format(wrapped)
+        except CryptoError:
+            return account_crypto.NOW
+
     def is_shared(self, vault_id: str) -> bool:
         """Is anyone else in this vault (as far as the last sync knew)?"""
         record = self._extra().get(vault_id, {})
@@ -374,7 +476,7 @@ class Account:
         return VaultFile(self.username, bytes.fromhex(vault_id), key,
                          record.get("name", ""), False,
                          int(record.get("key_generation", 0) or 0),
-                         self.vault_role(vault_id))
+                         self.vault_role(vault_id), self.vault_format(vault_id))
 
     def _name_taken(self, name: str, except_id: str = None) -> bool:
         wanted = name.lower()
@@ -591,7 +693,7 @@ class Account:
     def change_password(self, new_password: str, before_write=None) -> None:
         """
         The same keyset under a new password, so the vault file is not
-        touched. The old keyset.pmk is replaced, not kept: a .bak of it would
+        touched. The old keyset file is replaced, not kept: a .bak of it would
         still open with the old password.
 
         ``before_write(sealed_keyset, login_key)`` runs before anything here
@@ -711,8 +813,10 @@ def unlock(username: str, password: str, secret_key_text: str = None) -> Account
     is stored (secret_store) once it has opened the account, so it is asked
     for once per device.
     """
-    info = _read_info(username)
-    sealed = _read_text(_path(username, KEYSET_FILE))
+    info = _read_any_info(username)
+    old = info["format"] == OLD_ACCOUNT_FORMAT
+    sealed = _read_text(_path(username, legacy_names.KEYSET_FILE if old
+                              else KEYSET_FILE))
     typed = None
     if secret_key_text:
         typed = account_crypto.parse_secret_key(secret_key_text)
@@ -725,11 +829,204 @@ def unlock(username: str, password: str, secret_key_text: str = None) -> Account
             raise SecretKeyNeeded(username) from None
     keyset, login = account_crypto.unlock_account(username, password, secret,
                                                   sealed)
+    if old:
+        # Right password, right Secret Key -- and an account this version
+        # does not use as it is. Nothing is written until the user agrees.
+        raise NeedsConversion(username)
+    _remove_old_files(username)
     if typed is not None:
         info = dict(info)
         info["secret_key"] = secret_store.protect(typed, username, password)
         _write_info(username, info)
-    return Account(username, info, keyset, secret, login)
+    old_login = None
+    if (info.get("convert") or {}).get("server"):
+        old_login = account_crypto.login_key_for(username, password, secret,
+                                                 sealed, account_crypto.OLD)
+    return Account(username, info, keyset, secret, login, old_login)
+
+
+# ---------------------------------------------------------------------------
+# An account from SecretSpace 3
+# ---------------------------------------------------------------------------
+def _old_vault_path(username: str, vault_id: str) -> str:
+    return os.path.join(account_dir(username), VAULTS_DIR,
+                        vault_id + legacy_names.VAULT_SUFFIX)
+
+
+def _new_vault_path(username: str, vault_id: str) -> str:
+    return os.path.join(account_dir(username), VAULTS_DIR,
+                        vault_id + VAULT_SUFFIX)
+
+
+def _old_files(username: str) -> list:
+    """Every file of the old format in an account's folder."""
+    folder = account_dir(username)
+    found = [os.path.join(folder, name) for name in
+             (legacy_names.KEYSET_FILE, legacy_names.RECOVERY_FILE)]
+    try:
+        names = os.listdir(os.path.join(folder, VAULTS_DIR))
+    except OSError:
+        names = []
+    found += [os.path.join(folder, VAULTS_DIR, name) for name in names
+              if name.endswith((legacy_names.VAULT_SUFFIX,
+                                legacy_names.VAULT_SUFFIX + vault.BACKUP_SUFFIX,
+                                legacy_names.VAULT_SUFFIX + vault.BASE_SUFFIX))]
+    return [path for path in found if os.path.isfile(path)]
+
+
+def _remove_old_files(username: str) -> None:
+    """What a conversion that was interrupted after its last write left."""
+    for path in _old_files(username):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def copy_account_folder(username: str, destination: str) -> str:
+    """
+    A copy of the account's folder as it is now, in ``destination`` -- what
+    "Save a copy first" does before a conversion. The user chose to make it
+    and where, so it is theirs to keep or delete. Returns the copy's path.
+    """
+    target = os.path.join(destination, f"{username} (before conversion)")
+    if os.path.exists(target):
+        raise FileExistsError(f"There is already a folder {target}.")
+    shutil.copytree(account_dir(username), target)
+    return target
+
+
+def convert(username: str, password: str, secret_key_text: str = None) -> Account:
+    """
+    Write an account from SecretSpace 3 again in the current format, and
+    open it. Everything is first opened the old way with the password and
+    the Secret Key; nothing of the old account is touched until the new
+    files are complete:
+
+    1. the keyset, sealed again (same salt, so every device of the account
+       arrives at the same new login key);
+    2. the Secret Key, stored for this device the current way;
+    3. every vault file and its sync base, encrypted again;
+    4. the key of every vault that is on no server, wrapped again;
+    5. ``account.json`` with ``"format": 2`` -- from here on the account is
+       converted; then the old files are deleted.
+
+    Stopped before 5, the old account is whole and this simply runs again.
+    Stopped after it, the next unlock removes what is left of the old files.
+
+    The recovery copy is kept as it is: it opens only with the 12 words
+    (see Account.convert_recovery). A server is told at the next sync
+    (account_sync).
+    """
+    info = _read_any_info(username)
+    if info["format"] != OLD_ACCOUNT_FORMAT:
+        raise ValueError(f"The account “{username}” is already converted.")
+    folder = account_dir(username)
+    if secret_key_text:
+        secret = account_crypto.parse_secret_key(secret_key_text)
+    else:
+        try:
+            secret = secret_store.unprotect(info.get("secret_key"), username,
+                                            password)
+        except secret_store.Unavailable:
+            raise SecretKeyNeeded(username) from None
+    made = account_crypto.convert_keyset(
+        username, password, secret,
+        _read_text(os.path.join(folder, legacy_names.KEYSET_FILE)))
+    account = _rewrite_old_account(username, info, made["keyset"], secret,
+                                   password, made["sealed_keyset"])
+    account.login_key = made["login_key"]
+    if info.get("server"):
+        account.old_login_key = made["old_login_key"]
+    return account
+
+
+def _rewrite_old_account(username: str, info: dict, keyset: dict, secret: bytes,
+                         password: str, sealed_keyset: str,
+                         sealed_recovery: str = None) -> Account:
+    """
+    Steps 2 to 5 of :func:`convert`, for an old account whose keyset is
+    already open: the conversion itself, and also a recovery or a sign-in
+    from a server on a device that still holds the account the old way
+    (they bring ``sealed_keyset`` -- and a new ``sealed_recovery`` -- with
+    them). The account comes back without login keys; the caller has them.
+    """
+    folder = account_dir(username)
+    public = account_crypto.public_key_of(keyset)
+
+    # Every vault, opened with its key as the old account holds it.
+    extra = dict(info.get("vaults") or {})
+    keys = {info["personal_vault"]: account_crypto._unb64(
+        keyset["personal_vault_key"], "vault key")}
+    for vault_id, record in extra.items():
+        keys[vault_id] = account_crypto.unwrap_key(
+            keyset, record["wrapped_key"], bytes.fromhex(vault_id), username)
+
+    written = []
+    try:
+        for vault_id, key in keys.items():
+            raw_id = bytes.fromhex(vault_id)
+            on_server = bool(extra.get(vault_id, {}).get("on_server")) or (
+                vault_id == info["personal_vault"] and bool(info.get("server")))
+            for suffix in ("", vault.BASE_SUFFIX):
+                source = _old_vault_path(username, vault_id) + suffix
+                if not os.path.isfile(source):
+                    continue
+                try:
+                    blob = _read_text(source)
+                    data = account_crypto.decrypt_vault(key, blob, raw_id)
+                except (CryptoError, OSError, ValueError):
+                    # A sync base is only an aid to merging, and a vault the
+                    # server has is fetched again; anything else must not be
+                    # lost by converting.
+                    if suffix or on_server:
+                        continue
+                    raise CryptoError(
+                        "A vault of this account could not be read, so "
+                        "nothing was converted. Open the account with "
+                        "SecretSpace 3 and check its vaults.") from None
+                generation = account_crypto.vault_header(blob)["key_generation"]
+                target = _new_vault_path(username, vault_id) + suffix
+                _write_text(target, account_crypto.encrypt_vault(
+                    key, raw_id, generation, data))
+                written.append(target)
+
+        fresh = dict(info)
+        fresh["format"] = ACCOUNT_FORMAT
+        fresh["converted_at"] = vault.utc_now()
+        fresh["secret_key"] = secret_store.protect(secret, username, password)
+        vaults = {}
+        for vault_id, record in extra.items():
+            record = dict(record)
+            if not record.get("on_server"):
+                # No server and nobody else holds this key the old way.
+                record["wrapped_key"] = account_crypto.wrap_key(
+                    public, keys[vault_id], bytes.fromhex(vault_id), username)
+            vaults[vault_id] = record
+        if extra:
+            fresh["vaults"] = vaults
+        if info.get("server"):
+            fresh["convert"] = {"server": True}
+
+        recovery = os.path.join(folder, legacy_names.RECOVERY_FILE)
+        if sealed_recovery is not None or os.path.isfile(recovery):
+            target = os.path.join(folder, RECOVERY_FILE)
+            _write_text(target, sealed_recovery if sealed_recovery is not None
+                        else _read_text(recovery))
+            written.append(target)
+        target = os.path.join(folder, KEYSET_FILE)
+        _write_text(target, sealed_keyset)
+        written.append(target)
+        _write_info(username, fresh)          # from here on it is converted
+    except BaseException:
+        for path in written:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        raise
+    _remove_old_files(username)
+    return Account(username, fresh, keyset, secret)
 
 
 # ---------------------------------------------------------------------------
@@ -741,7 +1038,7 @@ def stored_secret(username: str, password: str) -> bytes:
     also when it is sealed under a password that is no longer the account's
     (changed on another device), since then only the Emergency Kit helps.
     """
-    info = _read_info(username)
+    info = _read_any_info(username)
     try:
         return secret_store.unprotect(info.get("secret_key"), username, password)
     except (secret_store.Unavailable, CryptoError):
@@ -760,15 +1057,25 @@ def adopt_from_server(username: str, me: dict, keyset: dict, secret: bytes,
     them); only its keys and the Secret Key's protection are replaced. One
     with the same name but another personal vault is someone else's, and is
     left alone.
+
+    The server holds the account in the current format by now (account_sync
+    converts it during the sign-in if no device had). A copy of it on this
+    PC that is still as SecretSpace 3 left it is converted here.
     """
     vault_id = me["personal_vault"]
     folder = account_dir(username)
     if account_exists(username):
-        info = _read_info(username)
+        info = _read_any_info(username)
         if info.get("personal_vault") != vault_id:
             raise FileExistsError(
                 f"This PC already has a different account called "
                 f"\u201c{username}\u201d. Delete or rename it first.")
+        if info["format"] == OLD_ACCOUNT_FORMAT:
+            # This PC still holds it as SecretSpace 3 left it: its vault
+            # files are converted with the keys that just came.
+            _rewrite_old_account(username, info, keyset, secret, password,
+                                 me["keyset"], me["recovery"])
+            info = _read_info(username)
         info = dict(info)
     elif os.path.exists(folder):
         raise FileExistsError(
@@ -783,6 +1090,7 @@ def adopt_from_server(username: str, me: dict, keyset: dict, secret: bytes,
                 "vaults": {}}
     info.update({"public_key": me["public_key"], "server": server,
                  "secret_key": secret_store.protect(secret, username, password)})
+    info.pop("convert", None)       # the server is in step: nothing to tell
     _write_text(os.path.join(folder, KEYSET_FILE), me["keyset"])
     _write_text(os.path.join(folder, RECOVERY_FILE), me["recovery"])
     _write_info(username, info)                 # last: it makes it an account
@@ -790,14 +1098,22 @@ def adopt_from_server(username: str, me: dict, keyset: dict, secret: bytes,
 
 
 def replace_keys(username: str, sealed_keyset: str, sealed_recovery: str,
-                 secret: bytes, password: str) -> None:
+                 secret: bytes, password: str, keyset: dict = None) -> None:
     """
     After a recovery on a PC that has the account and no server: the same
     keys under the new password and the new phrase, and the Secret Key
     stored for the new password. The vault files are not touched -- the
-    keys that open them have not changed.
+    keys that open them have not changed. (An account still as SecretSpace 3
+    left it is converted on the way; that needs its open ``keyset``.)
     """
-    info = dict(_read_info(username))
+    info = _read_any_info(username)
+    if info["format"] == OLD_ACCOUNT_FORMAT:
+        if keyset is None:
+            raise NeedsConversion(username)
+        _rewrite_old_account(username, info, keyset, secret, password,
+                             sealed_keyset, sealed_recovery)
+        return
+    info = dict(info)
     info["secret_key"] = secret_store.protect(secret, username, password)
     _write_text(_path(username, KEYSET_FILE), sealed_keyset)
     _write_text(_path(username, RECOVERY_FILE), sealed_recovery)
@@ -808,10 +1124,17 @@ def check_recovery_phrase(username: str, phrase: str) -> bool:
     """Does this phrase open the account's recovery copy? (Phase 5 recovers.)"""
     try:
         account_crypto.recover_account(username, phrase,
-                                       _read_text(_path(username, RECOVERY_FILE)))
+                                       read_recovery_copy(username))
         return True
     except (CryptoError, OSError):
         return False
+
+
+def read_recovery_copy(username: str) -> str:
+    """The recovery copy on this device, whichever format the account is in."""
+    name = legacy_names.RECOVERY_FILE \
+        if account_format(username) == OLD_ACCOUNT_FORMAT else RECOVERY_FILE
+    return _read_text(_path(username, name))
 
 
 def delete_account(username: str) -> None:

@@ -1,5 +1,4 @@
 This file was put here by SecretSpace-Setup.exe. While it is next to
 SecretSpace.exe, SecretSpace keeps your vaults and settings in
-%APPDATA%\SecretSpace (or %APPDATA%\PassMan, if that is where they
-already are) instead of in this folder, so upgrading or
+%APPDATA%\SecretSpace instead of in this folder, so upgrading or
 uninstalling the program never touches them.

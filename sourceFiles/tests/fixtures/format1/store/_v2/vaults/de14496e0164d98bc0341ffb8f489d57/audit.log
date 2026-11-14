@@ -1,0 +1,4 @@
+{"address": "127.0.0.1", "at": "2026-11-14T09:12:34Z", "by": "alice", "event": "vault_created"}
+{"address": "127.0.0.1", "at": "2026-11-14T09:12:35Z", "by": "alice", "event": "upload", "revision": 1}
+{"address": "127.0.0.1", "at": "2026-11-14T09:12:37Z", "by": "alice", "event": "member_added", "member": "bob", "role": "editor"}
+{"address": "127.0.0.1", "at": "2026-11-14T09:12:39Z", "by": "bob", "event": "upload", "revision": 2}

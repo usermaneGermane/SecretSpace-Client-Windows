@@ -29,7 +29,7 @@ from account_sync import KeyNotTrusted
 from sync_client import SyncError
 
 from test_account_sync import (PW, TOKEN, alice, cheap_argon2, device,  # noqa: F401
-                               new_account, passman_server, server)
+                               new_account, secretspace_server, server)
 from test_account_vaults import sync_all, sites
 from test_account_sharing import add_entry, share, rotate, with_server
 

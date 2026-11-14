@@ -51,10 +51,10 @@ def test_files_and_layout(data_dir):
     new, acc = make()
     folder = os.path.join(os.path.dirname(str(data_dir)), "accounts", "alice")
     assert accounts.account_dir("alice") == folder
-    assert sorted(os.listdir(folder)) == ["account.json", "keyset.pmk",
-                                          "recovery.pmk", "vaults"]
+    assert sorted(os.listdir(folder)) == ["account.json", "keyset.ssk",
+                                          "recovery.ssk", "vaults"]
     assert os.listdir(os.path.join(folder, "vaults")) == [
-        acc.info["personal_vault"] + ".pmv3"]
+        acc.info["personal_vault"] + ".ssv"]
     assert accounts.list_accounts() == ["alice"]
     assert acc.load_vault() == {"accounts": []}
 
@@ -78,7 +78,7 @@ def test_nothing_is_written_until_save():
     new = accounts.prepare_account("alice", PW)
     assert accounts.list_accounts() == []
     assert not os.path.exists(accounts.accounts_dir())
-    assert new.secret_key_text.startswith("A3-")
+    assert new.secret_key_text.startswith("A4-")
     assert len(new.recovery_phrase.split()) == 12
     new.save()
     assert accounts.list_accounts() == ["alice"]
@@ -227,7 +227,7 @@ def test_newer_account_format_refused():
     info = json.load(open(path, encoding="utf-8"))
     info["format"] = 99
     json.dump(info, open(path, "w", encoding="utf-8"))
-    with pytest.raises(ValueError, match="another SecretSpace version"):
+    with pytest.raises(ValueError, match="newer SecretSpace"):
         accounts.unlock("alice", PW)
 
 
@@ -303,8 +303,8 @@ def test_change_password_leaves_no_old_keyset_copy():
     new, acc = make()
     acc.change_password("new one here")
     folder = accounts.account_dir("alice")
-    assert sorted(os.listdir(folder)) == ["account.json", "keyset.pmk",
-                                          "recovery.pmk", "vaults"]
+    assert sorted(os.listdir(folder)) == ["account.json", "keyset.ssk",
+                                          "recovery.ssk", "vaults"]
 
 
 def test_change_password_then_new_device(scheme):
@@ -377,7 +377,7 @@ def test_account_folders_are_private():
     for d in (accounts.accounts_dir(), accounts.account_dir("alice"),
               os.path.dirname(acc.vault_path)):
         assert os.stat(d).st_mode & 0o777 == 0o700, d
-    for name in ("account.json", "keyset.pmk", "recovery.pmk"):
+    for name in ("account.json", "keyset.ssk", "recovery.ssk"):
         path = os.path.join(accounts.account_dir("alice"), name)
         assert os.stat(path).st_mode & 0o777 == 0o600, name
 

@@ -292,9 +292,9 @@ class SyncClient:
         revisions -- used after a password change."""
         headers = {"If-Match": str(revision)}
         if key_generation is not None:
-            headers["X-PassMan-Key-Generation"] = str(int(key_generation))
+            headers["X-SecretSpace-Key-Generation"] = str(int(key_generation))
         if drop_history:
-            headers["X-PassMan-Drop-History"] = "1"
+            headers["X-SecretSpace-Drop-History"] = "1"
         return self._request(
             "PUT", f"/vault/{username}", body={"blob": blob.decode("ascii")},
             headers=headers)

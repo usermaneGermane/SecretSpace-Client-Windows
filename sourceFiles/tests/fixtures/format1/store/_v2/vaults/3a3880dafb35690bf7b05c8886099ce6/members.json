@@ -1,0 +1,9 @@
+{
+  "created_at": "2026-11-14T09:12:33Z",
+  "kind": "personal",
+  "members": {
+    "alice": {
+      "role": "owner"
+    }
+  }
+}

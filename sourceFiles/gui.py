@@ -23,12 +23,14 @@ import pyperclip
 import accounts
 import appconfig
 import changelog
+import conversion_ui
 import dialogs
 import history_ui
 from icons import icon
 import lockout
 import sync_client
 import sync_ui
+import vault
 import account_sync_ui
 import vaults_ui
 import recovery_ui
@@ -590,7 +592,7 @@ class PasswordManagerGUI:
         try:
             before = file.load() if file.has_file else {"accounts": []}
             changelog.record(data, before, self.account.username,
-                             self.account.keyset, file.hex)
+                             self.account.keyset, file.hex, file.fmt)
         except Exception:
             pass
 
@@ -962,9 +964,20 @@ class PasswordManagerGUI:
         # two together meant a failure inside show_main_window() was caught by
         # the handler below, which then wrote to a login widget that
         # show_main_window()'s _clear() had already destroyed.
+        converted = False
         try:
-            account = accounts.unlock(username, master_password,
-                                      secret_key_text)
+            try:
+                account = accounts.unlock(username, master_password,
+                                          secret_key_text)
+            except accounts.NeedsConversion:
+                # An account from SecretSpace 3: the password was right. It
+                # is converted to the current format, if the user agrees --
+                # this version does not use it as it is.
+                if not conversion_ui.ask_conversion(self, username):
+                    return
+                account = accounts.convert(username, master_password,
+                                           secret_key_text)
+                converted = True
             loaded = account.load_vault()
         except accounts.SecretKeyNeeded:
             # A new PC, or another Windows user: the Secret Key is asked for
@@ -999,7 +1012,12 @@ class PasswordManagerGUI:
 
         lockout.reset(username)
         self.open_account(account, loaded, master_password)
-        if secret_key_text:
+        if converted:
+            self.toast("Account converted to the new format")
+            # The recovery copy opens only with the 12 words: ask for them
+            # once, now that the account is open.
+            self.root.after(700, lambda: conversion_ui.offer_recovery_conversion(self))
+        elif secret_key_text:
             self.toast("Secret Key saved on this PC — it won't be asked "
                        "for again here")
 
@@ -1127,7 +1145,7 @@ class PasswordManagerGUI:
         gear.pack(side="bottom", fill="x", pady=(0, 10))
         imp = self._nav_button(side, "Import", self.import_dialog, "import")
         imp.pack(side="bottom", fill="x")
-        Tooltip(imp, "Import a PassMan 2.x vault, or a CSV or JSON file")
+        Tooltip(imp, "Import a 2.x vault, or a CSV or JSON file")
         gen = self._nav_button(side, "Password generator",
                                self.generator_dialog, "key")
         gen.pack(side="bottom", fill="x")
@@ -1799,7 +1817,12 @@ class PasswordManagerGUI:
 
 
 if __name__ == "__main__":
+    # First of all, before anything is read: an installed copy's data folder
+    # from before the rename gets its current name.
+    home = vault.settle_home()
     apply_appearance(appconfig.appearance())
     root = ctk.CTk()
     app = PasswordManagerGUI(root)
+    if home[0]:
+        root.after(900, lambda: conversion_ui.home_notice(app, home))
     root.mainloop()

@@ -1,0 +1,48 @@
+{
+  "created_at": "2026-11-14T09:12:32Z",
+  "fingerprints_seen": {
+    "bob": {
+      "public_key": "34mwEYgX6nDhPrIoehLAfcIUFW/ftm6Kj6Mrr/Wl9Qw=",
+      "seen_at": "2026-11-14T09:12:37Z",
+      "signing_key": "hDwTgizvA+jMrf0V9V4T114Q45EpYY0LD2THCVGhLn4=",
+      "verified": true
+    }
+  },
+  "format": 1,
+  "mode": "personal",
+  "personal_vault": "3a3880dafb35690bf7b05c8886099ce6",
+  "public_key": "mRrtkVLrJhdUXVBg468CekE84qKOwIUkhwCUlo2H+F0=",
+  "secret_key": {
+    "lanes": 1,
+    "memory_kib": 64,
+    "nonce": "urfb8A6tLQ+MVuB0",
+    "passes": 1,
+    "salt": "nT6YAcQjc99aGuWwltd9zw==",
+    "scheme": "password",
+    "sealed": "2q2GJ9+HgXNZFFnNKwNnfvaGwbUb7vYD3npiKWCEg54="
+  },
+  "server": {
+    "ca_file": "",
+    "url": "http://127.0.0.1:46349"
+  },
+  "username": "alice",
+  "vaults": {
+    "abecdcdbbc86d06c42fd0ce0cce415b3": {
+      "created_at": "2026-11-14T09:12:33Z",
+      "gone_from_server": false,
+      "key_signer": "alice",
+      "name": "Solo",
+      "on_server": true,
+      "wrapped_key": "Ad14VpbAMj1fQsM8NfBbnX2+mbaf0swxufFkTV28E2Is1L8mq3gbaH9lg3taO2t56qvZWDMcf68fb8HE6Ne91utsZ7zBjL+v09QFviAN2MdHlMG699pS7uVVQ6Wc"
+    },
+    "de14496e0164d98bc0341ffb8f489d57": {
+      "created_at": "2026-11-14T09:12:33Z",
+      "gone_from_server": false,
+      "key_signer": "alice",
+      "members": 2,
+      "name": "Team",
+      "on_server": true,
+      "wrapped_key": "AZXgJ1629y7+sSNRDFFrKSwzAan0Ix+A6rFclxRalehbQjs4EsoKEmy5xj8AWFzmqvpqetUt5vC+2+V5sgUO65v8DUKNkxJifS19Gbf1O5mcWl6fUnEAupW1WcbB"
+    }
+  }
+}

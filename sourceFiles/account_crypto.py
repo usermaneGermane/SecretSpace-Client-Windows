@@ -1,7 +1,7 @@
 """
-The cryptography of SecretSpace 3.0 accounts (design: E:\\CLAUDE\\SecretSpace\\DESIGN-3.0.md).
+The cryptography of SecretSpace accounts (design: DESIGN-3.0.md, and
+DESIGN-RENAME.md for the two formats).
 
-Nothing in the 2.x app calls this yet: phase 1 builds the local account on it.
 Every function is pure -- bytes and dicts in, bytes and dicts out, no files --
 so the format can be pinned by tests before any screen depends on it.
 
@@ -13,7 +13,7 @@ The pieces, from what the user types to what opens a vault::
 
     AUK            --AES-GCM--> keyset {X25519 private key, personal vault key}
     X25519 key     --unwraps--> a shared vault's key
-    vault key      --AES-GCM--> PMV3: the vault's entries
+    vault key      --AES-GCM--> the vault's entries
 
 Recovery (personal accounts): a 12-word BIP39 phrase carries 128 random bits;
 they make a Recovery Key that seals a second copy of the keyset.
@@ -22,6 +22,13 @@ Libraries: ``cryptography`` for AES-GCM, HKDF and X25519 (all present in the
 old 3.4 that Ubuntu 22.04 ships); Argon2id from ``cryptography`` >= 44 where it
 exists (Windows), else from argon2-cffi (Ubuntu's python3-argon2). Both give
 the same bytes for the same inputs -- the tests hold them to it.
+
+Two formats. Format 2 is what this version writes. Format 1 is what
+SecretSpace 3 wrote, when the project was still called PassMan and that name
+was inside every label and marker: it is read here so an account can be
+converted, and written only for a vault that is still shared with someone
+whose app has not been updated. What differs between them is in ``Format``;
+the old names themselves are in legacy_names.py.
 """
 
 import base64
@@ -40,6 +47,7 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import (X25519PrivateKey,
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+import legacy_names
 from bip39_words import WORDS
 
 KEY_LEN = 32
@@ -64,6 +72,49 @@ ARGON2_MAX_LANES = 16
 
 class CryptoError(ValueError):
     """A sentence the user can be shown: wrong password, damaged file, typo."""
+
+
+class Format:
+    """
+    What differs between the account formats: the word every label starts
+    with (a label keeps two keys made from the same secret apart), the
+    markers at the start of the files, and how a Secret Key is spelled.
+    The algorithms and the layouts are the same in both.
+    """
+
+    def __init__(self, number: int, prefix: str, keyset_magic: bytes,
+                 keyset_version: int, vault_magic: bytes, secret_prefix: str,
+                 wrap_version: int):
+        self.number = number
+        self.prefix = prefix
+        self.keyset_magic = keyset_magic
+        self.keyset_version = keyset_version
+        self.vault_magic = vault_magic
+        self.secret_prefix = secret_prefix
+        self.wrap_version = wrap_version
+
+    def label(self, what: str) -> bytes:
+        return (self.prefix + " " + what).encode("ascii")
+
+    def __repr__(self):
+        return f"<Format {self.number}>"
+
+
+#: What this version writes.
+NOW = Format(2, "SecretSpace4", b"SSK4", 2, b"SSV4", "A4", 2)
+#: What SecretSpace 3 wrote (see the module docstring).
+OLD = Format(1, legacy_names.LABEL_PREFIX, legacy_names.KEYSET_MAGIC, 1,
+             legacy_names.VAULT_MAGIC, legacy_names.SECRET_KEY_PREFIX, 1)
+FORMATS = {OLD.number: OLD, NOW.number: NOW}
+
+
+def format_of(number) -> Format:
+    """The Format for a stored number; an unknown or missing one is OLD
+    (accounts and vaults from before formats were numbered)."""
+    try:
+        return FORMATS.get(int(number or OLD.number), OLD)
+    except (TypeError, ValueError):
+        return OLD
 
 
 def _b64(raw: bytes) -> str:
@@ -136,12 +187,12 @@ def _check_cost(passes, memory_kib, lanes):
 # ===========================================================================
 # Secret Key
 # ===========================================================================
-SECRET_KEY_PREFIX = "A3"
+SECRET_KEY_PREFIX = NOW.secret_prefix
 _B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 
 
-def _secret_check_char(raw: bytes) -> str:
-    return _B32[hashlib.sha256(b"PassMan3 secret key" + raw).digest()[0] % 32]
+def _secret_check_char(raw: bytes, fmt: Format = NOW) -> str:
+    return _B32[hashlib.sha256(fmt.label("secret key") + raw).digest()[0] % 32]
 
 
 def new_secret_key() -> bytes:
@@ -150,7 +201,7 @@ def new_secret_key() -> bytes:
 
 def format_secret_key(raw: bytes) -> str:
     """
-    ``A3-XXXXX-XXXXX-XXXXX-XXXXXX-XXXXXX``: 26 base32 characters for the 128
+    ``A4-XXXXX-XXXXX-XXXXX-XXXXXX-XXXXXX``: 26 base32 characters for the 128
     bits plus one check character, so a mistyped character is caught as a
     typo instead of reported as a wrong password.
     """
@@ -165,13 +216,19 @@ def parse_secret_key(text: str) -> bytes:
     """The 16 bytes of a typed Secret Key, or CryptoError saying what is wrong."""
     cleaned = "".join((text or "").split()).replace("-", "").upper()
     if not cleaned:
-        raise CryptoError("Enter your Secret Key (it starts with A3-).")
-    if not cleaned.startswith(SECRET_KEY_PREFIX):
-        raise CryptoError("A Secret Key starts with A3-; check your Emergency Kit.")
-    body = cleaned[len(SECRET_KEY_PREFIX):]
+        raise CryptoError("Enter your Secret Key (it starts with A4-).")
+    # An Emergency Kit printed by SecretSpace 3 spells the same 128 bits
+    # with A3- and another check character. It stays valid.
+    fmt = next((f for f in (NOW, OLD) if cleaned.startswith(f.secret_prefix)),
+               None)
+    if fmt is None:
+        raise CryptoError("A Secret Key starts with A4- (A3- on an Emergency "
+                          "Kit from SecretSpace 3); check your Emergency Kit.")
+    start = fmt.secret_prefix + "-"
+    body = cleaned[len(fmt.secret_prefix):]
     if len(body) != 27:
-        raise CryptoError(f"A Secret Key has 27 characters after A3-; this one "
-                          f"has {len(body)}.")
+        raise CryptoError(f"A Secret Key has 27 characters after {start}; "
+                          f"this one has {len(body)}.")
     bad = sorted({c for c in body if c not in _B32})
     if bad:
         hint = " (0 and 1 are never used: did you mean O or I?)" \
@@ -186,7 +243,7 @@ def parse_secret_key(text: str) -> bytes:
     # The 26th character carries only 3 of the 128 bits; decoding ignores the
     # rest, so compare against the canonical spelling to catch a typo there.
     canonical = base64.b32encode(raw).decode("ascii")[:26]
-    if canonical != body[:26] or _secret_check_char(raw) != body[26]:
+    if canonical != body[:26] or _secret_check_char(raw, fmt) != body[26]:
         raise CryptoError("That Secret Key has a typo; check it against your "
                           "Emergency Kit.")
     return raw
@@ -204,7 +261,7 @@ def _normalise(password: str) -> bytes:
 def derive_account_keys(master_password: str, secret_key: bytes, username: str,
                         salt: bytes, passes: int = ARGON2_PASSES,
                         memory_kib: int = ARGON2_MEMORY_KIB,
-                        lanes: int = ARGON2_LANES):
+                        lanes: int = ARGON2_LANES, fmt: Format = NOW):
     """
     (AUK, Login Key). Both need the password AND the Secret Key; the HKDF
     labels keep them independent, so a server that sees the Login Key learns
@@ -219,16 +276,16 @@ def derive_account_keys(master_password: str, secret_key: bytes, username: str,
     stretched = argon2id(_normalise(master_password), salt, passes, memory_kib,
                          lanes)
     who = unicodedata.normalize("NFKC", username).encode("utf-8")
-    auk = _hkdf(stretched, secret_key, b"PassMan3 account unlock key|" + who)
-    login = _hkdf(stretched, secret_key, b"PassMan3 login key|" + who)
+    auk = _hkdf(stretched, secret_key, fmt.label("account unlock key|") + who)
+    login = _hkdf(stretched, secret_key, fmt.label("login key|") + who)
     return auk, login
 
 
 # ===========================================================================
 # Sealed containers (keyset, recovery copy)
 # ===========================================================================
-KEYSET_MAGIC = b"PMK3"
-KEYSET_VERSION = 1
+KEYSET_MAGIC = NOW.keyset_magic
+KEYSET_VERSION = NOW.keyset_version
 KDF_ARGON2ID = 1        # sealed under the AUK (master password + Secret Key)
 KDF_NONE = 0            # sealed under a full-strength key (the Recovery Key)
 _KEYSET_HEADER = struct.Struct(">4sBBIBB16s")   # magic ver kdf mem passes lanes salt
@@ -237,6 +294,8 @@ _KEYSET_HEADER = struct.Struct(">4sBBIBB16s")   # magic ver kdf mem passes lanes
 def seal_keyset(key: bytes, keyset: dict, salt: bytes, kdf: int = KDF_ARGON2ID,
                 passes: int = ARGON2_PASSES, memory_kib: int = ARGON2_MEMORY_KIB,
                 lanes: int = ARGON2_LANES) -> str:
+    # Always the current format: a keyset is only ever sealed again by the
+    # account's own device, which has converted it.
     """
     The keyset as base64 text: a header (how to get the key back from the
     password: KDF, cost, salt) authenticated as AES-GCM associated data, so
@@ -245,7 +304,8 @@ def seal_keyset(key: bytes, keyset: dict, salt: bytes, kdf: int = KDF_ARGON2ID,
     header = _KEYSET_HEADER.pack(KEYSET_MAGIC, KEYSET_VERSION, kdf, memory_kib,
                                  passes, lanes, salt)
     nonce = os.urandom(NONCE_LEN)
-    body = json.dumps(keyset, separators=(",", ":"), sort_keys=True).encode()
+    body = json.dumps(complete_keyset(keyset), separators=(",", ":"),
+                      sort_keys=True).encode()
     return _b64(header + nonce + AESGCM(key).encrypt(nonce, body, header))
 
 
@@ -257,9 +317,10 @@ def keyset_header(blob: str) -> dict:
         raise CryptoError("The account file is too short to be SecretSpace's.")
     magic, version, kdf, memory_kib, passes, lanes, salt = \
         _KEYSET_HEADER.unpack(raw[:_KEYSET_HEADER.size])
-    if magic != KEYSET_MAGIC:
-        raise CryptoError("That is not a SecretSpace 3 account file.")
-    if version != KEYSET_VERSION:
+    fmt = next((f for f in (NOW, OLD) if f.keyset_magic == magic), None)
+    if fmt is None:
+        raise CryptoError("That is not a SecretSpace account file.")
+    if version != fmt.keyset_version:
         raise CryptoError("The account file was written by a newer SecretSpace; "
                           "update this one.")
     if kdf not in (KDF_ARGON2ID, KDF_NONE):
@@ -267,7 +328,12 @@ def keyset_header(blob: str) -> dict:
     if kdf == KDF_ARGON2ID:
         _check_cost(passes, memory_kib, lanes)
     return {"kdf": kdf, "memory_kib": memory_kib, "passes": passes,
-            "lanes": lanes, "salt": salt}
+            "lanes": lanes, "salt": salt, "format": fmt.number}
+
+
+def keyset_format(blob: str) -> Format:
+    """Which format a sealed keyset (or recovery copy) is in."""
+    return format_of(keyset_header(blob)["format"])
 
 
 def open_keyset(key: bytes, blob: str) -> dict:
@@ -280,16 +346,42 @@ def open_keyset(key: bytes, blob: str) -> dict:
                                    header)
     except Exception:
         raise CryptoError("Wrong master password or Secret Key.") from None
-    return json.loads(body)
+    return complete_keyset(json.loads(body))
 
 
 def new_keyset() -> dict:
-    """A fresh account: an X25519 key pair and the personal vault's key."""
+    """
+    A fresh account: an X25519 key pair, the personal vault's key, the seed
+    of its signing key and the secret it proves a recovery with.
+    """
     private = X25519PrivateKey.generate()
     return {"x25519_private": _b64(private.private_bytes(
                 serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
                 serialization.NoEncryption())),
-            "personal_vault_key": _b64(os.urandom(KEY_LEN))}
+            "personal_vault_key": _b64(os.urandom(KEY_LEN)),
+            "ed25519_seed": _b64(os.urandom(KEY_LEN)),
+            "recovery_proof": _b64(os.urandom(KEY_LEN))}
+
+
+def complete_keyset(keyset: dict) -> dict:
+    """
+    A keyset with all four secrets. One from SecretSpace 3 holds two: its
+    signing key and its recovery proof were not stored but *derived* from
+    the account's private key, with labels that carried the project's old
+    name. Here they are derived that one last time and from then on kept in
+    the keyset -- so the account's signing key, and with it everything it
+    ever signed and everyone's record of it, stays what it was.
+    """
+    if ("ed25519_seed" in keyset and "recovery_proof" in keyset) \
+            or "x25519_private" not in keyset:
+        return keyset
+    private = _unb64(keyset["x25519_private"], "account key")
+    done = dict(keyset)
+    done.setdefault("ed25519_seed", _b64(_hkdf(
+        private, OLD.label("signing"), OLD.label("signing key"))))
+    done.setdefault("recovery_proof", _b64(_hkdf(
+        private, OLD.label("recovery proof"), OLD.label("recovery proof|v1"))))
+    return done
 
 
 def public_key_of(keyset: dict) -> bytes:
@@ -302,43 +394,57 @@ def public_key_of(keyset: dict) -> bytes:
 # ===========================================================================
 # Wrapping a vault key to a member (sealed box)
 # ===========================================================================
-WRAP_VERSION = 1
+WRAP_VERSION = NOW.wrap_version
 
 
-def _wrap_context(vault_id: bytes, member: str) -> bytes:
-    return (b"PassMan3 wrap|" + vault_id + b"|" +
+def _wrap_context(vault_id: bytes, member: str, fmt: Format = NOW) -> bytes:
+    return (fmt.label("wrap|") + vault_id + b"|" +
             unicodedata.normalize("NFKC", member).encode("utf-8"))
 
 
 def wrap_key(recipient_public: bytes, vault_key: bytes, vault_id: bytes,
-             member: str) -> str:
+             member: str, fmt: Format = NOW) -> str:
     """
     ``vault_key`` sealed so only ``recipient_public``'s owner can open it:
     a one-off X25519 key, HKDF over the shared secret, AES-GCM. The vault id
     and member name are associated data, so a wrapped key cannot be passed
     off as another vault's or another person's.
+
+    ``fmt`` is the vault's format: a member whose app is still SecretSpace 3
+    can only open a key wrapped the old way.
     """
     ephemeral = X25519PrivateKey.generate()
     eph_pub = ephemeral.public_key().public_bytes(
         serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     shared = ephemeral.exchange(X25519PublicKey.from_public_bytes(recipient_public))
-    key = _hkdf(shared, eph_pub + recipient_public, b"PassMan3 wrap key")
+    key = _hkdf(shared, eph_pub + recipient_public, fmt.label("wrap key"))
     nonce = os.urandom(NONCE_LEN)
-    ct = AESGCM(key).encrypt(nonce, vault_key, _wrap_context(vault_id, member))
-    return _b64(bytes([WRAP_VERSION]) + eph_pub + nonce + ct)
+    ct = AESGCM(key).encrypt(nonce, vault_key,
+                             _wrap_context(vault_id, member, fmt))
+    return _b64(bytes([fmt.wrap_version]) + eph_pub + nonce + ct)
+
+
+def wrap_format(wrapped: str) -> Format:
+    """Which format a wrapped key is in (by its first byte)."""
+    raw = _unb64(wrapped, "shared vault key")
+    return next((f for f in (NOW, OLD) if raw[:1] == bytes([f.wrap_version])),
+                OLD)
 
 
 def unwrap_key(keyset: dict, wrapped: str, vault_id: bytes, member: str) -> bytes:
     raw = _unb64(wrapped, "shared vault key")
-    if len(raw) != 1 + 32 + NONCE_LEN + KEY_LEN + 16 or raw[0] != WRAP_VERSION:
+    fmt = next((f for f in (NOW, OLD) if raw[:1] == bytes([f.wrap_version])),
+               None)
+    if len(raw) != 1 + 32 + NONCE_LEN + KEY_LEN + 16 or fmt is None:
         raise CryptoError("A shared vault key is damaged or from a newer SecretSpace.")
     eph_pub, nonce, ct = raw[1:33], raw[33:33 + NONCE_LEN], raw[33 + NONCE_LEN:]
     private = X25519PrivateKey.from_private_bytes(
         _unb64(keyset["x25519_private"], "account key"))
     shared = private.exchange(X25519PublicKey.from_public_bytes(eph_pub))
-    key = _hkdf(shared, eph_pub + public_key_of(keyset), b"PassMan3 wrap key")
+    key = _hkdf(shared, eph_pub + public_key_of(keyset), fmt.label("wrap key"))
     try:
-        return AESGCM(key).decrypt(nonce, ct, _wrap_context(vault_id, member))
+        return AESGCM(key).decrypt(nonce, ct,
+                                   _wrap_context(vault_id, member, fmt))
     except Exception:
         raise CryptoError("This shared vault key was not made for this account "
                           "and vault.") from None
@@ -346,7 +452,7 @@ def unwrap_key(keyset: dict, wrapped: str, vault_id: bytes, member: str) -> byte
 
 def fingerprint(public_key: bytes) -> str:
     """Six groups of four digits, read aloud before the first share."""
-    digest = hashlib.sha256(b"PassMan3 fingerprint" + public_key).digest()
+    digest = hashlib.sha256(NOW.label("fingerprint") + public_key).digest()
     digits = str(int.from_bytes(digest[:12], "big") % 10 ** 24).zfill(24)
     return " ".join(digits[i:i + 4] for i in range(0, 24, 4))
 
@@ -365,12 +471,7 @@ def account_fingerprint(public_key: bytes, signing_key: bytes) -> str:
 # Signing (the change log, phase 4)
 # ===========================================================================
 def _signing_private(keyset: dict) -> Ed25519PrivateKey:
-    # Derived from the account's private key rather than stored beside it:
-    # every keyset ever made already has one, the recovery copy included,
-    # and there is nothing new to keep in step. HKDF keeps the two keys
-    # independent in use.
-    seed = _hkdf(_unb64(keyset["x25519_private"], "account key"),
-                 b"PassMan3 signing", b"PassMan3 signing key")
+    seed = _unb64(complete_keyset(keyset)["ed25519_seed"], "signing key")
     return Ed25519PrivateKey.from_private_bytes(seed)
 
 
@@ -395,9 +496,9 @@ def verify(signing_key: bytes, message: bytes, signature: str) -> bool:
 
 
 # ===========================================================================
-# PMV3: a vault's entries under its own key
+# A vault's entries under its own key
 # ===========================================================================
-VAULT_MAGIC = b"PMV3"
+VAULT_MAGIC = NOW.vault_magic
 VAULT_VERSION = 1
 _VAULT_HEADER = struct.Struct(">4sB16sI")        # magic ver vault-id key-generation
 
@@ -407,8 +508,8 @@ def new_vault_id() -> bytes:
 
 
 def encrypt_vault(vault_key: bytes, vault_id: bytes, key_generation: int,
-                  data: dict) -> str:
-    header = _VAULT_HEADER.pack(VAULT_MAGIC, VAULT_VERSION, vault_id,
+                  data: dict, fmt: Format = NOW) -> str:
+    header = _VAULT_HEADER.pack(fmt.vault_magic, VAULT_VERSION, vault_id,
                                 key_generation)
     nonce = os.urandom(NONCE_LEN)
     body = json.dumps(data, separators=(",", ":")).encode("utf-8")
@@ -418,15 +519,17 @@ def encrypt_vault(vault_key: bytes, vault_id: bytes, key_generation: int,
 def vault_header(blob: str) -> dict:
     raw = _unb64(blob, "vault")
     if len(raw) < _VAULT_HEADER.size + NONCE_LEN + 16:
-        raise CryptoError("The vault file is too short to be a SecretSpace 3 vault.")
+        raise CryptoError("The vault file is too short to be a SecretSpace vault.")
     magic, version, vault_id, generation = _VAULT_HEADER.unpack(
         raw[:_VAULT_HEADER.size])
-    if magic != VAULT_MAGIC:
-        raise CryptoError("That is not a SecretSpace 3 vault.")
+    fmt = next((f for f in (NOW, OLD) if f.vault_magic == magic), None)
+    if fmt is None:
+        raise CryptoError("That is not a SecretSpace vault.")
     if version != VAULT_VERSION:
         raise CryptoError("The vault was written by a newer SecretSpace; update "
                           "this one.")
-    return {"vault_id": vault_id, "key_generation": generation}
+    return {"vault_id": vault_id, "key_generation": generation,
+            "format": fmt.number}
 
 
 def decrypt_vault(vault_key: bytes, blob: str, expect_vault_id: bytes = None) -> dict:
@@ -463,12 +566,13 @@ def new_vault_key() -> bytes:
     return os.urandom(KEY_LEN)
 
 
-def _name_key(vault_key: bytes, vault_id: bytes) -> bytes:
+def _name_key(vault_key: bytes, vault_id: bytes, fmt: Format = NOW) -> bytes:
     # Its own key, so a name and the vault's entries never share one.
-    return _hkdf(vault_key, vault_id, b"PassMan3 vault name")
+    return _hkdf(vault_key, vault_id, fmt.label("vault name"))
 
 
-def seal_vault_name(vault_key: bytes, vault_id: bytes, name: str) -> str:
+def seal_vault_name(vault_key: bytes, vault_id: bytes, name: str,
+                    fmt: Format = NOW) -> str:
     """
     ``name`` under the vault's key, for the server: it lists an account's
     vaults without learning what they are called. Bound to the vault id, so
@@ -478,7 +582,7 @@ def seal_vault_name(vault_key: bytes, vault_id: bytes, name: str) -> str:
     if not raw or len(raw) > VAULT_NAME_BYTES:
         raise CryptoError("A vault name must be 1 to 200 bytes long.")
     nonce = os.urandom(NONCE_LEN)
-    return _b64(nonce + AESGCM(_name_key(vault_key, vault_id)).encrypt(
+    return _b64(nonce + AESGCM(_name_key(vault_key, vault_id, fmt)).encrypt(
         nonce, raw, vault_id))
 
 
@@ -486,12 +590,16 @@ def open_vault_name(vault_key: bytes, vault_id: bytes, sealed: str) -> str:
     raw = _unb64(sealed, "vault name")
     if len(raw) < NONCE_LEN + 1 + 16:
         raise CryptoError("The vault's name is damaged.")
-    try:
-        return AESGCM(_name_key(vault_key, vault_id)).decrypt(
-            raw[:NONCE_LEN], raw[NONCE_LEN:], vault_id).decode("utf-8")
-    except Exception:
-        raise CryptoError("The vault's name could not be read: wrong key, or "
-                          "it is damaged.") from None
+    # A sealed name carries no marker of its format; the vault's key opens
+    # it under exactly one of the two labels.
+    for fmt in (NOW, OLD):
+        try:
+            return AESGCM(_name_key(vault_key, vault_id, fmt)).decrypt(
+                raw[:NONCE_LEN], raw[NONCE_LEN:], vault_id).decode("utf-8")
+        except Exception:
+            continue
+    raise CryptoError("The vault's name could not be read: wrong key, or "
+                      "it is damaged.")
 
 
 # ===========================================================================
@@ -535,14 +643,14 @@ def phrase_to_entropy(phrase: str) -> bytes:
     return entropy
 
 
-def recovery_key(phrase: str, username: str) -> bytes:
+def recovery_key(phrase: str, username: str, fmt: Format = NOW) -> bytes:
     """
     The key that seals the recovery copy of the keyset. No slow KDF: the
     phrase is 128 random bits, already beyond guessing.
     """
     who = unicodedata.normalize("NFKC", username).encode("utf-8")
-    return _hkdf(phrase_to_entropy(phrase), b"PassMan3 recovery",
-                 b"PassMan3 recovery key|" + who)
+    return _hkdf(phrase_to_entropy(phrase), fmt.label("recovery"),
+                 fmt.label("recovery key|") + who)
 
 
 # ===========================================================================
@@ -578,14 +686,54 @@ def create_account(username: str, master_password: str,
 
 def unlock_account(username: str, master_password: str, secret_key: bytes,
                    sealed_keyset: str):
-    """(keyset, login key) from the master password and the Secret Key."""
+    """
+    (keyset, login key) from the master password and the Secret Key, in
+    whichever format the keyset is sealed. The login key is the one of that
+    format -- what a server that holds this keyset expects.
+    """
     head = keyset_header(sealed_keyset)
     if head["kdf"] != KDF_ARGON2ID:
         raise CryptoError("That is a recovery copy, not the account file.")
     auk, login = derive_account_keys(master_password, secret_key, username,
                                      head["salt"], head["passes"],
-                                     head["memory_kib"], head["lanes"])
+                                     head["memory_kib"], head["lanes"],
+                                     format_of(head["format"]))
     return open_keyset(auk, sealed_keyset), login
+
+
+def convert_keyset(username: str, master_password: str, secret_key: bytes,
+                   sealed_keyset: str) -> dict:
+    """
+    A keyset from SecretSpace 3 (format 1), sealed again in the current
+    format. The salt and the cost are KEPT: with the same password and Secret
+    Key every device of the account then arrives at the same new login key
+    on its own, so whichever converts first can tell the server, and the
+    others find it already done.
+
+    Returns {"keyset", "sealed_keyset", "login_key" (the new one),
+    "old_login_key" (what the server still expects until it is told)}.
+    """
+    head = keyset_header(sealed_keyset)
+    if head["kdf"] != KDF_ARGON2ID:
+        raise CryptoError("That is a recovery copy, not the account file.")
+    cost = (head["passes"], head["memory_kib"], head["lanes"])
+    keyset, old_login = unlock_account(username, master_password, secret_key,
+                                       sealed_keyset)
+    auk, login = derive_account_keys(master_password, secret_key, username,
+                                     head["salt"], *cost)
+    return {"keyset": keyset,
+            "sealed_keyset": seal_keyset(auk, keyset, head["salt"],
+                                         KDF_ARGON2ID, *cost),
+            "login_key": login, "old_login_key": old_login}
+
+
+def login_key_for(username: str, master_password: str, secret_key: bytes,
+                  sealed_keyset: str, fmt: Format) -> bytes:
+    """The login key this keyset's password and salt give in ``fmt``."""
+    head = keyset_header(sealed_keyset)
+    return derive_account_keys(master_password, secret_key, username,
+                               head["salt"], head["passes"],
+                               head["memory_kib"], head["lanes"], fmt)[1]
 
 
 def seal_recovery(phrase: str, username: str, keyset: dict) -> str:
@@ -599,18 +747,22 @@ def recovery_proof(keyset: dict) -> bytes:
     What a device shows the server to prove it opened the account's keyset
     (with the recovery phrase) before it may set a new password there. From
     the keyset's private key, under its own label, so it reveals nothing
-    about that key; the server keeps only its hash.
+    about that key; the server keeps only its hash. (A random secret in the
+    keyset; for an account from SecretSpace 3, the value that version
+    derived, so the server's check still holds after a conversion.)
     """
-    return _hkdf(_unb64(keyset["x25519_private"], "account key"),
-                 b"PassMan3 recovery proof", b"PassMan3 recovery proof|v1")
+    return _unb64(complete_keyset(keyset)["recovery_proof"], "recovery proof")
 
 
 def recover_account(username: str, phrase: str, sealed_recovery: str) -> dict:
     """The keyset from the recovery phrase alone (personal accounts)."""
-    if keyset_header(sealed_recovery)["kdf"] != KDF_NONE:
+    head = keyset_header(sealed_recovery)
+    if head["kdf"] != KDF_NONE:
         raise CryptoError("That is the account file, not its recovery copy.")
     try:
-        return open_keyset(recovery_key(phrase, username), sealed_recovery)
+        return open_keyset(recovery_key(phrase, username,
+                                        format_of(head["format"])),
+                           sealed_recovery)
     except CryptoError as e:
         if "Wrong master password" in str(e):
             raise CryptoError("That recovery phrase is not the one for this "

@@ -9,7 +9,8 @@
 ; The vaults are NOT in the program folder. The "installed" marker file makes
 ; SecretSpace keep them in %APPDATA%\SecretSpace (see vault.get_home_dir), so an
 ; upgrade or an uninstall never touches them. A copy installed before the
-; rename (as PassMan) keeps %APPDATA%\PassMan: see DataHome below.
+; rename (as PassMan) has them in %APPDATA%\PassMan: the app renames that
+; folder at its next start (vault.settle_home); see DataHome below.
 ;
 ; Silent install, e.g. for testing:
 ;     SecretSpace-Client-Installer.exe /VERYSILENT /DIR="C:\somewhere" /TASKS="desktopicon"
@@ -59,7 +60,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 ; An upgrade must not leave the previous version's libraries behind.
 Type: filesandordirs; Name: "{app}\_internal"
 ; Nor the program and shortcuts of the name before SecretSpace. An upgrade
-; keeps the folder it was installed in, even if that folder says PassMan.
+; keeps the folder it was installed in, even if that folder has the old name.
 Type: files; Name: "{app}\PassMan.exe"
 Type: files; Name: "{autoprograms}\PassMan.lnk"
 Type: files; Name: "{autodesktop}\PassMan.lnk"
@@ -80,9 +81,10 @@ var
   MovePage: TInputOptionWizardPage;
   FromPage: TInputDirWizardPage;
 
-{ Where the installed app keeps its data (vault.appdata_home makes the same
-  choice): SecretSpace, unless only the folder of the old name PassMan exists,
-  which an upgrade then keeps using. Nothing is moved or renamed. }
+{ Where the installed app's data is right now: SecretSpace, unless only the
+  folder of the old name exists. Setup does not rename that folder - the app
+  does, at its next start (vault.settle_home) - so vaults moved in here go
+  where the others are and are renamed with them, never beside them. }
 function DataHome: String;
 var
   NewHome, OldHome: String;
@@ -104,7 +106,7 @@ begin
     FindClose(FindRec);
 end;
 
-{ The folder that holds the *.vault.enc files of a portable PassMan in Dir:
+{ The folder that holds the *.vault.enc files of a portable copy in Dir:
   its vault folder, the older data folder, or Dir itself. '' if none. }
 function VaultFolderIn(Dir: String): String;
 begin
@@ -122,20 +124,21 @@ end;
 procedure InitializeWizard;
 begin
   MovePage := CreateInputOptionPage(wpSelectTasks,
-    'Existing vaults', 'Have you used the portable PassMan.exe before?',
+    'Existing vaults', 'Have you used a portable copy before?',
     'This copy of SecretSpace keeps its vaults in your user profile:' + #13#10 +
     '    ' + DataHome + #13#10 + #13#10 +
-    'If you have vaults next to an earlier PassMan.exe, Setup can move ' +
+    'If you have 2.x vaults next to an earlier portable program (it was ' +
+    'called PassMan then), Setup can move ' +
     'them there now. They are moved, not copied, so you still have one ' +
     'copy. A vault that already exists in your profile is never ' +
     'overwritten.' + #13#10 + #13#10 +
     'Back up your vault folder first, as you would before any upgrade.',
     False, False);
-  MovePage.Add('&Move my vaults from an earlier PassMan folder');
+  MovePage.Add('&Move my vaults from an earlier portable copy');
 
   FromPage := CreateInputDirPage(MovePage.ID,
-    'Existing vaults', 'Where is your earlier PassMan?',
-    'Choose the folder that contains the old PassMan.exe and its vault ' +
+    'Existing vaults', 'Where is your earlier portable copy?',
+    'Choose the folder that contains the old program and its vault ' +
     'folder, then click Next.', False, '');
   FromPage.Add('');
 end;

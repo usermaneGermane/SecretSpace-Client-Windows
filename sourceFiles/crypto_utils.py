@@ -1,9 +1,15 @@
 """
-Vault encryption for SecretSpace.
+The vault file of SecretSpace 2.x: one file per user, under the master
+password alone. SecretSpace 3 and later keep vaults in accounts
+(account_crypto); this container is read to import a 2.x vault, and written
+for the encrypted backup that 2.x can restore.
 
-Container format (all vaults written by this version)::
+Container format::
 
-    b"PMV2" || kdf_id(1) || iterations(4, big endian) || salt(16) || nonce(12) || ciphertext
+    marker(4) || kdf_id(1) || iterations(4, big endian) || salt(16) || nonce(12) || ciphertext
+
+The marker is from when the project was called PassMan (legacy_names); the
+2.x line is finished, so the format keeps it.
 
 the whole thing base64-encoded. The 9-byte header is passed to AES-GCM as
 additional authenticated data, so the KDF parameters are covered by the
@@ -23,11 +29,13 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+import legacy_names
+
 
 # ==============================
 # Container constants
 # ==============================
-MAGIC = b"PMV2"
+MAGIC = legacy_names.VAULT_2X_MAGIC
 KDF_PBKDF2_SHA256 = 1
 
 SALT_LEN = 16
@@ -39,7 +47,7 @@ HEADER_LEN = len(MAGIC) + 1 + 4          # magic || kdf id || iterations
 #: every vault's header, so old vaults keep opening with their own count.
 DEFAULT_ITERATIONS = 600_000
 
-#: What headerless (pre-PMV2) vaults were written with.
+#: What headerless vaults (older still) were written with.
 LEGACY_ITERATIONS = 200_000
 
 #: Refuse absurd iteration counts from a hostile or corrupt file, which would
@@ -68,7 +76,7 @@ def derive_key(master_password: str, salt: bytes,
 # ==============================
 def encrypt(master_password: str, data: dict,
             iterations: int = DEFAULT_ITERATIONS) -> bytes:
-    """Encrypt a dictionary into a base64 PMV2 blob."""
+    """Encrypt a dictionary into a base64 2.x vault blob."""
     salt = os.urandom(SALT_LEN)
     nonce = os.urandom(NONCE_LEN)
     header = MAGIC + bytes([KDF_PBKDF2_SHA256]) + iterations.to_bytes(4, "big")
@@ -85,7 +93,7 @@ def encrypt(master_password: str, data: dict,
 # Decryption
 # ==============================
 def _decrypt_legacy(master_password: str, raw: bytes) -> dict:
-    """Read a pre-PMV2 vault: salt(16) || nonce(12) || ct, 200k iters, no AAD."""
+    """Read a headerless vault: salt(16) || nonce(12) || ct, 200k iters, no AAD."""
     salt = raw[:SALT_LEN]
     nonce = raw[SALT_LEN:SALT_LEN + NONCE_LEN]
     ciphertext = raw[SALT_LEN + NONCE_LEN:]

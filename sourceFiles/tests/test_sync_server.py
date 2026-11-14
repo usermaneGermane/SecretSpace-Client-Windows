@@ -26,7 +26,7 @@ import vault                                                    # noqa: E402
 import crypto_utils                                             # noqa: E402
 import sync                                                     # noqa: E402
 import sync_client                                              # noqa: E402
-import passman_server                                           # noqa: E402
+import secretspace_server                                           # noqa: E402
 
 TOKEN = "test-token-that-is-long-enough"
 
@@ -48,9 +48,9 @@ def fast_kdf(monkeypatch):
 @pytest.fixture
 def server(tmp_path):
     """A real ThreadingHTTPServer on a free port, torn down after the test."""
-    httpd = passman_server.ThreadingHTTPServer(
-        ("127.0.0.1", 0), passman_server.Handler)
-    httpd.store = passman_server.Store(str(tmp_path / "store"))
+    httpd = secretspace_server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), secretspace_server.Handler)
+    httpd.store = secretspace_server.Store(str(tmp_path / "store"))
     httpd.token = TOKEN
     os.makedirs(httpd.store.root, exist_ok=True)
 
@@ -77,15 +77,15 @@ class PC:
     @contextlib.contextmanager
     def at_keyboard(self):
         """Point the vault module at THIS machine's data directory."""
-        previous = os.environ.get("PASSMAN_DATA_DIR")
-        os.environ["PASSMAN_DATA_DIR"] = self.data_dir
+        previous = os.environ.get("SECRETSPACE_DATA_DIR")
+        os.environ["SECRETSPACE_DATA_DIR"] = self.data_dir
         try:
             yield
         finally:
             if previous is None:
-                os.environ.pop("PASSMAN_DATA_DIR", None)
+                os.environ.pop("SECRETSPACE_DATA_DIR", None)
             else:
-                os.environ["PASSMAN_DATA_DIR"] = previous
+                os.environ["SECRETSPACE_DATA_DIR"] = previous
 
     def create(self):
         with self.at_keyboard():
@@ -728,7 +728,7 @@ def test_editing_the_address_keeps_the_password_generation():
 
 def test_a_store_from_before_key_generations_reads_as_zero(tmp_path):
     """Upgrading the server must not change how an existing vault reads."""
-    store = passman_server.Store(str(tmp_path / "store"))
+    store = secretspace_server.Store(str(tmp_path / "store"))
     (tmp_path / "store" / "alice").mkdir(parents=True)
     (tmp_path / "store" / "alice" / "meta.json").write_text(
         json.dumps({"revision": 3, "sha256": "x", "updated_at": "", "size": 1}))
@@ -741,7 +741,7 @@ def test_the_server_rejects_a_nonsense_generation(server):
     blob = __import__("base64").b64encode(b"PMV2" + b"\0" * 60)
     with pytest.raises(sync_client.SyncError):
         client._request("PUT", "/vault/alice", body={"blob": blob.decode()},
-                        headers={"X-PassMan-Key-Generation": "-3"})
+                        headers={"X-SecretSpace-Key-Generation": "-3"})
 
 
 # ==========================================================================
@@ -870,9 +870,9 @@ def test_a_vault_removed_on_the_server_is_uploaded_again_not_wiped(
 def test_moving_to_a_brand_new_server_uploads_the_vault(synced, tmp_path):
     """Same situation from the other side: a new, empty server."""
     pc1, _ = synced
-    fresh_store = passman_server.Store(str(tmp_path / "new-store"))
-    httpd = passman_server.ThreadingHTTPServer(
-        ("127.0.0.1", 0), passman_server.Handler)
+    fresh_store = secretspace_server.Store(str(tmp_path / "new-store"))
+    httpd = secretspace_server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), secretspace_server.Handler)
     httpd.store, httpd.token = fresh_store, TOKEN
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     try:
@@ -932,9 +932,9 @@ def test_a_live_entry_purged_elsewhere_is_put_to_the_user(synced):
 @contextlib.contextmanager
 def another_server(path):
     """A second, independent server -- the Ubuntu box beside the Windows one."""
-    httpd = passman_server.ThreadingHTTPServer(
-        ("127.0.0.1", 0), passman_server.Handler)
-    httpd.store = passman_server.Store(str(path))
+    httpd = secretspace_server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), secretspace_server.Handler)
+    httpd.store = secretspace_server.Store(str(path))
     httpd.token = TOKEN
     os.makedirs(httpd.store.root, exist_ok=True)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
