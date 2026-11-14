@@ -5,7 +5,8 @@ name may stay in exactly these places:
 * ``legacy_names.py`` -- the one module that holds the names an older
   version wrote, so they can be read and converted;
 * the sentences that say why (listed below, one per place);
-* the installer's clean-up of an older install.
+* the clean-up of an older install: the Windows installer removing the old
+  program, the Linux package replacing the old package.
 
 Anything else is a leftover of the rename, and this test names the line. It
 also checks the other half of the rule: the old names are read, and written
@@ -24,8 +25,11 @@ REPO = os.path.dirname(SOURCE)
 OLD = re.compile(r"passman|PMV[23]|PMK3|\.pmk|\.pmv3", re.IGNORECASE)
 
 #: (file, text the line contains): prose and clean-up, nothing a key or a
-#: file of the current format is made with.
+#: file of the current format is made with. The Windows and the Linux app
+#: share this test; each has the files of its own.
 ALLOWED = [
+    ("build_deb.py", 'OLD_PACKAGE = "passman"'),
+    ("build_deb.py", "The package was called passman before the rename"),
     ("account_crypto.py", "when the project was still called PassMan"),
     ("crypto_utils.py", "from when the project was called PassMan"),
     ("version.py", 'OLDER_VAULT_FORMATS = ("PMV3", "PMV2")'),
@@ -42,7 +46,8 @@ def program_files():
     """Every text file the program is built from (not tests, not docs)."""
     found = []
     for folder in (SOURCE, os.path.join(REPO, "builder"),
-                   os.path.join(REPO, "installer")):
+                   os.path.join(REPO, "installer"), os.path.join(REPO, "deb"),
+                   os.path.join(REPO, "tools")):
         if not os.path.isdir(folder):
             continue
         for name in sorted(os.listdir(folder)):
@@ -73,10 +78,16 @@ def test_the_old_name_is_only_where_it_is_allowed():
 
 def test_every_allowed_line_is_still_there():
     """An allowance for a line that is gone is a hole in the rule."""
+    checked = 0
     for name, text in ALLOWED:
-        path = next(p for p in program_files() if os.path.basename(p) == name)
+        path = next((p for p in program_files()
+                     if os.path.basename(p) == name), None)
+        if path is None:
+            continue                      # the other platform's file
         with open(path, encoding="utf-8") as f:
             assert text in f.read(), (name, text)
+        checked += 1
+    assert checked >= 3
 
 
 def test_legacy_names_is_only_names():
