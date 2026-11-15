@@ -17,3 +17,4 @@
 # Accounts and a server store written by SecretSpace 3.1.0, kept byte for
 # byte: the conversion is tested on exactly what that version wrote.
 sourceFiles/tests/fixtures/format1/** -text
+*.bmp  binary

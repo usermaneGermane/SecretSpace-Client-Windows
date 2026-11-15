@@ -58,6 +58,11 @@ def appearance() -> str:
     return value if value in ("system", "light", "dark") else "system"
 
 
+def check_updates() -> bool:
+    """Whether to ask GitHub for a newer version at start (off by default)."""
+    return load_config().get("check_updates") is True
+
+
 def sort_order() -> str:
     """How the account list is ordered; see vault.SORT_ORDERS."""
     value = load_config().get("sort_order")

@@ -25,6 +25,7 @@ import appconfig
 import importers
 import sync_client
 import totp
+import update_check
 import vault
 from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, INPUT_BG, BORDER,
                    CARD, CARD_HOVER, ON_ACCENT, MONO, DANGER, tile_colors,
@@ -772,6 +773,23 @@ def settings_dialog(app):
         list(looks.values()), set_look, width=180)
     look_menu.pack()
     look_menu.set(looks[appconfig.appearance()])
+
+    # ---- updates ----
+    upd = section(wrap, "Updates")
+    app._ghost_button(
+        setting_row(upd, "Check for a new version",
+                    "Asks github.com for the newest release. Nothing about you "
+                    "or your vaults is sent.", hint, first=True),
+        "Check now", lambda: update_check.check_now(app), width=150).pack()
+    at_start = ctk.CTkSwitch(
+        setting_row(upd, "Check when SecretSpace starts",
+                    "Off until you turn it on. A new version is only "
+                    "mentioned — nothing is installed.", hint),
+        text="", width=46, progress_color=GREEN,
+        command=lambda: appconfig.save_config(check_updates=bool(at_start.get())))
+    at_start.pack()
+    if appconfig.check_updates():
+        at_start.select()
 
     # ---- sync ----
     syn = section(wrap, "Sync")

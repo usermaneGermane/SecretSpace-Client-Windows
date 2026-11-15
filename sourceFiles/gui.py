@@ -35,6 +35,7 @@ import account_sync_ui
 import vaults_ui
 import recovery_ui
 import totp
+import update_check
 from theme import (F, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    ON_ACCENT, WARN, MONO, DECOR_DISC_A, DECOR_DISC_B,
@@ -1825,4 +1826,5 @@ if __name__ == "__main__":
     app = PasswordManagerGUI(root)
     if home[0]:
         root.after(900, lambda: conversion_ui.home_notice(app, home))
+    root.after(3000, lambda: update_check.check_at_start(app))
     root.mainloop()
