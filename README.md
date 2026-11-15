@@ -508,6 +508,16 @@ in use here but gone from the server means the server holds an older or
 different copy. The conflict dialog shows it; keeping it (the default)
 uploads it again, and choosing the server's side moves it to the Archive.
 
+**Changing the server's address or certificate.** *Settings → Sync →
+Edit…* opens the address and the certificate file of the server the
+account syncs with, filled in: change one or both and press *Save & sync*.
+There is no need to disconnect, and no token: the account is on the server
+already, and each device logs in with the account's own login (the server's
+token only creates an account). It is asked for only if the new address is
+a server that does not have the account yet. When the address and port stay
+the same — also when `http://` becomes `https://` — it is the same server
+and every vault stays in step with it.
+
 **An unencrypted address.** A plain `http://` address of another machine
 asks before it is used. On such a connection someone on the network could
 take over the account *on the server* (not read a vault). Use it on a
@@ -517,9 +527,9 @@ network you trust or through a VPN, or give the server a certificate.
 `tls` command (its README says how); it prints what to do here:
 
 1. Copy the server's `server.crt` to this device.
-2. *Settings → Sync → Set up…*: change the address from `http://` to
+2. *Settings → Sync → Edit…*: change the address from `http://` to
    `https://` — the same address and port — choose the copied file as the
-   certificate file, and press *Connect & sync*. No token is needed: the
+   certificate file, and press *Save & sync*. No token is needed: the
    account is already there.
 
 The app sees that it is the same server (same address and port; only the

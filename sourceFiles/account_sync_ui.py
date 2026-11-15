@@ -8,9 +8,11 @@ only back on the main thread, and a sync whose account was locked meanwhile
 does nothing when it returns.
 """
 
+import os
 import threading
 
 import customtkinter as ctk
+from tkinter import filedialog
 
 import account_crypto
 import account_sync
@@ -225,26 +227,54 @@ def server_dialog(app, on_done=None):
     Connect the open account to a server. If the server already has it (set
     up from another device) logging in is enough; otherwise it is created
     there, with the server's token as the sign-up code.
+
+    For an account that already syncs this is where its settings are
+    changed (Settings -> Sync -> Edit...): the address and the certificate
+    file come filled in, and either may be changed alone. No token: the
+    account is on the server already, and each device logs in with the
+    account's own login. The token is asked for only when the address is a
+    server that does not have the account yet.
     """
     account = app.account
-    top = app._modal("Sync with a server", 560, 620)
+    editing = bool(account.server)
+    top = app._modal("Change sync settings" if editing else "Sync with a server",
+                     560, 640)
     shell = dialog_shell(
-        top, "Sync with a server",
+        top, "Change sync settings" if editing else "Sync with a server",
+        ("Change the server's address, its certificate file, or both. It is "
+         "the same server when the address and port stay the same — also "
+         "when http:// becomes https:// — and your vaults stay in step with "
+         "it.") if editing else
         "The server keeps this account's vault encrypted — it never gets your "
         "master password, your Secret Key or anything it could open your "
-        "vault with. It needs SecretSpace Server 2.0 or newer.")
+        "vault with. It needs SecretSpace Server 2.1 or newer.")
     wrap = shell.body
 
     url_entry = field(wrap, "Server address", placeholder="http://192.168.1.50:8787")
-    token_entry = field(wrap, "Server token (only to create the account there)",
+    token_entry = field(wrap, "Server token (only for a server this account is "
+                        "not on yet)" if editing else
+                        "Server token (only to create the account there)",
                         show="•")
     ca_entry = field(wrap, "Certificate file (only for https, optional)",
                      placeholder="C:\\SecretSpace\\server.crt")
-    if account.server:
+    def browse():
+        chosen = filedialog.askopenfilename(
+            parent=top, title="The server's certificate file",
+            filetypes=[("Certificate", "*.crt *.pem *.cer"), ("All files", "*.*")])
+        if chosen:
+            ca_entry.delete(0, "end")
+            ca_entry.insert(0, chosen)
+
+    ghost_button(wrap, "Choose a file…", browse, width=150).pack(
+        anchor="w", pady=(6, 0))
+    if editing:
         url_entry.insert(0, account.server["url"])
         ca_entry.insert(0, account.server.get("ca_file", ""))
 
-    note(wrap, "The token is the one the server's setup shows (the same one 2.x "
+    note(wrap, ("Leave the token empty: this account is on the server "
+                "already. It is needed only to create the account on another "
+                "server.") if editing else
+         "The token is the one the server's setup shows (the same one 2.x "
          "vaults use). It lets you make an account there; it does not open "
          "anyone's vault.", shell.text_width, size=11, pady=(10, 0))
     status = ctk.CTkLabel(wrap, text="", font=F(12), text_color=MUTED,
@@ -258,6 +288,13 @@ def server_dialog(app, on_done=None):
                                          "with http:// or https://",
                                     text_color=DANGER)
         token, ca_file = token_entry.get().strip(), ca_entry.get().strip()
+        if editing and url.rstrip("/") == account.server["url"] and \
+                ca_file == account.server.get("ca_file", "") and not token:
+            top.destroy()
+            return app.toast("Nothing changed")
+        if ca_file and not os.path.isfile(ca_file):
+            return status.configure(text=f"There is no file {ca_file}.",
+                                    text_color=DANGER)
         if not plain_http_ok(app, url):
             return
         status.configure(text="Contacting the server…", text_color=MUTED)
@@ -268,6 +305,7 @@ def server_dialog(app, on_done=None):
                 on_done()
             app.toast("Account created on the server — syncing…"
                       if outcome == "created" else
+                      "Sync settings changed — syncing…" if editing else
                       "Connected to the server — syncing…")
             run_sync(app)
 
@@ -276,8 +314,8 @@ def server_dialog(app, on_done=None):
                            text=str(e), text_color=DANGER))
 
     ghost_button(shell.buttons, "Cancel", top.destroy, width=110).pack(side="left")
-    accent_button(shell.buttons, "Connect & sync", connect,
-                  width=160).pack(side="right")
+    accent_button(shell.buttons, "Save & sync" if editing else "Connect & sync",
+                  connect, width=160).pack(side="right")
     top.bind("<Escape>", lambda e: top.destroy())
     app._fit_modal(top)
 
