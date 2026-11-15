@@ -76,8 +76,9 @@ TILE_PALETTE = [
 
 
 def asset_candidates(name):
-    """Possible locations for a bundled asset: PyInstaller bundle, the script
-    directory, the current dir, and the legacy dist/ folder."""
+    """Possible locations for a bundled asset: a PyInstaller bundle, the
+    script directory (also the program folder of a Nuitka build), the
+    current dir, and the legacy dist/ folder."""
     paths = []
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:

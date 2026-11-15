@@ -9,9 +9,10 @@ Two ways to run it:
     py builder\\build.py       the same steps in a terminal
 
 SecretSpace-Builder.exe is this module frozen with builder_gui.py. It does not
-compile anything itself -- a frozen exe cannot run PyInstaller on the
-source -- it drives a real Python installed on the PC, the way build.bat
-did. Everything here is plain functions over an injectable command runner,
+compile anything itself -- a frozen exe cannot run Nuitka on the source
+-- it drives a real Python installed on the PC, the way build.bat did.
+The app is compiled by Nuitka (4.2.0 and earlier: PyInstaller); the
+builder's own exe is still made with PyInstaller (--builder). Everything here is plain functions over an injectable command runner,
 so the tests can check every decision without starting a single process.
 """
 
@@ -34,7 +35,6 @@ REQUIRED_FILES = (
     "requirements.txt",
     os.path.join("sourceFiles", "gui.py"),
     os.path.join("sourceFiles", "version.py"),
-    os.path.join("sourceFiles", "SecretSpace-installer.spec"),
     os.path.join("sourceFiles", "SecretSpace-logo.png"),
     os.path.join("sourceFiles", "SecretSpace-logo.ico"),
     os.path.join("sourceFiles", "Manrope-Regular.ttf"),
@@ -65,7 +65,7 @@ def run(cmd, cwd=None, env=None, on_line=None) -> Result:
     """
     Run ``cmd`` and return its exit code and combined output. With
     ``on_line``, each output line is passed on as it arrives, so a long
-    PyInstaller run shows progress instead of looking frozen.
+    Nuitka run shows progress instead of looking frozen.
     """
     try:
         proc = subprocess.Popen(
@@ -197,7 +197,7 @@ def check_all(project: str, runner=run, find_iscc=find_iscc) -> list:
     py = find_python(runner)
     if py is None:
         checks.append(Check("Python 3", False, "not found", "winget-python"))
-        for name in ("tkinter", "SecretSpace's libraries", "PyInstaller",
+        for name in ("tkinter", "SecretSpace's libraries", "Nuitka",
                      "The app imports cleanly"):
             checks.append(Check(name, False, "needs Python first"))
     else:
@@ -218,14 +218,15 @@ def check_all(project: str, runner=run, find_iscc=find_iscc) -> list:
             "ok" if not missing else "missing: " + ", ".join(missing),
             None if not missing else "pip", missing))
 
-        pyi = runner(py.cmd + ["-c", "import PyInstaller"]).code == 0
-        checks.append(Check("PyInstaller", pyi,
-                            "ok" if pyi else "missing",
-                            None if pyi else "pip",
-                            [] if pyi else ["pyinstaller"]))
+        nuitka = runner(py.cmd + ["-c", "import nuitka"]).code == 0
+        checks.append(Check("Nuitka", nuitka,
+                            "ok (its first build downloads a C compiler)"
+                            if nuitka else "missing",
+                            None if nuitka else "pip",
+                            [] if nuitka else ["nuitka"]))
 
-        # PyInstaller does NOT fail on a missing module -- it builds an exe
-        # that crashes on launch -- so prove the app imports first.
+        # A missing module is only found when the exe runs, so prove the app
+        # imports first, while the error is still readable.
         if not gone and not missing:
             src = os.path.join(project, "sourceFiles")
             imp = runner(py.cmd + ["-c", "import sys; sys.path.insert(0, "
@@ -289,24 +290,61 @@ def remove_previous(project: str) -> None:
         path = os.path.join(project, name)
         if os.path.exists(path):
             os.remove(path)
-    folder = os.path.join(project, "build", "installer", "SecretSpace")
-    if os.path.isdir(folder):
-        shutil.rmtree(folder)
+    for name in ("SecretSpace", DIST):        # PyInstaller's, Nuitka's
+        folder = os.path.join(project, "build", "installer", name)
+        if os.path.isdir(folder):
+            shutil.rmtree(folder)
+
+
+#: The folder Nuitka writes: --output-folder-name plus ".dist" (Nuitka 4.3.5;
+#: without the option it is gui.dist, after the main module).
+DIST = "SecretSpace.dist"
+
+#: The files the app reads beside itself (theme.asset_candidates).
+ASSETS = ("SecretSpace-logo.png", "SecretSpace-logo.ico", "Manrope-Regular.ttf",
+          "Manrope-Bold.ttf", "Manrope-OFL.txt")
+
+
+def nuitka_command(project: str, py: "Python", version: str) -> list:
+    """
+    Compile the app into build/installer/SecretSpace.dist: SecretSpace.exe and
+    everything it needs in one folder (standalone, not onefile - a onefile
+    exe unpacks itself to %TEMP% on every start).
+
+    --assume-yes-for-downloads: Nuitka fetches its C compiler (zig) on the
+    first build instead of asking on a console nobody sees.
+    """
+    src = os.path.join(project, "sourceFiles")
+    numbers = file_version(version)
+    cmd = py.cmd + [
+        "-m", "nuitka", "--standalone", "--assume-yes-for-downloads",
+        "--enable-plugin=tk-inter",
+        # customtkinter's themes and fonts come with Nuitka's own package
+        # configuration; naming them again only makes duplicate warnings.
+        # Loaded by PIL.ImageTk at run time, so not found by following imports.
+        "--include-module=PIL._tkinter_finder",
+        "--windows-console-mode=disable",
+        "--windows-icon-from-ico=" + os.path.join(src, "SecretSpace-logo.ico"),
+        "--output-filename=SecretSpace.exe",
+        "--output-dir=" + os.path.join(project, "build", "installer"),
+        "--output-folder-name=SecretSpace",
+        "--remove-output",
+        "--company-name=SecretSpace", "--product-name=SecretSpace",
+        "--file-description=SecretSpace", "--copyright=GPL-3.0-only",
+        "--file-version=" + numbers, "--product-version=" + numbers,
+    ]
+    cmd += [f"--include-data-files={os.path.join(src, name)}={name}"
+            for name in ASSETS]
+    return cmd + [os.path.join(src, "gui.py")]
 
 
 def build_steps(project: str, py: "Python", iscc: str, version: str) -> list:
     """The commands, as (label, cmd, the file it must produce): the app's
     folder build, then its installer."""
-    src = os.path.join(project, "sourceFiles")
     return [
-        ("Building the app",
-         py.cmd + ["-m", "PyInstaller", "--noconfirm",
-                   "--distpath", os.path.join(project, "build", "installer"),
-                   "--workpath", os.path.join(project, "build",
-                                              "installer-work"),
-                   os.path.join(src, "SecretSpace-installer.spec")],
-         os.path.join(project, "build", "installer", "SecretSpace",
-                      "SecretSpace.exe")),
+        ("Building the app (Nuitka: a few minutes)",
+         nuitka_command(project, py, version),
+         os.path.join(project, "build", "installer", DIST, "SecretSpace.exe")),
         ("Packing SecretSpace-Client-Installer.exe",
          [iscc, "/Q", f"/DAppVersion={version}",
           f"/DFileVersion={file_version(version)}",
@@ -336,7 +374,8 @@ def build(project: str, py: "Python", iscc: str, log=print, runner=run,
 
 
 def build_builder(project: str, py: "Python", log=print, runner=run) -> bool:
-    """Freeze this module and builder_gui.py into SecretSpace-Builder.exe."""
+    """Freeze this module and builder_gui.py into SecretSpace-Builder.exe
+    (with PyInstaller: pip install pyinstaller first)."""
     product = os.path.join(project, "SecretSpace-Builder.exe")
     if os.path.exists(product):
         os.remove(product)

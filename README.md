@@ -285,7 +285,7 @@ the build needs:
 - the SecretSpace source files
 - Python 3 and its `tkinter`
 - SecretSpace's libraries (`requirements.txt`)
-- PyInstaller
+- Nuitka (its first build also downloads a C compiler, zig, by itself)
 - that the app imports cleanly
 - Inno Setup 6, for the installer
 
@@ -318,12 +318,16 @@ py builder\build.py --install-missing    install what is missing first
 py builder\build.py --builder            build SecretSpace-Builder.exe itself
 ```
 
-The last line is how the builder is made in the first place, so a fresh
-checkout needs Python with PyInstaller once.
+The last line is how the builder is made in the first place. The builder's
+own exe is still made with PyInstaller, so that one needs
+`py -m pip install pyinstaller` once; the app does not.
 
 ### Which files the build needs
 
-PyInstaller compiles the source; the builder only checks and drives it.
+Nuitka compiles the source into C and then into `SecretSpace.exe` and the
+folder beside it (since 4.3.0; until 4.2.0 PyInstaller bundled it). The
+builder only checks and drives it. A build takes a few minutes, not seconds;
+the first one also downloads Nuitka's C compiler, so it needs the internet.
 Copy the **whole project folder** to the other PC. The build needs:
 
 ```
@@ -340,10 +344,20 @@ the colours change.
 
 `README.md` is not needed to build, and neither are the `tests` folders.
 
-Watch out: if one of the `.py` files is missing, **PyInstaller still
-reports a successful build** and produces an exe that crashes on launch
-with `ModuleNotFoundError`. The builder imports the app first, to catch
-that while the error is still readable.
+Watch out: if one of the `.py` files is missing, the build can still
+**report success** and produce an exe that crashes on launch with
+`ModuleNotFoundError`. The builder imports the app first, to catch that
+while the error is still readable.
+
+**Why Nuitka:** the code ships compiled to machine code instead of as Python
+bytecode in an archive (the source is public anyway, so this is about the
+shape of the program, not secrecy), and antivirus tools tend to flag
+PyInstaller's bootloader more often. It starts about as fast as before (a
+third of a second warm, two seconds cold, on the test PC).
+One trap it brings: Nuitka does not set `sys.frozen`, so the app finds its
+own folder through `vault.frozen_dir()` — without it an installed copy
+looked for its `installed` marker in the wrong folder and showed no
+accounts.
 
 ### After the build
 
@@ -370,7 +384,7 @@ installer upgrades the first — so a copy for trying things out runs
 folder instead:
 
 1. Build (`py builder\build.py`, or SecretSpace Builder).
-2. Copy the folder `build\installer\SecretSpace` somewhere of its own, e.g.
+2. Copy the folder `build\installer\SecretSpace.dist` somewhere of its own, e.g.
    `D:\SecretSpace-Lab`, and run `SecretSpace.exe` from there.
 
 That folder has no `installed` file, so it never touches
@@ -382,7 +396,7 @@ To update the lab copy after a new build, close it and copy the new program
 files over the old ones, leaving its `vault` folder and `config.json` alone:
 
 ```
-robocopy build\installer\SecretSpace D:\SecretSpace-Lab /E /XD vault /XF config.json
+robocopy build\installer\SecretSpace.dist D:\SecretSpace-Lab /E /XD vault /XF config.json
 ```
 
 (`/E` adds and replaces files but deletes nothing.)
@@ -464,8 +478,7 @@ SecretSpace-Client-Windows/
     ├── lockout.py       rate limiting of master-password attempts
     ├── password_generator.py
     ├── version.py       the version shown in the UI
-    ├── SecretSpace-installer.spec  the PyInstaller build the installer ships
-    ├── build_version.py the exe's version resource, read from version.py
+    ├── build_version.py the builder exe's version resource, read from version.py
     └── tests/
         └── sync_server/ a copy of the server, for the end-to-end sync tests
 ```

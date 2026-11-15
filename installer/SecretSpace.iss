@@ -63,8 +63,18 @@ UsedUserAreasWarning=no
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [InstallDelete]
-; An upgrade must not leave the previous version's libraries behind.
+; An upgrade must not leave the previous version's libraries behind:
+; PyInstaller's folder (4.2.0 and earlier) and what Nuitka writes beside
+; SecretSpace.exe (4.3.0 and newer): their folders, by name only; {app} is a folder
+; the user chose, so nothing else in it is touched. A DLL a newer build no
+; longer has may stay behind; nothing loads it.
 Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\tcl"
+Type: filesandordirs; Name: "{app}\tcl8"
+Type: filesandordirs; Name: "{app}\tk"
+Type: filesandordirs; Name: "{app}\PIL"
+Type: filesandordirs; Name: "{app}\cryptography"
+Type: filesandordirs; Name: "{app}\customtkinter"
 ; Nor the program and shortcuts of the name before SecretSpace. An upgrade
 ; keeps the folder it was installed in, even if that folder has the old name.
 Type: files; Name: "{app}\PassMan.exe"
@@ -72,7 +82,7 @@ Type: files; Name: "{autoprograms}\PassMan.lnk"
 Type: files; Name: "{autodesktop}\PassMan.lnk"
 
 [Files]
-Source: "..\build\installer\SecretSpace\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\installer\SecretSpace.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "installed"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 

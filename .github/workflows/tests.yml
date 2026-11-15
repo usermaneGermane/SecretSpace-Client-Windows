@@ -27,8 +27,8 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt
       - name: Every source module imports
-        # PyInstaller builds a broken exe rather than failing when a module
-        # is missing, so check the same thing the builder checks.
+        # A missing module only shows when the built exe runs, so check
+        # the same thing the builder checks.
         run: python -c "import sys; sys.path.insert(0, 'sourceFiles'); import gui"
       - name: Run the tests
         run: python -m pytest -q
