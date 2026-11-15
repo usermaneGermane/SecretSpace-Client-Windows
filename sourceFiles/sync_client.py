@@ -2,7 +2,7 @@
 Talking to the sync server.
 
 Deliberately built on urllib from the standard library rather than requests:
-the app ships as a PyInstaller bundle, and every dependency added here is
+the app ships as a compiled bundle (Nuitka), and every dependency added here is
 another package the build has to find and another way for the exe to fail on
 a machine that cannot be debugged remotely. There is nothing here requests
 would do better.

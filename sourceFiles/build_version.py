@@ -1,7 +1,8 @@
 """
 The Windows version resource for SecretSpace.exe -- what Explorer shows under
-Properties > Details. Used by both .spec files at build time only; the app
-never imports it, so PyInstaller does not bundle it.
+Properties > Details. Used by builder/SecretSpace-Builder.spec at build time
+only (the app itself is compiled by Nuitka, which takes the version on its
+command line); the app never imports it.
 
 It reads version.py, so the exe, the in-app label and the installer
 (the builder passes the same version to Inno Setup) can never disagree.

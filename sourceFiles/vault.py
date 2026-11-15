@@ -84,6 +84,29 @@ DATA_DIR_VARIABLE = "SECRETSPACE_DATA_DIR"
 LEGACY_DIR_NAME = "data"
 
 
+def frozen_dir():
+    """
+    The folder of SecretSpace.exe when running as a built program, else None.
+
+    Nuitka puts ``__compiled__`` into every module it compiles and does not
+    set ``sys.frozen``; PyInstaller sets ``sys.frozen``. A Nuitka build that
+    fell through to the source-tree rule would look for the installer's
+    marker one folder too high, find none, and show an installed copy's
+    user no accounts.
+
+    In a Nuitka standalone build every module's ``__file__`` is in the
+    folder of the exe (``SecretSpace/vault.py`` beside
+    ``SecretSpace/SecretSpace.exe``). Not ``__compiled__.containing_dir``:
+    that is the folder *around* the program's folder (seen with Nuitka
+    4.3.5), one level too high again.
+    """
+    if globals().get("__compiled__") is not None:
+        return os.path.dirname(os.path.abspath(__file__))
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return None
+
+
 def get_app_dir() -> str:
     """
     The project root: the folder holding SecretSpace.exe when frozen, else the
@@ -94,8 +117,9 @@ def get_app_dir() -> str:
     same place, so a vault created by the exe is the one you see when running
     from source.
     """
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(os.path.abspath(sys.executable))
+    exe_dir = frozen_dir()
+    if exe_dir:
+        return exe_dir
     # .../SecretSpace/sourceFiles/vault.py -> .../SecretSpace
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

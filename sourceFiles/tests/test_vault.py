@@ -284,6 +284,36 @@ def test_app_dir_is_the_project_root_not_the_source_folder(monkeypatch):
     assert os.path.isfile(os.path.join(app_dir, "sourceFiles", "vault.py"))
 
 
+def test_from_source_there_is_no_exe_folder(monkeypatch):
+    monkeypatch.delattr(vault.sys, "frozen", raising=False)
+    assert vault.frozen_dir() is None
+
+
+def test_nuitka_build_uses_the_exe_folder(tmp_path, monkeypatch):
+    """Nuitka sets no sys.frozen. Without this, an installed Nuitka build
+    looked one folder too high, missed the marker and showed no accounts."""
+    monkeypatch.delenv("SECRETSPACE_DATA_DIR", raising=False)
+    monkeypatch.delattr(vault.sys, "frozen", raising=False)
+    app = tmp_path / "Programs" / "SecretSpace"
+    app.mkdir(parents=True)
+    (app / vault.INSTALLED_MARKER).write_text("installed by setup")
+    # As Nuitka 4.3.5 has them: the module beside the exe, and
+    # containing_dir the folder around the program's folder.
+    compiled = type("Compiled", (), {"containing_dir": str(tmp_path / "Programs")})()
+    monkeypatch.setitem(vault.__dict__, "__compiled__", compiled)
+    monkeypatch.setattr(vault, "__file__", str(app / "vault.py"))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    assert vault.get_app_dir() == str(app)
+    assert vault.is_installed()
+    assert vault.get_data_dir() == str(tmp_path / "Roaming" / "SecretSpace" / "vault")
+
+
+def test_pyinstaller_build_uses_the_exe_folder(tmp_path, monkeypatch):
+    monkeypatch.setattr(vault.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(vault.sys, "executable", str(tmp_path / "SecretSpace.exe"))
+    assert vault.get_app_dir() == str(tmp_path)
+
+
 def test_default_vault_folder_is_named_vault(tmp_path, monkeypatch):
     monkeypatch.delenv("SECRETSPACE_DATA_DIR", raising=False)
     monkeypatch.setattr(vault, "get_app_dir", lambda: str(tmp_path))

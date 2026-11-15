@@ -80,12 +80,17 @@ def test_missing_libraries_are_installed_from_requirements():
     assert cmd[-2:] == ["-r", os.path.join(PROJECT, "requirements.txt")]
 
 
-def test_missing_pyinstaller_is_its_own_install():
-    runner = healthy(**{"import PyInstaller": build.Result(1, "")})
+def test_missing_nuitka_is_its_own_install():
+    runner = healthy(**{"import nuitka": build.Result(1, "")})
     checks = build.check_all(PROJECT, runner, find_iscc=has_iscc)
     [(label, cmd)] = build.fix_commands(checks, PROJECT,
                                         build.find_python(runner))
-    assert cmd[-3:] == ["pip", "install", "pyinstaller"]
+    assert cmd[-3:] == ["pip", "install", "nuitka"]
+
+
+def test_pyinstaller_is_no_longer_needed_for_the_app():
+    names = [c.name for c in build.check_all(PROJECT, healthy(), find_iscc=has_iscc)]
+    assert "PyInstaller" not in names and "Nuitka" in names
 
 
 def test_without_python_the_rest_waits_and_winget_is_offered():
@@ -93,7 +98,7 @@ def test_without_python_the_rest_waits_and_winget_is_offered():
     checks = build.check_all(PROJECT, runner, find_iscc=has_iscc)
     by = checks_by_name(checks)
     assert by["Python 3"].fix == "winget-python"
-    assert by["PyInstaller"].detail == "needs Python first"
+    assert by["Nuitka"].detail == "needs Python first"
     [(label, cmd)] = build.fix_commands(checks, PROJECT, None)
     assert cmd[0] == "winget" and cmd[-1] == build.WINGET_PYTHON
     assert "--scope" in cmd and cmd[cmd.index("--scope") + 1] == "user"
@@ -177,7 +182,7 @@ def test_build_runs_the_steps_in_order(project):
     assert build.build(project, py, r"C:\Inno\ISCC.exe", log=lambda s: None,
                        runner=runner, exists=lambda p: True)
     cmds = [" ".join(c) for c, _ in runner.calls]
-    assert "SecretSpace-installer.spec" in cmds[0]
+    assert " -m nuitka --standalone " in cmds[0] and cmds[0].endswith("gui.py")
     assert "/DAppVersion=9.8.7" in cmds[1] and "SecretSpace.iss" in cmds[1]
     assert "/DFileVersion=9.8.7.0" in cmds[1]
     assert len(cmds) == 2
@@ -199,6 +204,36 @@ def test_only_the_app_is_built():
     assert products == ["SecretSpace.exe", "SecretSpace-Client-Installer.exe"]
 
 
+def test_nuitka_builds_the_folder_the_installer_packs():
+    py = build.Python(["py", "-3"], "3.13.5", "python.exe")
+    cmd = build.nuitka_command("P", py, "4.3.0-rc.2")
+    opts = dict(a.split("=", 1) for a in cmd if a.startswith("--") and "=" in a)
+    assert cmd[:2] == ["py", "-3"] and "--standalone" in cmd
+    assert "--onefile" not in cmd
+    assert opts["--output-dir"] == os.path.join("P", "build", "installer")
+    product = build.build_steps("P", py, "iscc", "4.3.0")[0][2]
+    assert product == os.path.join("P", "build", "installer", "SecretSpace.dist",
+                                   "SecretSpace.exe")
+    assert opts["--output-folder-name"] + ".dist" == build.DIST
+    assert opts["--output-filename"] == "SecretSpace.exe"
+    assert opts["--windows-console-mode"] == "disable"
+    assert opts["--file-version"] == opts["--product-version"] == "4.3.0.2"
+    assert "--assume-yes-for-downloads" in cmd
+    # Every asset the app looks up beside itself, under its own name.
+    src = os.path.join("P", "sourceFiles")
+    for name in build.ASSETS:
+        assert f"--include-data-files={os.path.join(src, name)}={name}" in cmd
+    # The installer packs exactly what Nuitka writes.
+    with open(os.path.join(os.path.dirname(build.__file__), "..", "installer",
+                           "SecretSpace.iss"), encoding="utf-8") as f:
+        assert r'Source: "..\build\installer\SecretSpace.dist\*"' in f.read()
+
+
+def test_every_asset_exists():
+    for name in build.ASSETS:
+        assert os.path.isfile(os.path.join(PROJECT, "sourceFiles", name)), name
+
+
 def test_old_outputs_are_removed_before_building(project):
     build.build(project, build.Python(["py"], "3", "p"), "iscc",
                 log=lambda s: None, runner=FakeRunner(),
@@ -216,7 +251,7 @@ def test_an_old_installer_is_removed_too(project):
 
 
 def test_build_stops_at_the_first_failure(project):
-    runner = FakeRunner({"SecretSpace-installer.spec": build.Result(1, "boom")})
+    runner = FakeRunner({"-m nuitka": build.Result(1, "boom")})
     lines = []
     ok = build.build(project, build.Python(["py"], "3", "p"), "iscc",
                      log=lines.append, runner=runner, exists=lambda p: True)
@@ -226,7 +261,7 @@ def test_build_stops_at_the_first_failure(project):
 
 
 def test_a_missing_product_counts_as_failure(project):
-    """Exit code 0 is not enough: PyInstaller can 'succeed' and write nothing."""
+    """Exit code 0 is not enough: a build can 'succeed' and write nothing."""
     ok = build.build(project, build.Python(["py"], "3", "p"), "iscc",
                      log=lambda s: None, runner=FakeRunner(),
                      exists=lambda p: False)

@@ -12,7 +12,7 @@ has 0).
 
 import re
 
-__version__ = "4.2.0"
+__version__ = "4.3.0"
 
 #: The container an account's vaults are written in (account_crypto).
 VAULT_FORMAT = "SSV4"
