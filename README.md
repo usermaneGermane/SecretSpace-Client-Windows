@@ -513,6 +513,21 @@ asks before it is used. On such a connection someone on the network could
 take over the account *on the server* (not read a vault). Use it on a
 network you trust or through a VPN, or give the server a certificate.
 
+**Turning HTTPS on for a server you already sync with.** Run the server's
+`tls` command (its README says how); it prints what to do here:
+
+1. Copy the server's `server.crt` to this device.
+2. *Settings → Sync → Set up…*: change the address from `http://` to
+   `https://` — the same address and port — choose the copied file as the
+   certificate file, and press *Connect & sync*. No token is needed: the
+   account is already there.
+
+The app sees that it is the same server (same address and port; only the
+`s` changed), so every vault keeps what was last agreed with it and the next
+sync is an ordinary one. It checks the server against that certificate
+file only, so a machine pretending to be your server is refused. Do the
+same on each device.
+
 ### Changing the master password of an account you sync
 
 Change it as usual in *Settings → Master password → Change…*. The server
