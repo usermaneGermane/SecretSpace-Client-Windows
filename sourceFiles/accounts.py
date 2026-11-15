@@ -651,12 +651,21 @@ class Account:
         return found if isinstance(found, dict) and found.get("url") else None
 
     def set_server(self, url, ca_file: str = "") -> None:
-        """Remember the server (None forgets it). account.json only."""
+        """
+        Remember the server (None forgets it). account.json only.
+
+        The same server at a changed address -- http:// becoming https://
+        when HTTPS is turned on, the same host and port -- keeps what this
+        device knows about its vaults there. Only another server (or none)
+        starts them afresh.
+        """
+        import sync_client              # late: it is not needed to unlock
         info = dict(self.info)
         before = (info.get("server") or {}).get("url")
         info["server"] = ({"url": url.rstrip("/"), "ca_file": ca_file or ""}
                           if url else None)
-        if (info["server"] or {}).get("url") != before:
+        after = (info["server"] or {}).get("url")
+        if after != before and not sync_client.same_server(after, before):
             # Another server (or none) knows nothing of these vaults: they
             # are this device's again, to be put on whichever comes next.
             # (Roles and key generations were that server's too: on the next

@@ -17,6 +17,7 @@ import json
 import ssl
 import hashlib
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import vault
@@ -128,8 +129,33 @@ def note_password_change(vault_data: dict) -> int:
     return generation
 
 
-def _same_server(a: str, b: str) -> bool:
-    return (a or "").rstrip("/").lower() == (b or "").rstrip("/").lower()
+def server_identity(url: str):
+    """
+    What makes two addresses the same server: the host, the port and the
+    path -- not the scheme. One port is one listening program, so
+    http://10.0.0.3:8787 and https://10.0.0.3:8787 are the same server
+    before and after HTTPS was turned on. Without a port each scheme has
+    its own default (80, 443), which are two different ports.
+    """
+    parts = urllib.parse.urlsplit((url or "").strip())
+    scheme = parts.scheme.lower()
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    if port is None:
+        port = {"http": 80, "https": 443}.get(scheme)
+    return ((parts.hostname or "").lower(), port, parts.path.rstrip("/"))
+
+
+def same_server(a: str, b: str) -> bool:
+    """Are these two addresses the same server? (see server_identity)"""
+    if not a or not b:
+        return False
+    return server_identity(a) == server_identity(b)
+
+
+_same_server = same_server
 
 
 def base_origin_for(url: str, revision: int) -> dict:
