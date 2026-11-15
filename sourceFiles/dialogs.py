@@ -777,9 +777,19 @@ def settings_dialog(app):
     syn = section(wrap, "Sync")
     server = app.account.server
     if server:
+        where = server["url"]
+        if server.get("ca_file"):
+            where += "\nCertificate: " + os.path.basename(server["ca_file"])
         app._ghost_button(
-            setting_row(syn, "Synced with", server["url"], hint, first=True),
+            setting_row(syn, "Synced with", where, hint, first=True),
             "Sync now", lambda: (top.destroy(), app.sync_now()), width=150).pack()
+        app._ghost_button(
+            setting_row(syn, "Server address or certificate",
+                        "Change one or both - no token needed; your vaults "
+                        "stay in step.", hint),
+            "Edit…", lambda: (top.destroy(),
+                              account_sync_ui.server_dialog(app)),
+            width=150).pack()
         app._ghost_button(
             setting_row(syn, "Stop syncing on this PC",
                         "The server keeps its copy; connect again any time.",
