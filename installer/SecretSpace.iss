@@ -46,6 +46,12 @@ SetupIconFile=..\sourceFiles\SecretSpace-logo.ico
 UninstallDisplayIcon={app}\SecretSpace.exe
 UninstallDisplayName=SecretSpace
 WizardStyle=modern
+; The pictures come from make_wizard_images.py: 100%, 150% and 200% scaling.
+WizardImageFile=wizard-large-100.bmp,wizard-large-150.bmp,wizard-large-200.bmp
+WizardSmallImageFile=wizard-small-100.bmp,wizard-small-150.bmp,wizard-small-200.bmp
+; The GPL needs no "I accept": a page that says what it allows, and the
+; full text installed beside the program.
+InfoBeforeFile=licence-notice.txt
 Compression=lzma2
 SolidCompression=yes
 ; Close a running SecretSpace before replacing its files.
@@ -68,6 +74,7 @@ Type: files; Name: "{autodesktop}\PassMan.lnk"
 [Files]
 Source: "..\build\installer\SecretSpace\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "installed"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\SecretSpace"; Filename: "{app}\SecretSpace.exe"

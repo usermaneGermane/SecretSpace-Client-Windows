@@ -5,7 +5,9 @@ passwords are in encrypted vaults on your own PC (AES-256-GCM; the key comes
 from your master password and a Secret Key, through Argon2id). There is no
 online service behind it: it works offline, and if you want several devices
 in step, or a vault shared with other people, you run the sync server
-yourself, on your own hardware.
+yourself, on your own hardware. (The one other address it can contact is
+github.com, to see whether a newer version is out — only when you ask it to;
+see [Updates](#updates).)
 
 **This README describes SecretSpace 4** (4.0.0). It has everything
 SecretSpace 3 had — accounts, several vaults, sharing, recovery, the look
@@ -235,7 +237,9 @@ and an uninstaller under Settings → Apps; the program it installs is
 `SecretSpace.exe`. The vault lives in **`%APPDATA%\SecretSpace`**, not in the
 program folder, so upgrading or uninstalling never touches it. (A folder
 `%APPDATA%\PassMan` from an install before the rename is renamed to that
-at the app's first start.)
+at the app's first start.) Setup's first page says what the licence (GPL-3.0)
+allows; there is nothing to accept, and the full text is installed beside
+the program as `LICENSE.txt`.
 
 If you used the portable program of 2.2 or earlier (it was called PassMan
 then), the installer can move your vaults across. They are moved, not copied, and a vault already in
@@ -254,6 +258,20 @@ To run from source:
 pip install -r requirements.txt
 python sourceFiles/gui.py
 ```
+
+### Updates
+
+SecretSpace does not update itself. *Settings → Updates → Check now* asks
+github.com for the newest release of this app and tells you whether there is
+one; if there is, it offers to open its download page, and you install it
+as you did the first time (your accounts and vaults stay where they are).
+The switch *Check when SecretSpace starts* — off until you turn it on — does
+the same check quietly at each start and only speaks up when a new version
+is out.
+
+A check is one HTTPS request to `api.github.com`; nothing about you or your
+vaults is in it (GitHub sees your PC's address, as any website would).
+Nothing is downloaded or installed by the app.
 
 ## Building it yourself (Windows)
 
@@ -312,7 +330,13 @@ Copy the **whole project folder** to the other PC. The build needs:
 requirements.txt
 sourceFiles\    (all of it)
 installer\      (for SecretSpace-Client-Installer.exe)
+LICENSE         (installed beside the program)
 ```
+
+The installer's pictures (`installer\wizard-*.bmp`) are drawn from the logo
+and the font by `installer\make_wizard_images.py` (it needs Pillow). They are
+committed, so the build only reads them; draw them again after the logo or
+the colours change.
 
 `README.md` is not needed to build, and neither are the `tests` folders.
 
@@ -414,7 +438,7 @@ SecretSpace-Client-Windows/
 ├── SecretSpace-Builder.exe  the builder (built, not committed)
 ├── SecretSpace-Client-Installer.exe  installs the app (built, not committed)
 ├── vault/               vaults when running from source - never committed
-├── installer/           the Inno Setup script for the installer
+├── installer/           the Inno Setup script, its pictures and licence page
 └── sourceFiles/         the program itself
     ├── gui.py           app shell: login, account list + details, lifecycle
     ├── dialogs.py       the modal dialogs
@@ -436,6 +460,7 @@ SecretSpace-Client-Windows/
     ├── bip39_words.py   the BIP39 word list for the recovery phrase
     ├── importers.py     CSV/JSON parsing from other password managers
     ├── appconfig.py     non-secret preferences
+    ├── update_check.py  Settings → Updates: is a newer release on GitHub?
     ├── lockout.py       rate limiting of master-password attempts
     ├── password_generator.py
     ├── version.py       the version shown in the UI
@@ -625,6 +650,8 @@ needs no update for this.
   migrating away
 - Clipboard auto-clear, idle auto-lock, and a delay after repeated wrong
   master passwords
+- A check for a new version, when you ask for it (Settings → *Updates*)
+  *(4.2)*
 
 ## If you forget your master password
 

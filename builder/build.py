@@ -42,7 +42,10 @@ REQUIRED_FILES = (
     os.path.join("sourceFiles", "Manrope-OFL.txt"),
     os.path.join("installer", "SecretSpace.iss"),
     os.path.join("installer", "installed"),
-)
+    os.path.join("installer", "licence-notice.txt"),
+    "LICENSE",
+) + tuple(os.path.join("installer", f"wizard-{kind}-{percent}.bmp")
+          for kind in ("large", "small") for percent in (100, 150, 200))
 
 #: winget packages for what pip cannot install.
 WINGET_PYTHON = "Python.Python.3.13"
