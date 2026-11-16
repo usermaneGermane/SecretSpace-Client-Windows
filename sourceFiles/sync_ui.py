@@ -20,7 +20,7 @@ import sync
 import sync_client
 import vault
 from history_ui import local_time
-from theme import (F, TEXT, MUTED, GREEN, DANGER, INPUT_BG, CARD,
+from theme import (T, SP, R, F, TEXT, MUTED, GREEN, DANGER, INPUT_BG, CARD,
                    CARD_HOVER, CHOICE, WARN, MONO, tile_colors)
 from widgets import (ghost_button, accent_button, small_button, field, note,
                      check, error_label, dialog_shell)
@@ -245,9 +245,9 @@ def conflict_dialog(app, result, where=""):
         text="Whichever side you do not keep is saved in that entry's "
              "history — open History on the entry to revert. (An entry "
              "deleted on one side goes to the Archive instead.)",
-        font=F(12), text_color=GREEN, wraplength=shell.text_width,
+        font=F(T.small), text_color=GREEN, wraplength=shell.text_width,
         justify="left", anchor="w").grid(row=0, column=0, sticky="w",
-                                         padx=2, pady=(10, 6))
+                                         padx=SP.hair, pady=(SP.m, SP.s))
 
     for i, conflict in enumerate(result.conflicts):
         rows.append(_conflict_row(listing, i, conflict, answers))
@@ -276,14 +276,14 @@ def conflict_dialog(app, result, where=""):
     reveal_btn.pack(side="left")
     ghost_button(bar, "All: this PC",
                  lambda: set_all(sync.KEEP_LOCAL), width=120).pack(
-                     side="left", padx=(8, 0))
+                     side="left", padx=(SP.s, 0))
     ghost_button(bar, "All: server",
                  lambda: set_all(sync.KEEP_REMOTE), width=120).pack(
-                     side="left", padx=(8, 0))
+                     side="left", padx=(SP.s, 0))
 
     accent_button(bar, "Apply and sync", apply, width=170).pack(side="right")
     ghost_button(bar, "Cancel", top.destroy, width=110).pack(
-        side="right", padx=(0, 8))
+        side="right", padx=(0, SP.s))
 
     top.bind("<Escape>", lambda e: top.destroy())
     app.root.wait_window(top)
@@ -300,23 +300,23 @@ def _conflict_row(parent, index, conflict, answers):
     if index == 0:
         _secret_labels.clear()
 
-    card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=16)
-    card.grid(row=index + 1, column=0, sticky="ew", pady=6, padx=2)
+    card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=R.card)
+    card.grid(row=index + 1, column=0, sticky="ew", pady=SP.s, padx=SP.hair)
     card.grid_columnconfigure((0, 1), weight=1, uniform="sides")
 
     header = ctk.CTkFrame(card, fg_color="transparent")
-    header.grid(row=0, column=0, columnspan=2, sticky="ew", padx=16,
-                pady=(14, 0))
+    header.grid(row=0, column=0, columnspan=2, sticky="ew", padx=SP.l,
+                pady=(SP.l, 0))
     site = conflict.site or "(no site)"
     bg, ink, _ = tile_colors(conflict.site)
     ctk.CTkLabel(header, text=site[:1].upper(), width=38, height=38,
-                 corner_radius=11, fg_color=bg, text_color=ink,
-                 font=F(15, "bold")).pack(side="left", padx=(0, 12))
-    ctk.CTkLabel(header, text=site, font=F(15, "bold"),
+                 corner_radius=R.inner, fg_color=bg, text_color=ink,
+                 font=F(T.lead, "bold")).pack(side="left", padx=(0, SP.m))
+    ctk.CTkLabel(header, text=site, font=F(T.lead, "bold"),
                  text_color=TEXT).pack(side="left")
     ctk.CTkLabel(header, text=f"  {_kind_note(conflict)}  ", height=26,
-                 corner_radius=13, fg_color=INPUT_BG, text_color=WARN,
-                 font=F(11, "bold")).pack(side="left", padx=(12, 0))
+                 corner_radius=R.inner, fg_color=INPUT_BG, text_color=WARN,
+                 font=F(T.caption, "bold")).pack(side="left", padx=(SP.m, 0))
 
     gone = "not on the server" if conflict.kind == "missing" else "deleted"
     _version_panel(card, 1, 0, "On this PC", conflict.local, gone)
@@ -324,13 +324,13 @@ def _conflict_row(parent, index, conflict, answers):
 
     choice_row = ctk.CTkFrame(card, fg_color="transparent")
     choice_row.grid(row=2, column=0, columnspan=2, sticky="ew",
-                    padx=16, pady=(4, 14))
-    ctk.CTkLabel(choice_row, text="Keep", font=F(12, "bold"),
-                 text_color=MUTED).pack(side="left", padx=(0, 10))
+                    padx=SP.l, pady=(SP.xs, SP.l))
+    ctk.CTkLabel(choice_row, text="Keep", font=F(T.small, "bold"),
+                 text_color=MUTED).pack(side="left", padx=(0, SP.m))
 
     segmented = ctk.CTkSegmentedButton(
         choice_row, values=[CHOICE_LABELS[c] for c in CHOICE_ORDER],
-        font=F(12, "bold"), height=34, corner_radius=10, fg_color=INPUT_BG,
+        font=F(T.small, "bold"), height=34, corner_radius=R.button, fg_color=INPUT_BG,
         unselected_color=INPUT_BG, unselected_hover_color=CARD_HOVER,
         selected_color=CHOICE, selected_hover_color=CHOICE,
         text_color=TEXT,
@@ -369,37 +369,37 @@ def _version_panel(parent, row, column, title, entry, gone="deleted"):
     Passwords are masked until the user asks. ``gone`` is what an absent
     side says.
     """
-    panel = ctk.CTkFrame(parent, fg_color=INPUT_BG, corner_radius=14)
+    panel = ctk.CTkFrame(parent, fg_color=INPUT_BG, corner_radius=R.row)
     panel.grid(row=row, column=column, sticky="nsew",
-               padx=(16, 6) if column == 0 else (6, 16), pady=12)
+               padx=(SP.l, SP.s) if column == 0 else (6, 16), pady=SP.m)
 
     head = ctk.CTkFrame(panel, fg_color="transparent")
-    head.pack(fill="x", padx=14, pady=(12, 6))
-    ctk.CTkLabel(head, text=title, font=F(12, "bold"),
+    head.pack(fill="x", padx=SP.l, pady=(SP.m, SP.s))
+    ctk.CTkLabel(head, text=title, font=F(T.small, "bold"),
                  text_color=MUTED).pack(side="left")
 
     if entry is None:
-        ctk.CTkLabel(panel, text=gone, font=F(13, "bold"), text_color=DANGER,
-                     anchor="w").pack(anchor="w", padx=14, pady=(0, 14))
+        ctk.CTkLabel(panel, text=gone, font=F(T.label, "bold"), text_color=DANGER,
+                     anchor="w").pack(anchor="w", padx=SP.l, pady=(0, SP.l))
         return
 
     if vault.is_archived(entry):
-        ctk.CTkLabel(head, text="archived", font=F(11, "bold"),
+        ctk.CTkLabel(head, text="archived", font=F(T.caption, "bold"),
                      text_color=WARN).pack(side="right")
 
     def line(label, value, font=None):
         box = ctk.CTkFrame(panel, fg_color="transparent")
-        box.pack(fill="x", padx=14, pady=1)
-        ctk.CTkLabel(box, text=label, width=74, anchor="w", font=F(12),
+        box.pack(fill="x", padx=SP.l, pady=SP.hair)
+        ctk.CTkLabel(box, text=label, width=74, anchor="w", font=F(T.small),
                      text_color=MUTED).pack(side="left")
-        lbl = ctk.CTkLabel(box, text=value, anchor="w", font=font or F(13),
+        lbl = ctk.CTkLabel(box, text=value, anchor="w", font=font or F(T.label),
                            text_color=TEXT)
         lbl.pack(side="left", fill="x")
         return lbl
 
     line("Site", entry.get("site", "") or "—")
     line("Username", entry.get("username", "") or "—")
-    pwd = line("Password", "•" * 10, ctk.CTkFont(family=MONO, size=13))
+    pwd = line("Password", "•" * 10, ctk.CTkFont(family=MONO, size=T.label))
     _secret_labels.append((pwd, entry.get("password", "")))
     if entry.get("notes"):
         line("Notes", entry["notes"][:40])
@@ -408,9 +408,9 @@ def _version_panel(parent, row, column, title, entry, gone="deleted"):
 
     when = entry.get("updated_at", "")
     ctk.CTkLabel(panel, text=("Changed " + local_time(when)) if when
-                 else "Changed at an unknown time", font=F(11),
-                 text_color=MUTED, anchor="w").pack(anchor="w", padx=14,
-                                                    pady=(8, 12))
+                 else "Changed at an unknown time", font=F(T.caption),
+                 text_color=MUTED, anchor="w").pack(anchor="w", padx=SP.l,
+                                                    pady=(SP.s, SP.m))
 
 
 # ==========================================================================
@@ -457,9 +457,9 @@ def password_mismatch_dialog(app, adopt, wrong=False):
     shell = dialog_shell(top, title)
     wrap = shell.body
 
-    note(wrap, body, shell.text_width, color=TEXT, size=13, pady=(14, 0))
+    note(wrap, body, shell.text_width, color=TEXT, size=T.label, pady=(SP.l, 0))
     if hint:
-        note(wrap, hint, shell.text_width, size=12, pady=(8, 0))
+        note(wrap, hint, shell.text_width, size=T.small, pady=(SP.s, 0))
 
     entry = field(wrap, label, show="•")
 
@@ -522,11 +522,11 @@ def archive_dialog(app):
                    for e in vault.archived_accounts(data)]
         if not entries:
             box = ctk.CTkFrame(listing, fg_color="transparent")
-            box.grid(row=0, column=0, pady=80)
-            ctk.CTkLabel(box, text="The archive is empty", font=F(17, "bold"),
+            box.grid(row=0, column=0, pady=SP.empty)
+            ctk.CTkLabel(box, text="The archive is empty", font=F(T.heading, "bold"),
                          text_color=TEXT).pack()
             ctk.CTkLabel(box, text="Entries you archive show up here.",
-                         font=F(13), text_color=MUTED).pack(pady=(4, 0))
+                         font=F(T.label), text_color=MUTED).pack(pady=(SP.xs, 0))
             return
 
         for i, entry in enumerate(entries):
@@ -540,29 +540,29 @@ def archive_dialog(app):
 
 def _archive_row(app, parent, index, entry, rebuild):
     """A row like the main list's: tile, site, who and when, then actions."""
-    row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14)
-    row.grid(row=index, column=0, sticky="ew", pady=(10 if index == 0 else 4,
-                                                     4), padx=2)
+    row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=R.row)
+    row.grid(row=index, column=0, sticky="ew", pady=(SP.m if index == 0 else SP.xs,
+                                                     SP.xs), padx=SP.hair)
     row.grid_columnconfigure(1, weight=1)
 
     site = entry.get("site", "") or "—"
     bg, ink, _ = tile_colors(entry.get("site", ""))
     ctk.CTkLabel(row, text=site[:1].upper(), width=42, height=42,
-                 corner_radius=12, fg_color=bg, text_color=ink,
-                 font=F(16, "bold")).grid(row=0, column=0, padx=(12, 12),
-                                          pady=10)
+                 corner_radius=R.inner, fg_color=bg, text_color=ink,
+                 font=F(T.glyph_s, "bold")).grid(row=0, column=0, padx=(SP.m, SP.m),
+                                          pady=SP.m)
     info = ctk.CTkFrame(row, fg_color="transparent")
     info.grid(row=0, column=1, sticky="w")
-    ctk.CTkLabel(info, text=site, anchor="w", font=F(14, "bold"),
+    ctk.CTkLabel(info, text=site, anchor="w", font=F(T.body, "bold"),
                  text_color=TEXT).pack(anchor="w")
     when = entry.get("archived_at")
     ctk.CTkLabel(info,
                  text=f"{entry.get('username') or '—'}   ·   archived "
                       f"{local_time(when) if when else 'at an unknown time'}",
-                 anchor="w", font=F(12), text_color=MUTED).pack(anchor="w")
+                 anchor="w", font=F(T.small), text_color=MUTED).pack(anchor="w")
 
     buttons = ctk.CTkFrame(row, fg_color="transparent")
-    buttons.grid(row=0, column=2, padx=(8, 14))
+    buttons.grid(row=0, column=2, padx=(SP.s, SP.l))
 
     def read_only() -> bool:
         check = getattr(app, "entry_writable", None)
@@ -597,7 +597,7 @@ def _archive_row(app, parent, index, entry, rebuild):
         app.toast("Deleted permanently", "warn")
 
     small_button(buttons, "Restore", restore, accent=True,
-                 width=86).pack(side="left", padx=(0, 6))
+                 width=86).pack(side="left", padx=(0, SP.s))
     small_button(buttons, "Delete", purge, danger=True,
                  width=76).pack(side="left")
 
@@ -660,12 +660,12 @@ def sync_settings_dialog(app):
 
     note(wrap, "Plain http is reasonable over a VPN you trust. For https with "
          "a self-signed certificate, copy the .crt here and point the field "
-         "above at it.", shell.text_width, size=11, pady=(10, 0))
+         "above at it.", shell.text_width, size=T.caption, pady=(SP.m, 0))
 
-    status = ctk.CTkLabel(wrap, text="", font=F(12), text_color=MUTED,
+    status = ctk.CTkLabel(wrap, text="", font=F(T.small), text_color=MUTED,
                           wraplength=shell.text_width, justify="left",
                           anchor="w")
-    status.pack(anchor="w", fill="x", pady=(10, 0))
+    status.pack(anchor="w", fill="x", pady=(SP.m, 0))
 
     def _validate():
         """Shared by Test and Save: the typed fields, or None once the
@@ -761,9 +761,9 @@ def sync_settings_dialog(app):
     ghost_button(row, "Test connection", test, width=140).pack(side="left")
     accent_button(row, "Save & sync", save, width=130).pack(side="right")
     ghost_button(row, "Save only", save_offline, width=100).pack(
-        side="right", padx=(0, 8))
+        side="right", padx=(0, SP.s))
     ghost_button(row, "Cancel", top.destroy, width=90).pack(side="right",
-                                                            padx=(0, 8))
+                                                            padx=(0, SP.s))
     top.bind("<Escape>", lambda e: top.destroy())
     app._fit_modal(top)
 
@@ -802,10 +802,10 @@ def restore_from_server_dialog(app):
     user_entry = field(wrap, "Username", placeholder="the name on the other PC")
     pw_entry = field(wrap, "Master password", show="•")
 
-    status = ctk.CTkLabel(wrap, text="", font=F(12), text_color=DANGER,
+    status = ctk.CTkLabel(wrap, text="", font=F(T.small), text_color=DANGER,
                           wraplength=shell.text_width, justify="left",
                           anchor="w")
-    status.pack(anchor="w", fill="x", pady=(10, 0))
+    status.pack(anchor="w", fill="x", pady=(SP.m, 0))
 
     def restore():
         url = url_entry.get().strip()

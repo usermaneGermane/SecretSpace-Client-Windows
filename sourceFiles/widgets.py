@@ -15,13 +15,13 @@ from types import SimpleNamespace
 
 import customtkinter as ctk
 
-from theme import (ON_DANGER, TOOLTIP_BG, TOOLTIP_TEXT, tile_colors, strength_color, F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
+from theme import (T, SP, R, ON_DANGER, TOOLTIP_BG, TOOLTIP_TEXT, tile_colors, strength_color, F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
                    GREEN_HOVER, DANGER, DANGER_HOVER, INPUT_BG, BORDER,
                    CARD_HOVER, ON_ACCENT)
 from password_generator import estimate_strength
 
 #: Side padding inside every dialog.
-PAD = 28
+PAD = SP.dialog
 
 #: Segments in a strength meter -- the details card and the dialogs alike.
 STRENGTH_SEGMENTS = 5
@@ -48,7 +48,7 @@ class Tooltip:
         tw.wm_geometry(f"+{x}+{y}")
         tw.attributes("-topmost", True)
         lbl = tk.Label(tw, text=self.text, bg=TOOLTIP_BG, fg=TOOLTIP_TEXT,
-                       padx=9, pady=4, font=(FONT, 9), bd=0)
+                       padx=SP.s, pady=SP.xs, font=(FONT, T.tooltip_pt), bd=0)
         lbl.pack()
 
     def _hide(self, _=None):
@@ -63,25 +63,25 @@ class Tooltip:
 def ghost_button(parent, text, command, width=120, danger=False):
     return ctk.CTkButton(
         parent, text=text, command=command, width=width, height=40,
-        corner_radius=10, fg_color="transparent", border_width=1,
+        corner_radius=R.button, fg_color="transparent", border_width=1,
         border_color=BORDER, hover_color=CARD_HOVER,
-        text_color=DANGER if danger else TEXT, font=F(13, "bold"),
+        text_color=DANGER if danger else TEXT, font=F(T.label, "bold"),
     )
 
 
 def accent_button(parent, text, command, width=140):
     return ctk.CTkButton(
         parent, text=text, command=command, width=width, height=40,
-        corner_radius=10, fg_color=GREEN, hover_color=GREEN_HOVER,
-        text_color=ON_ACCENT, font=F(13, "bold"),
+        corner_radius=R.button, fg_color=GREEN, hover_color=GREEN_HOVER,
+        text_color=ON_ACCENT, font=F(T.label, "bold"),
     )
 
 
 def danger_button(parent, text, command, width=130):
     return ctk.CTkButton(
         parent, text=text, command=command, width=width, height=40,
-        corner_radius=10, fg_color=DANGER, hover_color=DANGER_HOVER,
-        text_color=ON_DANGER, font=F(13, "bold"),
+        corner_radius=R.button, fg_color=DANGER, hover_color=DANGER_HOVER,
+        text_color=ON_DANGER, font=F(T.label, "bold"),
     )
 
 
@@ -112,28 +112,28 @@ def small_button(parent, text, command, accent=False, danger=False, width=72):
     """The compact button of list rows (archive) -- same as the details card's."""
     return ctk.CTkButton(
         parent, text=text, command=command, width=width, height=34,
-        corner_radius=10,
+        corner_radius=R.button,
         fg_color=GREEN if accent else "transparent",
         hover_color=GREEN_HOVER if accent else CARD_HOVER,
         border_width=0 if accent else 1, border_color=BORDER,
         text_color=ON_ACCENT if accent else (DANGER if danger else TEXT),
-        font=F(12, "bold"))
+        font=F(T.small, "bold"))
 
 
 # ---------------------------------------------------------------------------
 # Form parts
 # ---------------------------------------------------------------------------
 def field_label(parent, text):
-    lbl = ctk.CTkLabel(parent, text=text, anchor="w", font=F(12, "bold"),
+    lbl = ctk.CTkLabel(parent, text=text, anchor="w", font=F(T.small, "bold"),
                        text_color=MUTED)
-    lbl.pack(anchor="w", pady=(14, 6))
+    lbl.pack(anchor="w", pady=(SP.l, SP.s))
     return lbl
 
 
 def entry(parent, show=None, placeholder="", height=44, font=None):
-    return ctk.CTkEntry(parent, height=height, corner_radius=12,
+    return ctk.CTkEntry(parent, height=height, corner_radius=R.inner,
                         fg_color=CARD, border_width=1, border_color=BORDER,
-                        show=show, font=font or F(14),
+                        show=show, font=font or F(T.body),
                         placeholder_text=placeholder)
 
 
@@ -144,7 +144,7 @@ def field(parent, label, show=None, placeholder=""):
     return e
 
 
-def note(parent, text, width, color=MUTED, size=12, pady=(0, 0)):
+def note(parent, text, width, color=MUTED, size=T.small, pady=(0, 0)):
     """A paragraph that wraps at ``width`` (the space it has, in points)."""
     lbl = ctk.CTkLabel(parent, text=text, font=F(size), text_color=color,
                        wraplength=width, justify="left", anchor="w")
@@ -153,9 +153,9 @@ def note(parent, text, width, color=MUTED, size=12, pady=(0, 0)):
 
 
 def error_label(parent, width):
-    lbl = ctk.CTkLabel(parent, text="", font=F(12), text_color=DANGER,
+    lbl = ctk.CTkLabel(parent, text="", font=F(T.small), text_color=DANGER,
                        wraplength=width, justify="left", anchor="w")
-    lbl.pack(anchor="w", fill="x", pady=(10, 0))
+    lbl.pack(anchor="w", fill="x", pady=(SP.m, 0))
     return lbl
 
 
@@ -166,15 +166,15 @@ def check(parent, text, width, checked=False):
     the box, and clicking it ticks the box all the same.
     """
     row = ctk.CTkFrame(parent, fg_color="transparent")
-    row.pack(fill="x", pady=(14, 0))
+    row.pack(fill="x", pady=(SP.l, 0))
     box = ctk.CTkCheckBox(row, text="", width=24, checkbox_width=22,
                           checkbox_height=22, fg_color=GREEN,
                           hover_color=GREEN_HOVER, border_color=MUTED)
     box.pack(side="left", anchor="n")
-    lbl = ctk.CTkLabel(row, text=text, font=F(12), text_color=TEXT,
+    lbl = ctk.CTkLabel(row, text=text, font=F(T.small), text_color=TEXT,
                        wraplength=width - 34, justify="left", anchor="w",
                        cursor="hand2")
-    lbl.pack(side="left", fill="x", padx=(8, 0))
+    lbl.pack(side="left", fill="x", padx=(SP.s, 0))
     lbl.bind("<Button-1>", lambda e: box.toggle())
     if checked:
         box.select()
@@ -187,16 +187,16 @@ def strength_widget(parent):
     Returns (frame, label, update(password)).
     """
     box = ctk.CTkFrame(parent, fg_color="transparent")
-    box.pack(fill="x", pady=(12, 0))
+    box.pack(fill="x", pady=(SP.m, 0))
     segments = []
     for _ in range(STRENGTH_SEGMENTS):
-        seg = ctk.CTkFrame(box, width=10, height=6, corner_radius=3,
+        seg = ctk.CTkFrame(box, width=10, height=6, corner_radius=R.meter,
                            fg_color=BORDER)
-        seg.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        seg.pack(side="left", fill="x", expand=True, padx=(0, SP.xs))
         segments.append(seg)
     label = ctk.CTkLabel(box, text="", width=64, anchor="e",
-                         font=F(12, "bold"), text_color=MUTED)
-    label.pack(side="left", padx=(6, 0))
+                         font=F(T.small, "bold"), text_color=MUTED)
+    label.pack(side="left", padx=(SP.s, 0))
 
     def update(password):
         name, frac = estimate_strength(password)
@@ -260,42 +260,42 @@ def dialog_shell(top, title, subtitle="", tile=None, danger=False,
     foot.pack(side="bottom", fill="x")
     _rule(foot)
     buttons = ctk.CTkFrame(foot, fg_color="transparent")
-    buttons.pack(fill="x", padx=PAD, pady=14)
+    buttons.pack(fill="x", padx=PAD, pady=SP.l)
 
     head = ctk.CTkFrame(top, fg_color=band or HEADER_BG, corner_radius=0)
     head.pack(side="top", fill="x")
     inner = ctk.CTkFrame(head, fg_color="transparent")
-    inner.pack(fill="x", padx=PAD, pady=(20, 18))
+    inner.pack(fill="x", padx=PAD, pady=(SP.xl, SP.xl))
     text_width = width - 2 * PAD
     tile_label = None
     if tile:
         letter, bg, ink = tile
         tile_label = ctk.CTkLabel(inner, text=letter, width=48, height=48,
-                                  corner_radius=14, fg_color=bg,
-                                  text_color=ink, font=F(20, "bold"))
-        tile_label.pack(side="left", padx=(0, 16))
+                                  corner_radius=R.row, fg_color=bg,
+                                  text_color=ink, font=F(T.glyph_m, "bold"))
+        tile_label.pack(side="left", padx=(0, SP.l))
         text_width -= 64
     words = ctk.CTkFrame(inner, fg_color="transparent")
     words.pack(side="left", fill="x", expand=True)
-    heading = ctk.CTkLabel(words, text=title, font=F(19, "bold"),
+    heading = ctk.CTkLabel(words, text=title, font=F(T.heading, "bold"),
                            text_color=DANGER if danger else TEXT, anchor="w",
                            justify="left", wraplength=text_width)
     heading.pack(anchor="w")
     if subtitle:
-        ctk.CTkLabel(words, text=subtitle, font=F(12),
+        ctk.CTkLabel(words, text=subtitle, font=F(T.small),
                      text_color=TEXT if band else MUTED,
                      anchor="w", justify="left",
-                     wraplength=text_width).pack(anchor="w", pady=(3, 0))
+                     wraplength=text_width).pack(anchor="w", pady=(SP.xs, 0))
     if not band:
         _rule(head)
 
     if scroll:
         body = ctk.CTkScrollableFrame(top, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=(PAD - 6, 8), pady=(8, 8))
+        body.pack(fill="both", expand=True, padx=(PAD - SP.s, SP.s), pady=(SP.s, SP.s))
         body_width = width - 2 * PAD - 24
     else:
         body = ctk.CTkFrame(top, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=PAD, pady=(6, 22))
+        body.pack(fill="both", expand=True, padx=PAD, pady=(SP.s, SP.xxl))
         body_width = width - 2 * PAD
     return SimpleNamespace(body=body, buttons=buttons, heading=heading,
                            tile=tile_label, text_width=body_width)
@@ -303,12 +303,12 @@ def dialog_shell(top, title, subtitle="", tile=None, danger=False,
 
 def section(parent, title, danger=False, first=False):
     """A titled card, like the details card's sections."""
-    ctk.CTkLabel(parent, text=title, font=F(12, "bold"),
+    ctk.CTkLabel(parent, text=title, font=F(T.small, "bold"),
                  text_color=DANGER if danger else MUTED,
-                 anchor="w").pack(anchor="w", pady=(10 if first else 22, 6))
+                 anchor="w").pack(anchor="w", pady=(SP.m if first else SP.xxl, SP.s))
     # A card needs no outline on the window colour; a dangerous one keeps
     # its red line.
-    card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=16,
+    card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=R.card,
                         border_width=1 if danger else 0, border_color=DANGER)
     card.pack(fill="x")
     return card
@@ -321,28 +321,30 @@ def setting_row(card, title, hint="", hint_width=240, first=False):
     """
     if not first:
         ctk.CTkFrame(card, height=1, corner_radius=0,
-                     fg_color=BORDER).pack(fill="x", padx=16)
+                     fg_color=BORDER).pack(fill="x", padx=SP.l)
     row = ctk.CTkFrame(card, fg_color="transparent")
-    row.pack(fill="x", padx=16, pady=14)
+    row.pack(fill="x", padx=SP.l, pady=SP.l)
     row.grid_columnconfigure(0, weight=1)
     text = ctk.CTkFrame(row, fg_color="transparent")
     text.grid(row=0, column=0, sticky="w")
-    ctk.CTkLabel(text, text=title, font=F(13, "bold"), text_color=TEXT,
+    ctk.CTkLabel(text, text=title, font=F(T.label, "bold"), text_color=TEXT,
                  anchor="w").pack(anchor="w")
     if hint:
-        ctk.CTkLabel(text, text=hint, font=F(12), text_color=MUTED,
+        ctk.CTkLabel(text, text=hint, font=F(T.small), text_color=MUTED,
                      wraplength=hint_width, justify="left",
-                     anchor="w").pack(anchor="w", pady=(2, 0))
-    right = ctk.CTkFrame(row, fg_color="transparent")
-    right.grid(row=0, column=1, sticky="e", padx=(12, 0))
+                     anchor="w").pack(anchor="w", pady=(SP.hair, 0))
+    # 1 x 1 until a control is put in it: an empty CTkFrame is 200 x 200,
+    # which squeezed the hint (cutting off a long path) and made the row tall.
+    right = ctk.CTkFrame(row, fg_color="transparent", width=1, height=1)
+    right.grid(row=0, column=1, sticky="e", padx=(SP.m, 0))
     return right
 
 
 def option_menu(parent, values, command, width=140):
     return ctk.CTkOptionMenu(
-        parent, width=width, height=34, corner_radius=10, values=values,
+        parent, width=width, height=34, corner_radius=R.button, values=values,
         fg_color=INPUT_BG, button_color=BORDER, button_hover_color=CARD_HOVER,
-        text_color=TEXT, font=F(12), dropdown_fg_color=CARD,
+        text_color=TEXT, font=F(T.small), dropdown_fg_color=CARD,
         dropdown_hover_color=CARD_HOVER, dropdown_text_color=TEXT,
         command=command)
 
@@ -363,14 +365,30 @@ def fit_modal(root, top):
     top.update_idletasks()
     need = top.winfo_reqheight()
     cur_w, cur_h = top.winfo_width(), top.winfo_height()
-    if need == cur_h or (need < cur_h and not getattr(top, "pm_fit_exact",
-                                                      False)):
-        return
+    if need < cur_h and not getattr(top, "pm_fit_exact", False):
+        need = cur_h                    # keeps its size, but is still placed
     x = root.winfo_rootx() + (root.winfo_width() - cur_w) // 2
     y = root.winfo_rooty() + (root.winfo_height() - need) // 2
+    x, y = on_screen(x, y, cur_w, need, top.winfo_screenwidth(),
+                     top.winfo_screenheight())
     # Raw tkinter geometry: winfo_* values are physical pixels, and CTk's
     # geometry() would scale them a second time on high-DPI displays.
-    tk.Toplevel.geometry(top, f"{cur_w}x{need}+{max(x, 0)}+{max(y, 0)}")
+    tk.Toplevel.geometry(top, f"{cur_w}x{need}+{x}+{y}")
+
+
+#: Room kept below a dialog for the taskbar and the window's frame.
+SCREEN_MARGIN = 64
+
+
+def on_screen(x, y, width, height, screen_w, screen_h):
+    """
+    Move a window of this size so it is on the screen: centred over the main
+    window, a tall dialog went off the bottom when the main window sat low,
+    and its buttons could not be reached.
+    """
+    x = max(0, min(x, screen_w - width))
+    y = max(0, min(y, screen_h - SCREEN_MARGIN - height))
+    return x, y
 
 
 def safe_grab(root, top, icon_path=None):
@@ -409,8 +427,8 @@ def confirm(root, title, message, danger=True, icon_path=None):
     top = modal(root, title, 440, 240, icon_path)
     result = {"ok": False}
     shell = dialog_shell(top, title)
-    note(shell.body, message, shell.text_width, color=TEXT, size=13,
-         pady=(14, 0))
+    note(shell.body, message, shell.text_width, color=TEXT, size=T.label,
+         pady=(SP.l, 0))
 
     def ok():
         result["ok"] = True

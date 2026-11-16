@@ -17,7 +17,7 @@ import account_sync
 import accounts
 import sharing_ui
 from sync_ui import _in_background
-from theme import F, TEXT, MUTED, CARD, WARN, tile_colors
+from theme import T, SP, R, F, TEXT, MUTED, CARD, WARN, tile_colors
 from widgets import (dialog_shell, ghost_button, accent_button, small_button,
                      field, error_label)
 
@@ -105,28 +105,28 @@ def _vault_row(app, parent, index, vault_id, changed):
     name = app.vault_name(vault_id)
     record = account.vault_record(vault_id)
 
-    row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14)
-    row.grid(row=index, column=0, sticky="ew", padx=2,
-             pady=(10 if index == 0 else 4, 4))
+    row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=R.row)
+    row.grid(row=index, column=0, sticky="ew", padx=SP.hair,
+             pady=(SP.m if index == 0 else SP.xs, SP.xs))
     row.grid_columnconfigure(1, weight=1)
 
     # The vault's tile, as in the list at the left of the main window.
     tile_bg, tile_ink, _ = tile_colors(name)
     ctk.CTkLabel(row, text=(name[:1].upper() or "?"), width=40, height=40,
-                 corner_radius=12, fg_color=tile_bg, text_color=tile_ink,
-                 font=F(15, "bold")).grid(row=0, column=0, padx=(14, 0),
-                                          pady=12)
+                 corner_radius=R.inner, fg_color=tile_bg, text_color=tile_ink,
+                 font=F(T.lead, "bold")).grid(row=0, column=0, padx=(SP.l, 0),
+                                          pady=SP.m)
     info = ctk.CTkFrame(row, fg_color="transparent")
-    info.grid(row=0, column=1, sticky="w", padx=(12, 8), pady=12)
-    ctk.CTkLabel(info, text=name, anchor="w", font=F(14, "bold"),
+    info.grid(row=0, column=1, sticky="w", padx=(SP.m, SP.s), pady=SP.m)
+    ctk.CTkLabel(info, text=name, anchor="w", font=F(T.body, "bold"),
                  text_color=TEXT).pack(anchor="w")
     text, colour = _status(app, vault_id)
     ctk.CTkLabel(info, text=f"{_count(app.vaults.get(vault_id, {}))}  ·  {text}",
-                 anchor="w", justify="left", wraplength=240, font=F(12),
+                 anchor="w", justify="left", wraplength=240, font=F(T.small),
                  text_color=colour).pack(anchor="w")
 
     side = ctk.CTkFrame(row, fg_color="transparent")
-    side.grid(row=0, column=2, padx=(0, 14), pady=8)
+    side.grid(row=0, column=2, padx=(0, SP.l), pady=SP.s)
     upper = ctk.CTkFrame(side, fg_color="transparent")
     upper.pack(anchor="e")
     owner = account.vault_role(vault_id) == accounts.ROLE_OWNER
@@ -139,7 +139,7 @@ def _vault_row(app, parent, index, vault_id, changed):
 
     if not personal:
         small_button(upper, "Members", members, width=84).pack(
-            side="left", padx=(0, 6))
+            side="left", padx=(0, SP.s))
     small_button(upper, "Activity",
                  lambda: sharing_ui.activity_dialog(app, vault_id),
                  width=78).pack(side="left")
@@ -147,7 +147,7 @@ def _vault_row(app, parent, index, vault_id, changed):
         return
 
     buttons = ctk.CTkFrame(side, fg_color="transparent")
-    buttons.pack(anchor="e", pady=(6, 0))
+    buttons.pack(anchor="e", pady=(SP.s, 0))
 
     def rename():
         new = _ask_name(app, f"Rename “{name}”", "The new name shows on all "
@@ -165,10 +165,10 @@ def _vault_row(app, parent, index, vault_id, changed):
 
     if record.get("gone_from_server") and account.server:
         small_button(buttons, "Put back", put_back, accent=True,
-                     width=84).pack(side="left", padx=(0, 6))
+                     width=84).pack(side="left", padx=(0, SP.s))
     elif owner:
         small_button(buttons, "Rename", rename, width=84).pack(
-            side="left", padx=(0, 6))
+            side="left", padx=(0, SP.s))
     leaving = not owner and not record.get("gone_from_server")
     small_button(buttons, "Leave" if leaving else "Delete", delete, danger=True,
                  width=78).pack(side="left")

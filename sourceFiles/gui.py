@@ -36,7 +36,7 @@ import vaults_ui
 import recovery_ui
 import totp
 import update_check
-from theme import (ON_DANGER, F, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
+from theme import (T, SP, R, ON_DANGER, F, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    ON_ACCENT, WARN, MONO, DECOR_DISC_A, DECOR_DISC_B,
                    DECOR_DOT, DECOR_INK, pick, apply_appearance,
@@ -221,8 +221,8 @@ class VaultNav:
 
     def _row(self, index, label):
         row = ctk.CTkFrame(self.frame, fg_color="transparent",
-                           corner_radius=12, height=44)
-        row.grid(row=index, column=0, sticky="ew", pady=2)
+                           corner_radius=R.inner, height=44)
+        row.grid(row=index, column=0, sticky="ew", pady=SP.hair)
         row.grid_columnconfigure(1, weight=1)
         if label == ALL_VAULTS:
             bg, ink, letter = GREEN, ON_ACCENT, "≡"
@@ -230,15 +230,15 @@ class VaultNav:
             bg, ink, _ = tile_colors(label)
             letter = label[:1].upper() or "?"
         tile = ctk.CTkLabel(row, text=letter, width=28, height=28,
-                            corner_radius=8, fg_color=bg, text_color=ink,
-                            font=F(12, "bold"))
-        tile.grid(row=0, column=0, padx=(10, 10), pady=8)
+                            corner_radius=R.small, fg_color=bg, text_color=ink,
+                            font=F(T.small, "bold"))
+        tile.grid(row=0, column=0, padx=(SP.m, SP.m), pady=SP.s)
         name = ctk.CTkLabel(row, text=_clip(label, 16), anchor="w",
-                            font=F(13, "bold"), text_color=TEXT)
+                            font=F(T.label, "bold"), text_color=TEXT)
         name.grid(row=0, column=1, sticky="w")
-        note = ctk.CTkLabel(row, text=self._notes.get(label, ""), font=F(11),
+        note = ctk.CTkLabel(row, text=self._notes.get(label, ""), font=F(T.caption),
                             text_color=MUTED)
-        note.grid(row=0, column=2, padx=(6, 12))
+        note.grid(row=0, column=2, padx=(SP.s, SP.m))
         for w in (row, tile, name, note):
             w.bind("<Button-1>",
                    lambda e, label=label: self._dropdown_callback(label))
@@ -472,7 +472,7 @@ class PasswordManagerGUI:
         return ctk.CTkLabel(parent, text="P", width=size, height=size,
                             corner_radius=size // 3, fg_color=GREEN,
                             text_color=ON_ACCENT,
-                            font=F(16 if small else 28, "bold"))
+                            font=F(T.glyph_s if small else 28, "bold"))
 
     @staticmethod
     def _circle(parent, text, size, bg, ink, font):
@@ -542,10 +542,10 @@ class PasswordManagerGUI:
         host = getattr(self, "detail", None)
         on_card = host is not None and host.winfo_exists() and host.winfo_ismapped()
         self._toast = ctk.CTkLabel(
-            self.root, text=f"   {message}   ", height=38, corner_radius=12,
+            self.root, text=f"   {message}   ", height=38, corner_radius=R.inner,
             fg_color=color, bg_color=CARD if on_card else BG,
             text_color=ON_DANGER if kind == "error" else ON_ACCENT,
-            font=F(13, "bold"),
+            font=F(T.label, "bold"),
         )
         self._toast.place(in_=host if on_card else self.root,
                           relx=0.5, rely=1.0, anchor="s", y=-22)
@@ -699,18 +699,18 @@ class PasswordManagerGUI:
                       lambda e: self._backdrop_resized(backdrop, e.width,
                                                        e.height))
 
-        card = ctk.CTkFrame(backdrop, fg_color=CARD, corner_radius=24,
+        card = ctk.CTkFrame(backdrop, fg_color=CARD, corner_radius=R.dialog,
                             bg_color=BG)
         card.place(relx=0.5, rely=0.5, anchor="center")
         pad = ctk.CTkFrame(card, fg_color="transparent")
-        pad.pack(padx=40, pady=36)
+        pad.pack(padx=SP.page, pady=SP.page)
 
         self._logo(pad).pack()
-        ctk.CTkLabel(pad, text="Welcome back", font=F(26, "bold"),
-                     text_color=TEXT).pack(pady=(12, 0))
+        ctk.CTkLabel(pad, text="Welcome back", font=F(T.title, "bold"),
+                     text_color=TEXT).pack(pady=(SP.m, 0))
         ctk.CTkLabel(pad, text="Pick your account and enter its master "
                               "password.",
-                     font=F(13), text_color=MUTED).pack(pady=(4, 20))
+                     font=F(T.label), text_color=MUTED).pack(pady=(SP.xs, SP.xl))
 
         users = accounts.list_accounts()
         last = appconfig.load_config().get("last_username", "")
@@ -719,20 +719,20 @@ class PasswordManagerGUI:
         self._login_tiles.pack(fill="x")
         self._draw_login_tiles(users)
 
-        ctk.CTkLabel(pad, text="Master password", font=F(12, "bold"),
-                     text_color=MUTED, anchor="w").pack(fill="x", pady=(20, 6))
+        ctk.CTkLabel(pad, text="Master password", font=F(T.small, "bold"),
+                     text_color=MUTED, anchor="w").pack(fill="x", pady=(SP.xl, SP.s))
         pw_row = ctk.CTkFrame(pad, fg_color="transparent")
         pw_row.pack(fill="x")
         pw_row.grid_columnconfigure(0, weight=1)
         self.password_entry = ctk.CTkEntry(
-            pw_row, height=50, corner_radius=14, fg_color=INPUT_BG, show="•",
-            border_color=BORDER, font=F(15), placeholder_text="Master password")
+            pw_row, height=50, corner_radius=R.row, fg_color=INPUT_BG, show="•",
+            border_color=BORDER, font=F(T.lead), placeholder_text="Master password")
         self.password_entry.grid(row=0, column=0, sticky="ew")
         reveal_btn = ctk.CTkButton(
-            pw_row, text="Show", width=64, height=50, corner_radius=14,
+            pw_row, text="Show", width=64, height=50, corner_radius=R.row,
             fg_color="transparent", border_width=1, border_color=BORDER,
-            hover_color=CARD_HOVER, text_color=MUTED, font=F(12, "bold"))
-        reveal_btn.grid(row=0, column=1, padx=(8, 0))
+            hover_color=CARD_HOVER, text_color=MUTED, font=F(T.small, "bold"))
+        reveal_btn.grid(row=0, column=1, padx=(SP.s, 0))
 
         def toggle_pw():
             if self.password_entry.cget("show"):
@@ -743,15 +743,15 @@ class PasswordManagerGUI:
                 reveal_btn.configure(text="Show")
         reveal_btn.configure(command=toggle_pw)
 
-        self.login_error = ctk.CTkLabel(pad, text="", font=F(12),
+        self.login_error = ctk.CTkLabel(pad, text="", font=F(T.small),
                                         text_color=DANGER, wraplength=360)
-        self.login_error.pack(pady=(8, 2))
+        self.login_error.pack(pady=(SP.s, SP.hair))
 
         self.unlock_button = self._accent_button(
             pad, self._unlock_text(), self.unlock_vault, width=360)
-        self.unlock_button.configure(height=52, corner_radius=14,
-                                     font=F(15, "bold"))
-        self.unlock_button.pack(fill="x", pady=(4, 16))
+        self.unlock_button.configure(height=52, corner_radius=R.row,
+                                     font=F(T.lead, "bold"))
+        self.unlock_button.pack(fill="x", pady=(SP.xs, SP.l))
 
         links = ctk.CTkFrame(pad, fg_color="transparent")
         links.pack(fill="x")
@@ -760,20 +760,20 @@ class PasswordManagerGUI:
         ctk.CTkButton(links, text="Create an account",
                       command=self.create_user_dialog, width=10, height=32,
                       fg_color="transparent", hover_color=CARD_HOVER,
-                      text_color=GREEN, font=F(13, "bold")).pack(side="left")
+                      text_color=GREEN, font=F(T.label, "bold")).pack(side="left")
         ctk.CTkButton(links, text="Sign in from a server",
                       command=lambda: account_sync_ui.sign_in_dialog(self),
                       width=10, height=32, fg_color="transparent",
                       hover_color=CARD_HOVER, text_color=GREEN,
-                      font=F(13, "bold")).pack(side="right")
+                      font=F(T.label, "bold")).pack(side="right")
         ctk.CTkButton(pad, text="Forgot your master password?",
                       command=lambda: recovery_ui.recover_dialog(
                           self, self._login_user or ""),
                       width=10, height=28, fg_color="transparent",
                       hover_color=CARD_HOVER, text_color=MUTED,
-                      font=F(12)).pack(pady=(6, 0))
-        ctk.CTkLabel(pad, text=version_string(), font=F(11),
-                     text_color=MUTED).pack(pady=(8, 0))
+                      font=F(T.small)).pack(pady=(SP.s, 0))
+        ctk.CTkLabel(pad, text=version_string(), font=F(T.caption),
+                     text_color=MUTED).pack(pady=(SP.s, 0))
 
         self.password_entry.bind("<Return>", lambda e: self.unlock_vault())
         self.password_entry.focus()
@@ -867,35 +867,35 @@ class PasswordManagerGUI:
                          text="There is no SecretSpace 3 account on this PC yet. "
                               "Create one, then import your 2.x vaults into "
                               "it.",
-                         font=F(13), text_color=MUTED, wraplength=360).grid(
+                         font=F(T.label), text_color=MUTED, wraplength=360).grid(
                 row=0, column=0, columnspan=LOGIN_TILES_PER_ROW)
             return
         for i, name in enumerate(users + [None]):
             tile = self._login_tile(name)
             tile.grid(row=i // LOGIN_TILES_PER_ROW,
-                      column=i % LOGIN_TILES_PER_ROW, padx=6, pady=6,
+                      column=i % LOGIN_TILES_PER_ROW, padx=SP.s, pady=SP.s,
                       sticky="ew")
 
     def _login_tile(self, name):
         picked = name is not None and name == self._login_user
         tile = ctk.CTkFrame(self._login_tiles, width=112, height=108,
-                            corner_radius=18, border_width=2,
+                            corner_radius=R.band, border_width=2,
                             border_color=GREEN if picked else BORDER,
                             fg_color=SELECTED if picked else CARD)
         tile.pack_propagate(False)
         if name is None:
             avatar, letters = self._circle(tile, "+", 50, INPUT_BG, MUTED,
-                                           F(22, "bold"))
+                                           F(T.glyph_m, "bold"))
             label = "Add account"
             command = self.create_user_dialog
         else:
             bg, ink, _ = tile_colors(name)
             avatar, letters = self._circle(tile, _initials(name), 50, bg, ink,
-                                           F(16, "bold"))
+                                           F(T.glyph_s, "bold"))
             label = _clip(name, 14)
             command = lambda: self._pick_login_user(name)
-        avatar.pack(pady=(14, 6))
-        caption = ctk.CTkLabel(tile, text=label, font=F(12, "bold"),
+        avatar.pack(pady=(SP.l, SP.s))
+        caption = ctk.CTkLabel(tile, text=label, font=F(T.small, "bold"),
                                text_color=TEXT)
         caption.pack()
         for w in (tile, avatar, letters, caption):
@@ -1090,9 +1090,9 @@ class PasswordManagerGUI:
     def _nav_button(self, parent, text, command, picture):
         """A quiet row of the side bar: an icon and a name."""
         return ctk.CTkButton(
-            parent, text=text, command=command, height=38, corner_radius=12,
+            parent, text=text, command=command, height=38, corner_radius=R.inner,
             fg_color="transparent", hover_color=CARD_HOVER, anchor="w",
-            text_color=MUTED, font=F(13, "bold"),
+            text_color=MUTED, font=F(T.label, "bold"),
             image=icon(picture, 18, MUTED), compound="left")
 
     def show_main_window(self):
@@ -1103,59 +1103,59 @@ class PasswordManagerGUI:
         # Three columns: the vaults, the entries of the one picked, and the
         # selected entry.
         shell = ctk.CTkFrame(self.root, fg_color="transparent")
-        shell.grid(row=1, column=0, sticky="nsew", padx=16, pady=16)
+        shell.grid(row=1, column=0, sticky="nsew", padx=SP.l, pady=SP.l)
         shell.grid_rowconfigure(0, weight=1)
         shell.grid_columnconfigure(1, weight=1, minsize=320)
         shell.grid_columnconfigure(2, weight=2, minsize=520)
 
         # ---- side bar ----
         side = ctk.CTkFrame(shell, fg_color="transparent", width=204)
-        side.grid(row=0, column=0, sticky="ns", padx=(0, 16))
+        side.grid(row=0, column=0, sticky="ns", padx=(0, SP.l))
         side.pack_propagate(False)
 
         brand = ctk.CTkFrame(side, fg_color="transparent")
-        brand.pack(fill="x", padx=8, pady=(6, 18))
+        brand.pack(fill="x", padx=SP.s, pady=(SP.s, SP.xl))
         self._logo(brand, small=True).pack(side="left")
-        ctk.CTkLabel(brand, text="SecretSpace", font=F(17, "bold"),
-                     text_color=TEXT).pack(side="left", padx=(10, 0))
+        ctk.CTkLabel(brand, text="SecretSpace", font=F(T.heading, "bold"),
+                     text_color=TEXT).pack(side="left", padx=(SP.m, 0))
 
         # Which vault the list shows. New entries go to the one picked.
         self.vault_menu = VaultNav(side, self._on_vault_pick)
         self.vault_menu.frame.pack(fill="x")
         manage = self._nav_button(side, "Manage vaults…", self.vaults_dialog,
                                   "vaults")
-        manage.pack(fill="x", pady=(6, 0))
+        manage.pack(fill="x", pady=(SP.s, 0))
         Tooltip(manage, "Add, rename, share or delete vaults")
 
         # Bottom up: the account, then the places you go occasionally.
-        ctk.CTkLabel(side, text=version_string(), font=F(11),
-                     text_color=MUTED).pack(side="bottom", pady=(6, 0))
-        me = ctk.CTkFrame(side, fg_color=CARD, corner_radius=14)
+        ctk.CTkLabel(side, text=version_string(), font=F(T.caption),
+                     text_color=MUTED).pack(side="bottom", pady=(SP.s, 0))
+        me = ctk.CTkFrame(side, fg_color=CARD, corner_radius=R.row)
         me.pack(side="bottom", fill="x")
         bg, ink, _ = tile_colors(self.current_user)
         who = ctk.CTkFrame(me, fg_color="transparent")
-        who.pack(fill="x", padx=12, pady=(12, 8))
+        who.pack(fill="x", padx=SP.m, pady=(SP.m, SP.s))
         self._circle(who, _initials(self.current_user), 34, bg, ink,
-                     F(12, "bold"))[0].pack(side="left")
+                     F(T.small, "bold"))[0].pack(side="left")
         ctk.CTkLabel(who, text=_clip(self.current_user, 16),
-                     font=F(13, "bold"), text_color=TEXT).pack(
-            side="left", padx=(10, 0))
+                     font=F(T.label, "bold"), text_color=TEXT).pack(
+            side="left", padx=(SP.m, 0))
         Tooltip(who, "The account you unlocked. Lock to switch to another.")
         pair = ctk.CTkFrame(me, fg_color="transparent")
-        pair.pack(fill="x", padx=12, pady=(0, 12))
+        pair.pack(fill="x", padx=SP.m, pady=(0, SP.m))
         pair.grid_columnconfigure((0, 1), weight=1, uniform="pair")
         syn = self._small_button(pair, "Sync", self.sync_now)
         syn.configure(image=icon("sync", 16), compound="left")
-        syn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        syn.grid(row=0, column=0, sticky="ew", padx=(0, SP.xs))
         Tooltip(syn, "Sync this account with its server (Settings → Sync)")
         lock = self._small_button(pair, "Lock", self.lock_vault)
         lock.configure(image=icon("lock", 16), compound="left")
-        lock.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        lock.grid(row=0, column=1, sticky="ew", padx=(SP.xs, 0))
         Tooltip(lock, "Lock the account and sign out")
 
         gear = self._nav_button(side, "Settings", self.settings_dialog,
                                 "settings")
-        gear.pack(side="bottom", fill="x", pady=(0, 10))
+        gear.pack(side="bottom", fill="x", pady=(0, SP.m))
         imp = self._nav_button(side, "Import", self.import_dialog, "import")
         imp.pack(side="bottom", fill="x")
         Tooltip(imp, "Import a 2.x vault, or a CSV or JSON file")
@@ -1173,7 +1173,7 @@ class PasswordManagerGUI:
 
         # ---- the entries ----
         left = ctk.CTkFrame(shell, fg_color="transparent")
-        left.grid(row=0, column=1, sticky="nsew", padx=(0, 16))
+        left.grid(row=0, column=1, sticky="nsew", padx=(0, SP.l))
         left.grid_rowconfigure(2, weight=1)
         left.grid_columnconfigure(0, weight=1)
 
@@ -1181,28 +1181,28 @@ class PasswordManagerGUI:
         top.grid(row=0, column=0, sticky="ew")
         top.grid_columnconfigure(0, weight=1)
         self.search_entry = ctk.CTkEntry(
-            top, height=46, corner_radius=12, fg_color=CARD,
-            border_color=CARD, font=F(14),
+            top, height=46, corner_radius=R.inner, fg_color=CARD,
+            border_color=CARD, font=F(T.body),
             placeholder_text="Search   (Ctrl+F)")
         self.search_entry.grid(row=0, column=0, sticky="ew")
         self.search_entry.bind("<KeyRelease>", self._on_search)
         add = ctk.CTkButton(
             top, text="+", command=self.add_account_dialog, width=46,
-            height=46, corner_radius=12, fg_color=GREEN,
-            hover_color=GREEN_HOVER, text_color=ON_ACCENT, font=F(22, "bold"))
-        add.grid(row=0, column=1, padx=(10, 0))
+            height=46, corner_radius=R.inner, fg_color=GREEN,
+            hover_color=GREEN_HOVER, text_color=ON_ACCENT, font=F(T.glyph_m, "bold"))
+        add.grid(row=0, column=1, padx=(SP.m, 0))
         Tooltip(add, "Add an entry")
 
         info = ctk.CTkFrame(left, fg_color="transparent")
-        info.grid(row=1, column=0, sticky="ew", pady=(12, 6))
-        self.all_chip = ctk.CTkLabel(info, text="", font=F(12, "bold"),
+        info.grid(row=1, column=0, sticky="ew", pady=(SP.m, SP.s))
+        self.all_chip = ctk.CTkLabel(info, text="", font=F(T.small, "bold"),
                                      text_color=MUTED)
-        self.all_chip.pack(side="left", padx=(6, 0))
+        self.all_chip.pack(side="left", padx=(SP.s, 0))
         sort_menu = ctk.CTkOptionMenu(
-            info, width=160, height=32, corner_radius=10,
+            info, width=160, height=32, corner_radius=R.button,
             values=[SORT_LABELS[o] for o in SORT_ORDERS],
             fg_color=CARD, button_color=CARD,
-            button_hover_color=CARD_HOVER, text_color=TEXT, font=F(12),
+            button_hover_color=CARD_HOVER, text_color=TEXT, font=F(T.small),
             dropdown_fg_color=CARD, dropdown_hover_color=CARD_HOVER,
             dropdown_text_color=TEXT, command=self._on_sort)
         sort_menu.set(SORT_LABELS[self.sort_order])
@@ -1214,7 +1214,7 @@ class PasswordManagerGUI:
         self.list_frame.grid(row=2, column=0, sticky="nsew")
         self.list_frame.grid_columnconfigure(0, weight=1)
 
-        self.detail = ctk.CTkFrame(shell, fg_color=CARD, corner_radius=20)
+        self.detail = ctk.CTkFrame(shell, fg_color=CARD, corner_radius=R.panel)
         self.detail.grid(row=0, column=2, sticky="nsew")
 
         self.refresh_account_list()
@@ -1356,7 +1356,7 @@ class PasswordManagerGUI:
             i, acc = pending.pop(0)
             cached = self._rows.get(acc["id"])
             if cached:
-                cached[1].grid(row=i, column=0, sticky="ew", pady=3, padx=2)
+                cached[1].grid(row=i, column=0, sticky="ew", pady=SP.xs, padx=SP.hair)
                 cached[2] = i
             else:
                 self._rows[acc["id"]] = [_row_signature(acc,
@@ -1373,38 +1373,38 @@ class PasswordManagerGUI:
     def _empty_state(self, filtered):
         box = self._empty_box = ctk.CTkFrame(self.list_frame,
                                              fg_color="transparent")
-        box.grid(row=0, column=0, pady=90)
+        box.grid(row=0, column=0, pady=SP.empty)
         if filtered:
-            ctk.CTkLabel(box, text="No matching accounts", font=F(17, "bold"),
+            ctk.CTkLabel(box, text="No matching accounts", font=F(T.heading, "bold"),
                          text_color=TEXT).pack()
-            ctk.CTkLabel(box, text="Try a different search term.", font=F(13),
-                         text_color=MUTED).pack(pady=(4, 0))
+            ctk.CTkLabel(box, text="Try a different search term.", font=F(T.label),
+                         text_color=MUTED).pack(pady=(SP.xs, 0))
         else:
-            ctk.CTkLabel(box, text="Your vault is empty", font=F(18, "bold"),
+            ctk.CTkLabel(box, text="Your vault is empty", font=F(T.heading, "bold"),
                          text_color=TEXT).pack()
             ctk.CTkLabel(box, text="Add your first login to get started.",
-                         font=F(13), text_color=MUTED).pack(pady=(4, 16))
+                         font=F(T.label), text_color=MUTED).pack(pady=(SP.xs, SP.l))
             self._ghost_button(box, "Import from file",
                                self.import_dialog, width=170).pack()
 
     def _add_row(self, i, acc):
         """A compact list row; clicking it shows the entry in the details."""
         row = ctk.CTkFrame(
-            self.list_frame, corner_radius=14,
+            self.list_frame, corner_radius=R.row,
             fg_color=SELECTED if acc["id"] == self._selected_id else CARD)
-        row.grid(row=i, column=0, sticky="ew", pady=3, padx=2)
+        row.grid(row=i, column=0, sticky="ew", pady=SP.xs, padx=SP.hair)
         row.grid_columnconfigure(1, weight=1)
 
         bg, ink, _ = tile_colors(acc["site"])
         tile = ctk.CTkLabel(row, text=(acc["site"][:1].upper() or "?"),
-                            width=42, height=42, corner_radius=12,
-                            fg_color=bg, text_color=ink, font=F(16, "bold"))
-        tile.grid(row=0, column=0, padx=(12, 12), pady=11)
+                            width=42, height=42, corner_radius=R.inner,
+                            fg_color=bg, text_color=ink, font=F(T.glyph_s, "bold"))
+        tile.grid(row=0, column=0, padx=(SP.m, SP.m), pady=SP.m)
 
         info = ctk.CTkFrame(row, fg_color="transparent")
         info.grid(row=0, column=1, sticky="w")
         site = ctk.CTkLabel(info, text=_clip(acc["site"], 30), anchor="w",
-                            font=F(14, "bold"), text_color=TEXT)
+                            font=F(T.body, "bold"), text_color=TEXT)
         site.pack(anchor="w")
         subtitle = acc["username"] or "—"
         extras = [name for name, key in (("2FA", "totp"), ("note", "notes"))
@@ -1412,25 +1412,25 @@ class PasswordManagerGUI:
         subtitle = _clip(subtitle, 30 if not extras else 22)
         if extras:
             subtitle += "  ·  " + " · ".join(extras)
-        user = ctk.CTkLabel(info, text=subtitle, anchor="w", font=F(12),
+        user = ctk.CTkLabel(info, text=subtitle, anchor="w", font=F(T.small),
                             text_color=MUTED)
         user.pack(anchor="w")
 
         side = ctk.CTkFrame(row, fg_color="transparent")
-        side.grid(row=0, column=2, padx=(8, 14))
+        side.grid(row=0, column=2, padx=(SP.s, SP.l))
         when = ctk.CTkLabel(side, text=history_ui.short_when(
-            acc.get("updated_at", "")), font=F(11), text_color=MUTED)
+            acc.get("updated_at", "")), font=F(T.caption), text_color=MUTED)
         when.pack(anchor="e")
         clickable = [row, tile, info, site, user, side, when]
         label = self._row_label(acc)
         if label:
-            where = ctk.CTkLabel(side, text=_clip(label, 16), font=F(11, "bold"),
+            where = ctk.CTkLabel(side, text=_clip(label, 16), font=F(T.caption, "bold"),
                                  text_color=MUTED, height=16)
             where.pack(anchor="e")
             clickable.append(where)
 
         for w in clickable:
-            w.bind("<Button-1>", lambda e, eid=acc["id"]: self._select(eid))
+            w.bind("<Button-1>", lambda e=None, eid=acc["id"]: self._select(eid))
         return row
 
     def _select(self, eid):
@@ -1480,26 +1480,26 @@ class PasswordManagerGUI:
         if acc is None:
             box = ctk.CTkFrame(self.detail, fg_color="transparent")
             box.place(relx=0.5, rely=0.5, anchor="center")
-            ctk.CTkLabel(box, text="Nothing selected", font=F(17, "bold"),
+            ctk.CTkLabel(box, text="Nothing selected", font=F(T.heading, "bold"),
                          text_color=TEXT).pack()
             ctk.CTkLabel(box, text="Pick an entry on the left, or add one.",
-                         font=F(13), text_color=MUTED).pack(pady=(4, 0))
+                         font=F(T.label), text_color=MUTED).pack(pady=(SP.xs, 0))
             return
 
         bg, ink, band_color = tile_colors(acc["site"])
-        band = ctk.CTkFrame(self.detail, fg_color=band_color, corner_radius=18,
+        band = ctk.CTkFrame(self.detail, fg_color=band_color, corner_radius=R.band,
                             height=112)
-        band.pack(fill="x", padx=8, pady=(8, 0))
+        band.pack(fill="x", padx=SP.s, pady=(SP.s, 0))
         band.grid_propagate(False)
         band.grid_columnconfigure(1, weight=1)
         band.grid_rowconfigure(0, weight=1)
         ctk.CTkLabel(band, text=(acc["site"][:1].upper() or "?"), width=72,
-                     height=72, corner_radius=20, fg_color=bg, text_color=ink,
-                     bg_color=band_color, font=F(30, "bold")).grid(
-            row=0, column=0, padx=(22, 18))
+                     height=72, corner_radius=R.panel, fg_color=bg, text_color=ink,
+                     bg_color=band_color, font=F(T.glyph_l, "bold")).grid(
+            row=0, column=0, padx=(SP.xxl, SP.xl))
         names = ctk.CTkFrame(band, fg_color="transparent")
         names.grid(row=0, column=1, sticky="w")
-        ctk.CTkLabel(names, text=_clip(acc["site"], 34), font=F(24, "bold"),
+        ctk.CTkLabel(names, text=_clip(acc["site"], 34), font=F(T.title, "bold"),
                      text_color=TEXT, anchor="w").pack(anchor="w")
         changed = acc.get("updated_at")
         line = ("Last changed " + history_ui.local_time(changed)) if changed else ""
@@ -1513,16 +1513,16 @@ class PasswordManagerGUI:
         if len(self.vaults) > 1:
             line += ("\n" if line else "") + "In " + _clip(self.vault_name(
                 self._entry_vault.get(acc["id"])), 28)
-        ctk.CTkLabel(names, text=line, font=F(12), text_color=MUTED,
+        ctk.CTkLabel(names, text=line, font=F(T.small), text_color=MUTED,
                      anchor="w", justify="left").pack(anchor="w")
         actions = ctk.CTkFrame(band, fg_color="transparent")
-        actions.grid(row=0, column=2, padx=(8, 22))
+        actions.grid(row=0, column=2, padx=(SP.s, SP.xxl))
         if writable:
             edit = self._ghost_button(actions, "Edit",
                                       lambda: self.account_dialog(acc),
                                       width=92)
             edit.configure(image=icon("edit", 16), compound="left")
-            edit.pack(side="left", padx=(0, 8))
+            edit.pack(side="left", padx=(0, SP.s))
             arch = self._ghost_button(actions, "Archive",
                                       lambda: self._archive_account(acc),
                                       width=112)
@@ -1531,83 +1531,83 @@ class PasswordManagerGUI:
             Tooltip(arch, "Move to archive — restorable, and it still syncs "
                           "the removal to your other PCs")
         else:
-            only = ctk.CTkLabel(actions, text="Read only", font=F(12, "bold"),
+            only = ctk.CTkLabel(actions, text="Read only", font=F(T.small, "bold"),
                                 text_color=MUTED, fg_color=CARD,
-                                corner_radius=8, width=92, height=32)
+                                corner_radius=R.small, width=92, height=32)
             only.pack(side="left")
             Tooltip(only, "This vault is shared with you for reading: you can "
                           "see and copy, not change")
 
         scroll = ctk.CTkScrollableFrame(self.detail, fg_color=CARD,
                                         corner_radius=0)
-        scroll.pack(fill="both", expand=True, padx=14, pady=(14, 14))
+        scroll.pack(fill="both", expand=True, padx=SP.l, pady=(SP.l, SP.l))
 
         fields = ctk.CTkFrame(scroll, fg_color="transparent")
-        fields.pack(fill="x", padx=8)
+        fields.pack(fill="x", padx=SP.s)
         fields.grid_columnconfigure((0, 1), weight=1, uniform="field")
         self._username_box(fields, acc).grid(row=0, column=0, sticky="nsew",
-                                             padx=(0, 7))
+                                             padx=(0, SP.s))
         self._password_box(fields, acc).grid(row=0, column=1, sticky="nsew",
-                                             padx=(7, 0))
+                                             padx=(SP.s, 0))
 
         self._strength_row(scroll, acc.get("password", ""))
 
         if acc.get("totp"):
-            self._totp_box(scroll, acc).pack(fill="x", padx=8, pady=(14, 0))
+            self._totp_box(scroll, acc).pack(fill="x", padx=SP.s, pady=(SP.l, 0))
 
         self._section_title(scroll, "Notes")
         ctk.CTkLabel(scroll, text=acc.get("notes") or "No notes.",
-                     font=F(13), text_color=TEXT if acc.get("notes") else MUTED,
+                     font=F(T.label), text_color=TEXT if acc.get("notes") else MUTED,
                      wraplength=520, justify="left", anchor="w").pack(
-            anchor="w", fill="x", padx=8)
+            anchor="w", fill="x", padx=SP.s)
 
         count = len(acc.get("history") or [])
         self._section_title(
             scroll, f"History  ·  {count} earlier version"
                     f"{'s' if count != 1 else ''}")
-        history_ui.panel(self, scroll, acc).pack(fill="x", padx=8,
-                                                 pady=(0, 8))
+        history_ui.panel(self, scroll, acc).pack(fill="x", padx=SP.s,
+                                                 pady=(0, SP.s))
 
     def _section_title(self, parent, text):
-        ctk.CTkLabel(parent, text=text, font=F(12, "bold"), text_color=MUTED,
-                     anchor="w").pack(anchor="w", padx=8, pady=(20, 6))
+        ctk.CTkLabel(parent, text=text, font=F(T.small, "bold"), text_color=MUTED,
+                     anchor="w").pack(anchor="w", padx=SP.s, pady=(SP.xl, SP.s))
 
     def _field_box(self, parent, label):
-        box = ctk.CTkFrame(parent, fg_color=INPUT_BG, corner_radius=16)
+        box = ctk.CTkFrame(parent, fg_color=INPUT_BG, corner_radius=R.card)
         box.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(box, text=label, font=F(12, "bold"), text_color=MUTED,
+        ctk.CTkLabel(box, text=label, font=F(T.small, "bold"), text_color=MUTED,
                      anchor="w").grid(row=0, column=0, sticky="w",
-                                      padx=16, pady=(12, 0))
+                                      padx=SP.l, pady=(SP.m, 0))
         return box
 
     def _small_button(self, parent, text, command, accent=False, width=60):
         return ctk.CTkButton(
             parent, text=text, command=command, width=width, height=36,
-            corner_radius=10,
+            corner_radius=R.button,
             fg_color=GREEN if accent else "transparent",
             hover_color=GREEN_HOVER if accent else CARD_HOVER,
             border_width=0 if accent else 1, border_color=BORDER,
-            text_color=ON_ACCENT if accent else TEXT, font=F(12, "bold"))
+            text_color=ON_ACCENT if accent else TEXT, font=F(T.small, "bold"))
 
     def _username_box(self, parent, acc):
         box = self._field_box(parent, "Username")
         ctk.CTkLabel(box, text=_clip(acc["username"] or "—", 26),
-                     font=F(15, "bold"), text_color=TEXT, anchor="w").grid(
-            row=1, column=0, sticky="w", padx=16, pady=(2, 12))
+                     font=F(T.lead, "bold"), text_color=TEXT, anchor="w").grid(
+            row=1, column=0, sticky="w", padx=SP.l, pady=(SP.hair, SP.m))
         copy_user = self._small_button(
             box, "Copy", lambda: self._copy(acc["username"], "Username copied"))
-        copy_user.grid(row=0, column=1, rowspan=2, padx=(4, 12))
+        copy_user.grid(row=0, column=1, rowspan=2, padx=(SP.xs, SP.m))
         Tooltip(copy_user, "Copy username")
         return box
 
     def _password_box(self, parent, acc):
         box = self._field_box(parent, "Password")
         pwd = ctk.CTkLabel(box, text="•" * 12, anchor="w",
-                           font=ctk.CTkFont(family=MONO, size=15),
+                           font=ctk.CTkFont(family=MONO, size=T.lead),
                            text_color=TEXT)
-        pwd.grid(row=1, column=0, sticky="w", padx=16, pady=(2, 12))
+        pwd.grid(row=1, column=0, sticky="w", padx=SP.l, pady=(SP.hair, SP.m))
         buttons = ctk.CTkFrame(box, fg_color="transparent")
-        buttons.grid(row=0, column=1, rowspan=2, padx=(4, 12))
+        buttons.grid(row=0, column=1, rowspan=2, padx=(SP.xs, SP.m))
 
         def toggle():
             self._cancel_reveal()
@@ -1620,7 +1620,7 @@ class PasswordManagerGUI:
                 self._reveal_job = self.root.after(REVEAL_MS, toggle)
 
         show = self._small_button(buttons, "Show", toggle)
-        show.pack(side="left", padx=(0, 6))
+        show.pack(side="left", padx=(0, SP.s))
         Tooltip(show, "Show / hide password")
         copy_pw = self._small_button(
             buttons, "Copy",
@@ -1642,25 +1642,25 @@ class PasswordManagerGUI:
         problem = totp.check(acc.get("totp", ""))
         if problem:
             ctk.CTkLabel(box, text="No codes from this secret: " + problem,
-                         font=F(12), text_color=WARN, wraplength=440,
+                         font=F(T.small), text_color=WARN, wraplength=440,
                          justify="left", anchor="w").grid(
-                row=1, column=0, columnspan=2, sticky="w", padx=16,
-                pady=(2, 12))
+                row=1, column=0, columnspan=2, sticky="w", padx=SP.l,
+                pady=(SP.hair, SP.m))
             return box
 
         params = totp.parse(acc["totp"])
         masked = totp.spaced("•" * params.digits)
         hint = "Hidden — Show asks for your master password"
         shown = ctk.CTkLabel(box, text=masked, anchor="w",
-                             font=ctk.CTkFont(family=MONO, size=20,
+                             font=ctk.CTkFont(family=MONO, size=T.code,
                                               weight="bold"),
                              text_color=TEXT)
-        shown.grid(row=1, column=0, sticky="w", padx=16, pady=(2, 0))
-        status = ctk.CTkLabel(box, text=hint, font=F(11), text_color=MUTED,
+        shown.grid(row=1, column=0, sticky="w", padx=SP.l, pady=(SP.hair, 0))
+        status = ctk.CTkLabel(box, text=hint, font=F(T.caption), text_color=MUTED,
                               anchor="w")
-        status.grid(row=2, column=0, sticky="w", padx=16, pady=(0, 12))
+        status.grid(row=2, column=0, sticky="w", padx=SP.l, pady=(0, SP.m))
         buttons = ctk.CTkFrame(box, fg_color="transparent")
-        buttons.grid(row=0, column=1, rowspan=3, padx=(4, 12))
+        buttons.grid(row=0, column=1, rowspan=3, padx=(SP.xs, SP.m))
 
         def tick():
             now = time.time()
@@ -1691,7 +1691,7 @@ class PasswordManagerGUI:
             if not shown.winfo_exists():
                 return                      # the entry changed meanwhile
             show.configure(text="Hide")
-            copy.pack(side="left", padx=(6, 0))
+            copy.pack(side="left", padx=(SP.s, 0))
             tick()
 
         def copy_code():
@@ -1709,17 +1709,17 @@ class PasswordManagerGUI:
         name, frac = estimate_strength(password)
         color = strength_color(name)
         row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", padx=8, pady=(16, 0))
-        ctk.CTkLabel(row, text="Strength", font=F(12, "bold"),
-                     text_color=MUTED).pack(side="left", padx=(0, 14))
+        row.pack(fill="x", padx=SP.s, pady=(SP.l, 0))
+        ctk.CTkLabel(row, text="Strength", font=F(T.small, "bold"),
+                     text_color=MUTED).pack(side="left", padx=(0, SP.l))
         lit = round(frac * STRENGTH_SEGMENTS) if password else 0
         lit = max(lit, 1) if password else 0
         for n in range(STRENGTH_SEGMENTS):
-            ctk.CTkFrame(row, width=38, height=6, corner_radius=3,
+            ctk.CTkFrame(row, width=38, height=6, corner_radius=R.meter,
                          fg_color=color if n < lit else BORDER).pack(
-                side="left", padx=(0, 4))
-        ctk.CTkLabel(row, text=name, font=F(12, "bold"),
-                     text_color=color).pack(side="left", padx=(10, 0))
+                side="left", padx=(0, SP.xs))
+        ctk.CTkLabel(row, text=name, font=F(T.small, "bold"),
+                     text_color=color).pack(side="left", padx=(SP.m, 0))
 
     def _archive_account(self, acc):
         """

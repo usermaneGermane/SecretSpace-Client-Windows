@@ -50,6 +50,54 @@ WARN = ("#8A5300", "#F2B955")
 TOOLTIP_BG = "#16181D"
 TOOLTIP_TEXT = "#F0F1F4"
 
+class T:
+    """
+    Type: every size text is written in, by its role (DESIGN-LOOK.md). A
+    screen says F(T.body), never F(14), so the scale is changed here.
+    """
+    title = 26      # a screen's one title: Welcome back, an open entry's name
+    heading = 19    # a dialog's heading, an empty list's message, the brand
+    lead = 15       # what is typed in a field; a name heading a card
+    body = 14       # text to read; a row's name
+    label = 13      # buttons, a second line, notes in a dialog
+    small = 12      # field captions, small buttons, the line under a name
+    caption = 11    # times, counts, the small print
+    code = 20       # a 2FA code or a fingerprint, in MONO, to be read aloud
+    # Letters drawn as a picture - a tile's initial, the + of Add - sized by
+    # the tile they sit in rather than by the text around them.
+    glyph_s = 16    # a 32-50 px tile or circle
+    glyph_m = 22    # a 46-48 px tile, the + button
+    glyph_l = 30    # a 60-64 px tile
+    tooltip_pt = 9  # a plain Tk tooltip: in points, not CustomTkinter's units
+
+
+class SP:
+    """Space: steps of 4 (DESIGN-LOOK.md); 2 only between a list's rows."""
+    hair = 2
+    xs = 4
+    s = 8
+    m = 12
+    l = 16          # noqa: E741  (one letter, like the others)
+    xl = 20
+    xxl = 24
+    dialog = 28     # a dialog's side margin
+    page = 40       # around the login card
+    empty = 80      # above an empty list's message
+
+
+class R:
+    """Corner radius, by what is rounded (DESIGN-LOOK.md)."""
+    meter = 3       # a 6 px high meter segment: fully round ends
+    small = 8       # a 30-32 px high button
+    button = 10     # buttons
+    inner = 12      # fields, tiles, panels inside a card
+    row = 14        # a list row, a card in a dialog
+    card = 16
+    band = 18       # an entry's coloured band, inside the 20 of its card
+    panel = 20      # the details card
+    dialog = 24     # the login card
+
+
 # How strong a password is, by the name estimate_strength gives it.
 STRENGTH = {
     "Weak": DANGER,

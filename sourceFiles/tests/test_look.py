@@ -313,3 +313,45 @@ def test_icons_follow_the_mode_and_are_made_once(window):
 def test_an_unknown_icon_is_an_error():
     with pytest.raises(KeyError):
         icons.picture("no-such-icon", "#000000", 24)
+
+
+# ---- type, space and radius come from theme.py's scales ---------------------
+_BARE = {
+    "a font size": re.compile(r"\bF\(\d|family=MONO, size=\d|text_width(?:, color=TEXT)?, size=\d"),
+    "a padding": re.compile(r"\bi?pad[xy]=\(?[^)\n]*?\b[1-9]\d*\b"),
+    "a corner radius": re.compile(r"corner_radius=[1-9]"),
+}
+
+
+def test_the_scale_patterns_find_what_they_should():
+    assert _BARE["a font size"].search("font=F(14)")
+    assert _BARE["a font size"].search("ctk.CTkFont(family=MONO, size=15)")
+    assert _BARE["a padding"].search("pack(padx=(SP.l, 6))")
+    assert _BARE["a padding"].search("grid(pady=10)")
+    assert _BARE["a corner radius"].search("corner_radius=12")
+    assert not _BARE["a padding"].search("pack(padx=SP.l, pady=(0, SP.s))")
+    assert not _BARE["a corner radius"].search("corner_radius=0")
+
+
+@pytest.mark.parametrize("name", sorted(
+    n for n in os.listdir(_HERE) if n.endswith(".py") and n != "theme.py"))
+def test_sizes_come_from_the_scales(name):
+    """F(T.body), padx=SP.l, corner_radius=R.row: never a bare number (0
+    excepted), so a size is changed in theme.py and nowhere else."""
+    with open(os.path.join(_HERE, name), encoding="utf-8") as f:
+        text = f.read()
+    found = {what: [m.group(0) for m in pattern.finditer(text)]
+             for what, pattern in _BARE.items()}
+    assert found == {what: [] for what in _BARE}
+
+
+def test_space_is_in_steps_of_four():
+    values = {k: v for k, v in vars(theme.SP).items() if not k.startswith("_")}
+    assert values.pop("hair") == 2          # only between a list's rows
+    assert all(v % 4 == 0 for v in values.values()), values
+
+
+def test_the_type_scale_is_the_designs():
+    T = theme.T
+    assert (T.title, T.heading, T.caption) == (26, 19, 11)
+    assert 14 <= T.body <= T.lead <= 15 and 12 <= T.small <= T.label <= 13
