@@ -128,8 +128,9 @@ def estimate_strength(password: str):
     """
     Roughly estimate password strength.
 
-    Returns a tuple ``(label, fraction, color)`` where ``fraction`` is a
-    0.0-1.0 value suitable for a progress bar and ``color`` is a hex string.
+    Returns a tuple ``(label, fraction)`` where ``fraction`` is a 0.0-1.0
+    value suitable for a progress bar. The colour of each label is
+    theme.strength_color's.
 
     The estimate is entropy over the character classes used, but computed on a
     structure-adjusted length: repeats, runs and keyboard walks are discounted
@@ -137,7 +138,7 @@ def estimate_strength(password: str):
     ``len(password) * log2(pool)`` rated twenty 'a's as strong.
     """
     if not password:
-        return ("", 0.0, "#9B9BA3")
+        return ("", 0.0)
 
     pool = 0
     if any(c in _LOWER for c in password):
@@ -157,12 +158,12 @@ def estimate_strength(password: str):
 
     fraction = min(entropy / 120.0, 1.0)
     if entropy < 40:
-        return ("Weak", fraction, "#E5534B")
+        return ("Weak", fraction)
     elif entropy < 70:
-        return ("Fair", fraction, "#E0A030")
+        return ("Fair", fraction)
     elif entropy < 100:
-        return ("Good", fraction, "#67C090")
-    return ("Strong", fraction, "#3FB27F")
+        return ("Good", fraction)
+    return ("Strong", fraction)
 
 
 def copy_to_clipboard(text: str):

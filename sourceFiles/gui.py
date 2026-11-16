@@ -36,7 +36,7 @@ import vaults_ui
 import recovery_ui
 import totp
 import update_check
-from theme import (F, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
+from theme import (ON_DANGER, F, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    ON_ACCENT, WARN, MONO, DECOR_DISC_A, DECOR_DISC_B,
                    DECOR_DOT, DECOR_INK, pick, apply_appearance,
@@ -537,13 +537,25 @@ class PasswordManagerGUI:
             self._toast.destroy()
         if self._toast_job:
             self.root.after_cancel(self._toast_job)
+        # Over the open entry's card when there is one, so it never sits
+        # across the card's edge; else at the bottom of the window.
+        host = getattr(self, "detail", None)
+        on_card = host is not None and host.winfo_exists() and host.winfo_ismapped()
         self._toast = ctk.CTkLabel(
             self.root, text=f"   {message}   ", height=38, corner_radius=12,
-            fg_color=color,
-            text_color=ON_ACCENT if kind in ("info", "warn") else "white",
+            fg_color=color, bg_color=CARD if on_card else BG,
+            text_color=ON_DANGER if kind == "error" else ON_ACCENT,
             font=F(13, "bold"),
         )
-        self._toast.place(relx=0.5, rely=1.0, anchor="s", y=-22)
+        self._toast.place(in_=host if on_card else self.root,
+                          relx=0.5, rely=1.0, anchor="s", y=-22)
+        # Smoothed corners are drawn right at even widths only; the text
+        # decides this one, so round it up (see widgets.even_width).
+        self._toast.update_idletasks()
+        width = self._toast.winfo_reqwidth()
+        if width % 2:
+            self._toast.configure(
+                width=(width + 1) / self._toast._get_widget_scaling())
         self._toast_job = self.root.after(2400, self._hide_toast)
 
     def _hide_toast(self):
@@ -1694,7 +1706,7 @@ class PasswordManagerGUI:
         return box
 
     def _strength_row(self, parent, password):
-        name, frac, _ = estimate_strength(password)
+        name, frac = estimate_strength(password)
         color = strength_color(name)
         row = ctk.CTkFrame(parent, fg_color="transparent")
         row.pack(fill="x", padx=8, pady=(16, 0))
