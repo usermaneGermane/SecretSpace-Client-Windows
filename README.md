@@ -322,6 +322,25 @@ The last line is how the builder is made in the first place. The builder's
 own exe is still made with PyInstaller, so that one needs
 `py -m pip install pyinstaller` once; the app does not.
 
+To build with one particular Python, set `SECRETSPACE_BUILD_PYTHON` to its
+`python.exe`; then that one is the only Python the builder tries.
+
+### How releases are built
+
+The installer on the [Releases](https://github.com/usermaneGermane/SecretSpace-Client-Windows/releases)
+page is built by GitHub Actions ([`build.yml`](.github/workflows/build.yml)),
+not on anyone's PC. A clean Windows runner checks out the tagged commit and
+runs `builder\build.py`, the same script as above. The same run then:
+
+1. installs that installer silently;
+2. starts SecretSpace and checks it is still running 15 seconds later;
+3. uninstalls it.
+
+A tag `v<version>` makes a draft release with the installer and
+`SHA256SUMS.txt`, which is published once its notes are written. Every
+pull request builds and checks the installer the same way and keeps it as
+a workflow artifact.
+
 ### Which files the build needs
 
 Nuitka compiles the source into C and then into `SecretSpace.exe` and the
