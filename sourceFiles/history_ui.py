@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import customtkinter as ctk
 
 import vault
-from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER, DANGER_HOVER,
+from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    BORDER, CARD_HOVER, ON_ACCENT, HEADER_BG, MONO)
 from widgets import Tooltip
 
@@ -81,7 +81,7 @@ def _small_button(parent, text, command, accent=False, danger=False, width=62):
     return ctk.CTkButton(parent, text=text, command=command, width=width,
                          height=30, corner_radius=8, fg_color="transparent",
                          border_width=1, border_color=BORDER,
-                         hover_color=DANGER_HOVER if danger else CARD_HOVER,
+                         hover_color=CARD_HOVER,
                          text_color=DANGER if danger else TEXT,
                          font=F(11, "bold"))
 

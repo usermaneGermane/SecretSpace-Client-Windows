@@ -21,7 +21,7 @@ import sync_client
 import vault
 from history_ui import local_time
 from theme import (F, TEXT, MUTED, GREEN, DANGER, INPUT_BG, CARD,
-                   CARD_HOVER, ACCENT_DEEP, WARN, MONO, tile_colors)
+                   CARD_HOVER, CHOICE, WARN, MONO, tile_colors)
 from widgets import (ghost_button, accent_button, small_button, field, note,
                      check, error_label, dialog_shell)
 
@@ -332,7 +332,7 @@ def _conflict_row(parent, index, conflict, answers):
         choice_row, values=[CHOICE_LABELS[c] for c in CHOICE_ORDER],
         font=F(12, "bold"), height=34, corner_radius=10, fg_color=INPUT_BG,
         unselected_color=INPUT_BG, unselected_hover_color=CARD_HOVER,
-        selected_color=ACCENT_DEEP, selected_hover_color=ACCENT_DEEP,
+        selected_color=CHOICE, selected_hover_color=CHOICE,
         text_color=TEXT,
         command=lambda label: answers.__setitem__(conflict.id,
                                                   _choice_from(label)))

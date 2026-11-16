@@ -35,13 +35,20 @@ INPUT_BG = ("#F4F6F9", "#191B20")
 BORDER = ("#DCE1E8", "#2E313A")
 TEXT = ("#16181D", "#F0F1F4")
 MUTED = ("#586170", "#A2A8B3")
-GREEN = ("#0E7A47", "#56E39F")
+GREEN = ("#0D7644", "#56E39F")       # light: 4.5:1 on HEADER_BG too
 GREEN_HOVER = ("#0B6239", "#3FCB87")
-ACCENT_DEEP = ("#0E7A47", "#177A49")     # a selected choice under light text
-DANGER = ("#C0362F", "#E5534B")
-DANGER_HOVER = ("#9E2A24", "#C23B34")
+# A selected choice in a segmented button, with TEXT on it (the button has
+# one text colour for its chosen and its other segments).
+CHOICE = ("#B6E3C9", "#24603F")
+DANGER = ("#BC342E", "#F2766E")       # also text: 4.5:1 on every surface
+DANGER_HOVER = ("#9E2A24", "#FF938A")  # a red button under the pointer
 ON_ACCENT = ("#FFFFFF", "#05230F")       # text drawn on top of the green accent
+ON_DANGER = ("#FFFFFF", "#2A0603")       # text drawn on top of DANGER
 WARN = ("#8A5300", "#F2B955")
+# A tooltip: dark in both modes, like the system's own (a plain Tk
+# window: these are single colours, not pairs).
+TOOLTIP_BG = "#16181D"
+TOOLTIP_TEXT = "#F0F1F4"
 
 # How strong a password is, by the name estimate_strength gives it.
 STRENGTH = {

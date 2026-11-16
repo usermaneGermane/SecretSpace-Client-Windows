@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import customtkinter as ctk
 
-from theme import (tile_colors, strength_color, F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
+from theme import (ON_DANGER, TOOLTIP_BG, TOOLTIP_TEXT, tile_colors, strength_color, F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
                    GREEN_HOVER, DANGER, DANGER_HOVER, INPUT_BG, BORDER,
                    CARD_HOVER, ON_ACCENT)
 from password_generator import estimate_strength
@@ -47,7 +47,7 @@ class Tooltip:
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
         tw.attributes("-topmost", True)
-        lbl = tk.Label(tw, text=self.text, bg="#16181D", fg="#F0F1F4",
+        lbl = tk.Label(tw, text=self.text, bg=TOOLTIP_BG, fg=TOOLTIP_TEXT,
                        padx=9, pady=4, font=(FONT, 9), bd=0)
         lbl.pack()
 
@@ -81,7 +81,7 @@ def danger_button(parent, text, command, width=130):
     return ctk.CTkButton(
         parent, text=text, command=command, width=width, height=40,
         corner_radius=10, fg_color=DANGER, hover_color=DANGER_HOVER,
-        text_color="white", font=F(13, "bold"),
+        text_color=ON_DANGER, font=F(13, "bold"),
     )
 
 
@@ -199,7 +199,7 @@ def strength_widget(parent):
     label.pack(side="left", padx=(6, 0))
 
     def update(password):
-        name, frac, _ = estimate_strength(password)
+        name, frac = estimate_strength(password)
         color = strength_color(name)
         lit = max(round(frac * STRENGTH_SEGMENTS), 1) if password else 0
         for n, seg in enumerate(segments):

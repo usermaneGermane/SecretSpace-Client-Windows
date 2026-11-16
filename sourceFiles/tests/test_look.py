@@ -62,8 +62,8 @@ def test_padlock_body_has_round_corners():
 
 # ---- light and dark ---------------------------------------------------------
 PAIRS = ("BG", "HEADER_BG", "CARD", "CARD_HOVER", "SELECTED", "INPUT_BG",
-         "BORDER", "TEXT", "MUTED", "GREEN", "GREEN_HOVER", "ACCENT_DEEP",
-         "DANGER", "DANGER_HOVER", "ON_ACCENT", "WARN")
+         "BORDER", "TEXT", "MUTED", "GREEN", "GREEN_HOVER", "CHOICE",
+         "DANGER", "DANGER_HOVER", "ON_ACCENT", "ON_DANGER", "WARN")
 
 
 @pytest.fixture
@@ -117,14 +117,79 @@ def _contrast(a, b):
     return (hi + 0.05) / (lo + 0.05)
 
 
+#: Every colour text is drawn in, and every surface it is drawn on: a window,
+#: a bar, a card, a row under the pointer or selected, a field, and the
+#: header band of an open entry or vault (one per tile colour). Any text
+#: colour may land on any surface, so every pair is checked, not a list of
+#: the pairs in use today.
+INKS = ("TEXT", "MUTED", "GREEN", "DANGER", "WARN")
+SURFACES = ("BG", "HEADER_BG", "CARD", "CARD_HOVER", "SELECTED", "INPUT_BG")
+BANDS = [band for _, _, band in theme.TILE_PALETTE]
+
+#: Text on a filled button, a chosen segment or a toast, and the fills it
+#: sits on, under the pointer too.
+FILLS = [("ON_ACCENT", "GREEN"), ("ON_ACCENT", "GREEN_HOVER"),
+         ("ON_ACCENT", "WARN"), ("ON_DANGER", "DANGER"),
+         ("ON_DANGER", "DANGER_HOVER"), ("TEXT", "CHOICE")]
+
+
 @pytest.mark.parametrize("i", [0, 1])
-@pytest.mark.parametrize("ink,ground", [
-    ("TEXT", "BG"), ("TEXT", "CARD"), ("TEXT", "INPUT_BG"), ("MUTED", "BG"),
-    ("MUTED", "CARD"), ("MUTED", "INPUT_BG"), ("ON_ACCENT", "GREEN"),
-    ("GREEN", "CARD"), ("WARN", "CARD"), ("TEXT", "SELECTED")])
-def test_text_is_readable_on_its_ground(ink, ground, i):
+@pytest.mark.parametrize("ground", SURFACES + tuple(f"band{n}" for n in range(len(BANDS))))
+@pytest.mark.parametrize("ink", INKS)
+def test_text_is_readable_on_every_surface(ink, ground, i):
     """WCAG AA for body text: 4.5 to 1, in light (0) and dark (1)."""
-    assert _contrast(getattr(theme, ink)[i], getattr(theme, ground)[i]) >= 4.5
+    surface = (BANDS[int(ground[4:])] if ground.startswith("band")
+               else getattr(theme, ground))
+    assert _contrast(getattr(theme, ink)[i], surface[i]) >= 4.5
+
+
+@pytest.mark.parametrize("i", [0, 1])
+@pytest.mark.parametrize("ink,fill", FILLS)
+def test_text_is_readable_on_its_fill(ink, fill, i):
+    assert _contrast(getattr(theme, ink)[i], getattr(theme, fill)[i]) >= 4.5
+
+
+def test_a_chosen_segment_stands_out_from_the_others():
+    """Not text, so 1.2 is enough to see which one is chosen; and the two
+    must not be the same colour, as they were for a while in 3.x."""
+    for i in (0, 1):
+        assert _contrast(theme.CHOICE[i], theme.INPUT_BG[i]) >= 1.2
+
+
+def test_tooltip_text_is_readable():
+    assert _contrast(theme.TOOLTIP_TEXT, theme.TOOLTIP_BG) >= 4.5
+
+
+# ---- colours come from theme.py only -----------------------------------------
+import os                                                         # noqa: E402
+import re                                                         # noqa: E402
+
+_HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#: A hex colour, or a Tk colour name, as a string in the code.
+_TYPED = re.compile(
+    r"""["']#[0-9A-Fa-f]{3}(?:[0-9A-Fa-f]{3})?["']"""
+    r"""|\w*(?:color|fg|bg|outline)\s*=\s*["'](?!transparent)[A-Za-z]+\d*["']""")
+
+
+def typed_colours(text):
+    return [m.group(0) for m in _TYPED.finditer(text)]
+
+
+def test_the_pattern_finds_what_it_should():
+    assert typed_colours('x = "#16181D"; y = "#fff"') == ['"#16181D"', '"#fff"']
+    assert typed_colours('text_color="white", fg="gray20"') == [
+        'text_color="white"', 'fg="gray20"']
+    assert typed_colours('fg_color="transparent", text="#1 in the list"') == []
+
+
+@pytest.mark.parametrize("name", sorted(
+    n for n in os.listdir(_HERE) if n.endswith(".py") and n != "theme.py"))
+def test_no_colour_is_typed_outside_theme(name):
+    """A screen takes its colours from theme.py, so that one change there
+    reaches every screen, in both modes, and the contrast tests above
+    cover what is on screen."""
+    with open(os.path.join(_HERE, name), encoding="utf-8") as f:
+        assert typed_colours(f.read()) == []
 
 
 def test_tile_letters_are_readable():
