@@ -61,6 +61,22 @@ def test_no_python_at_all():
     assert build.find_python(FakeRunner(default=build.Result(127, ""))) is None
 
 
+def test_the_python_the_workflow_names_is_the_only_one_tried():
+    exe = r"C:\hostedtoolcache\Python\3.13.5\x64\python.exe"
+    runner = healthy()
+    py = build.find_python(runner, environ={build.PYTHON_ENV: exe})
+    assert py.cmd == [exe]
+    assert [cmd[0] for cmd, _ in runner.calls] == [exe]
+
+
+def test_a_named_python_that_fails_is_not_replaced_by_another():
+    # Building with a different Python than the one asked for would be a
+    # silent surprise; finding none makes the checklist say so instead.
+    runner = FakeRunner({"broken.exe": build.Result(1, "no"),
+                         "-c": build.Result(0, PY_OUT)})
+    assert build.find_python(runner, environ={build.PYTHON_ENV: "broken.exe"}) is None
+
+
 # --- the checklist ---------------------------------------------------------
 def test_everything_present_means_ready():
     checks = build.check_all(PROJECT, healthy(), find_iscc=has_iscc)
