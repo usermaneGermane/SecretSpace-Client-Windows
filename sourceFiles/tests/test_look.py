@@ -355,3 +355,50 @@ def test_the_type_scale_is_the_designs():
     T = theme.T
     assert (T.title, T.heading, T.caption) == (26, 19, 11)
     assert 14 <= T.body <= T.lead <= 15 and 12 <= T.small <= T.label <= 13
+
+
+# ---- the toast and the list row (widgets.py) ---------------------------------
+@pytest.mark.parametrize("kind,fill,ink", [("info", "GREEN", "ON_ACCENT"),
+                                           ("warn", "WARN", "ON_ACCENT"),
+                                           ("error", "DANGER", "ON_DANGER")])
+def test_a_toast_is_coloured_by_its_kind(window, kind, fill, ink):
+    import widgets
+    pill = widgets.toast_pill(window, "Saved", kind)
+    assert pill.cget("fg_color") == getattr(theme, fill)
+    assert pill.cget("text_color") == getattr(theme, ink)
+    assert pill.cget("bg_color") == theme.BG
+    assert widgets.toast_pill(window, "x", kind, on_card=True).cget("bg_color") == theme.CARD
+
+
+@pytest.mark.parametrize("text", ["Copied", "Password copied", "A longer message!"])
+def test_a_toast_is_an_even_number_of_pixels_wide(window, text):
+    """At an odd width CustomTkinter draws a step into the rounded end."""
+    import widgets
+    pill = widgets.toast_pill(window, text)
+    pill.update_idletasks()
+    assert pill.winfo_reqwidth() % 2 == 0
+
+
+def test_an_entry_row_shows_its_texts_and_answers_a_click(window):
+    import customtkinter as ctk
+    import widgets
+    row = widgets.entry_row(window, "GitHub", "alex  ·  note", "09:20",
+                            where="Work", selected=True,
+                            on_click=lambda: None)
+    texts = [w.cget("text") for w in walk(row) if isinstance(w, ctk.CTkLabel)]
+    assert texts == ["G", "GitHub", "alex  ·  note", "09:20", "Work"]
+    assert row.cget("fg_color") == theme.SELECTED
+    # The test window is not on screen, so Tk delivers no clicks to it:
+    # check that every part of the row, the vault's name included, has one.
+    labels = [w for w in walk(row) if isinstance(w, ctk.CTkLabel)]
+    assert all(w._label.bind("<Button-1>") for w in labels)
+    assert row._canvas.bind("<Button-1>")
+    plain = widgets.entry_row(window, "", "—", "")
+    assert plain.cget("fg_color") == theme.CARD
+    assert [w.cget("text") for w in walk(plain) if isinstance(w, ctk.CTkLabel)][0] == "?"
+
+
+def walk(widget):
+    for child in widget.winfo_children():
+        yield child
+        yield from walk(child)

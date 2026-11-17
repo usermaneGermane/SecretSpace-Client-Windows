@@ -9,7 +9,7 @@ yourself, on your own hardware. (The one other address it can contact is
 github.com, to see whether a newer version is out — only when you ask it to;
 see [Updates](#updates).)
 
-**This README describes SecretSpace 4** (4.0.0). It has everything
+**This README describes SecretSpace 4** (4.4.0). It has everything
 SecretSpace 3 had — accounts, several vaults, sharing, recovery, the look
 of 3.1 — in a new file format. Coming from 3.x? Read
 [Upgrading from 3.x](#upgrading-from-3x) first: your account is converted
@@ -38,7 +38,12 @@ SecretSpace lives in four repositories:
 | [SecretSpace-Server-Windows](https://github.com/usermaneGermane/SecretSpace-Server-Windows) | the sync server for Windows, and its installer |
 | [SecretSpace-Server-Linux](https://github.com/usermaneGermane/SecretSpace-Server-Linux) | the sync server for Linux (systemd) |
 
-![SecretSpace](sourceFiles/SecretSpace-logo.png)
+| Light | Dark |
+|---|---|
+| ![The main window, light](docs/screenshots/main-light.png) | ![The main window, dark](docs/screenshots/main-dark.png) |
+| ![The members of a shared vault](docs/screenshots/members-light.png) | ![The login screen](docs/screenshots/login-dark.png) |
+
+*Pictures of SecretSpace 4.4 with made-up test data.*
 
 ## What SecretSpace is
 
@@ -124,6 +129,24 @@ invites, recovery with an admin's approval), moving an entry from one vault
 to another, and *Sync when I unlock* (2.x had it; here you press **Sync**).
 [SecretSpace for Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux)
 1.0.0 is the same release for Linux.
+
+## New in 4.4: the finishing of the look
+
+- **Readable everywhere.** Every text colour meets WCAG AA (4.5 : 1) on every
+  surface it can appear on, in light and dark; a test checks all of them.
+  Fixed on the way: red buttons whose text vanished under the pointer, the
+  chosen option in the sync conflict window, red text on dark cards.
+- **One scale for type, space and corners.** Sizes come from a named scale
+  (title, heading, body, …; spacing in steps of 4) instead of numbers typed
+  per screen, so dialogs line up. Some are a few pixels taller.
+- **Dialogs stay on the screen.** A tall dialog could open with its buttons
+  below the bottom of the screen when the main window sat low.
+- **A sharper icon.** The icon has every size Windows asks for (20, 24 and
+  40 px were missing, so it was blurred at 125 % and 150 % scaling) and is
+  cropped to the shield, so it reads in the title bar and on the taskbar.
+- **Smaller fixes:** the "copied" message no longer sits across the edge of
+  the entry's card; the Import window shows a long folder path in full.
+- Nothing changes in what the app stores: it opens the same accounts.
 
 ## New in 3.1: the look
 
@@ -357,9 +380,11 @@ LICENSE         (installed beside the program)
 ```
 
 The installer's pictures (`installer\wizard-*.bmp`) are drawn from the logo
-and the font by `installer\make_wizard_images.py` (it needs Pillow). They are
-committed, so the build only reads them; draw them again after the logo or
-the colours change.
+and the font by `installer\make_wizard_images.py`, in the app's own colours
+(read from `theme.py`), and the icon (`sourceFiles\SecretSpace-logo.ico`, every
+size from 16 to 256 px) by `installer\make_icon.py`. Both need Pillow. The
+results are committed, so the build only reads them; draw them again after
+the logo or the colours change.
 
 `README.md` is not needed to build, and neither are the `tests` folders.
 
@@ -471,7 +496,9 @@ SecretSpace-Client-Windows/
 ├── SecretSpace-Builder.exe  the builder (built, not committed)
 ├── SecretSpace-Client-Installer.exe  installs the app (built, not committed)
 ├── vault/               vaults when running from source - never committed
-├── installer/           the Inno Setup script, its pictures and licence page
+├── docs/screenshots/    the pictures in this README
+├── installer/           the Inno Setup script, its pictures and licence page,
+│                        make_icon.py (the .ico) and make_wizard_images.py
 └── sourceFiles/         the program itself
     ├── gui.py           app shell: login, account list + details, lifecycle
     ├── dialogs.py       the modal dialogs
