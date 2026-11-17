@@ -36,13 +36,13 @@ import vaults_ui
 import recovery_ui
 import totp
 import update_check
-from theme import (T, SP, R, ON_DANGER, F, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
+from theme import (T, SP, R, F, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    ON_ACCENT, WARN, MONO, DECOR_DISC_A, DECOR_DISC_B,
                    DECOR_DOT, DECOR_INK, pick, apply_appearance,
                    strength_color,
                    tile_colors, asset_candidates)
-from widgets import (Tooltip, ghost_button, accent_button, field,
+from widgets import (toast_pill, entry_row, TOAST_GAP, Tooltip, ghost_button, accent_button, field,
                      strength_widget, modal, fit_modal, safe_grab, confirm,
                      STRENGTH_SEGMENTS)
 from password_generator import estimate_strength
@@ -532,7 +532,6 @@ class PasswordManagerGUI:
 
     def toast(self, message, kind="info"):
         """Small auto-dismissing status pill at the bottom of the window."""
-        color = {"info": GREEN, "error": DANGER, "warn": WARN}.get(kind, GREEN)
         if self._toast is not None:
             self._toast.destroy()
         if self._toast_job:
@@ -541,21 +540,9 @@ class PasswordManagerGUI:
         # across the card's edge; else at the bottom of the window.
         host = getattr(self, "detail", None)
         on_card = host is not None and host.winfo_exists() and host.winfo_ismapped()
-        self._toast = ctk.CTkLabel(
-            self.root, text=f"   {message}   ", height=38, corner_radius=R.inner,
-            fg_color=color, bg_color=CARD if on_card else BG,
-            text_color=ON_DANGER if kind == "error" else ON_ACCENT,
-            font=F(T.label, "bold"),
-        )
+        self._toast = toast_pill(self.root, message, kind, on_card)
         self._toast.place(in_=host if on_card else self.root,
-                          relx=0.5, rely=1.0, anchor="s", y=-22)
-        # Smoothed corners are drawn right at even widths only; the text
-        # decides this one, so round it up (see widgets.even_width).
-        self._toast.update_idletasks()
-        width = self._toast.winfo_reqwidth()
-        if width % 2:
-            self._toast.configure(
-                width=(width + 1) / self._toast._get_widget_scaling())
+                          relx=0.5, rely=1.0, anchor="s", y=-TOAST_GAP)
         self._toast_job = self.root.after(2400, self._hide_toast)
 
     def _hide_toast(self):
@@ -1389,48 +1376,20 @@ class PasswordManagerGUI:
 
     def _add_row(self, i, acc):
         """A compact list row; clicking it shows the entry in the details."""
-        row = ctk.CTkFrame(
-            self.list_frame, corner_radius=R.row,
-            fg_color=SELECTED if acc["id"] == self._selected_id else CARD)
-        row.grid(row=i, column=0, sticky="ew", pady=SP.xs, padx=SP.hair)
-        row.grid_columnconfigure(1, weight=1)
-
-        bg, ink, _ = tile_colors(acc["site"])
-        tile = ctk.CTkLabel(row, text=(acc["site"][:1].upper() or "?"),
-                            width=42, height=42, corner_radius=R.inner,
-                            fg_color=bg, text_color=ink, font=F(T.glyph_s, "bold"))
-        tile.grid(row=0, column=0, padx=(SP.m, SP.m), pady=SP.m)
-
-        info = ctk.CTkFrame(row, fg_color="transparent")
-        info.grid(row=0, column=1, sticky="w")
-        site = ctk.CTkLabel(info, text=_clip(acc["site"], 30), anchor="w",
-                            font=F(T.body, "bold"), text_color=TEXT)
-        site.pack(anchor="w")
         subtitle = acc["username"] or "—"
         extras = [name for name, key in (("2FA", "totp"), ("note", "notes"))
                   if acc.get(key)]
         subtitle = _clip(subtitle, 30 if not extras else 22)
         if extras:
             subtitle += "  ·  " + " · ".join(extras)
-        user = ctk.CTkLabel(info, text=subtitle, anchor="w", font=F(T.small),
-                            text_color=MUTED)
-        user.pack(anchor="w")
-
-        side = ctk.CTkFrame(row, fg_color="transparent")
-        side.grid(row=0, column=2, padx=(SP.s, SP.l))
-        when = ctk.CTkLabel(side, text=history_ui.short_when(
-            acc.get("updated_at", "")), font=F(T.caption), text_color=MUTED)
-        when.pack(anchor="e")
-        clickable = [row, tile, info, site, user, side, when]
         label = self._row_label(acc)
-        if label:
-            where = ctk.CTkLabel(side, text=_clip(label, 16), font=F(T.caption, "bold"),
-                                 text_color=MUTED, height=16)
-            where.pack(anchor="e")
-            clickable.append(where)
-
-        for w in clickable:
-            w.bind("<Button-1>", lambda e=None, eid=acc["id"]: self._select(eid))
+        row = entry_row(
+            self.list_frame, _clip(acc["site"], 30), subtitle,
+            history_ui.short_when(acc.get("updated_at", "")),
+            where=_clip(label, 16) if label else "",
+            selected=acc["id"] == self._selected_id,
+            on_click=lambda eid=acc["id"]: self._select(eid))
+        row.grid(row=i, column=0, sticky="ew", pady=SP.xs, padx=SP.hair)
         return row
 
     def _select(self, eid):

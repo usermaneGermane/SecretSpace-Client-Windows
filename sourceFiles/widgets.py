@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import customtkinter as ctk
 
-from theme import (T, SP, R, ON_DANGER, TOOLTIP_BG, TOOLTIP_TEXT, tile_colors, strength_color, F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
+from theme import (WARN, SELECTED, T, SP, R, ON_DANGER, TOOLTIP_BG, TOOLTIP_TEXT, tile_colors, strength_color, F, FONT, BG, HEADER_BG, CARD, TEXT, MUTED, GREEN,
                    GREEN_HOVER, DANGER, DANGER_HOVER, INPUT_BG, BORDER,
                    CARD_HOVER, ON_ACCENT)
 from password_generator import estimate_strength
@@ -442,3 +442,74 @@ def confirm(root, title, message, danger=True, icon_path=None):
     top.bind("<Escape>", lambda e: top.destroy())
     root.wait_window(top)
     return result["ok"]
+
+
+# ---------------------------------------------------------------------------
+# A toast and a list row: the main window's, here so the Lab gallery shows
+# the real ones
+# ---------------------------------------------------------------------------
+#: A toast's height (a main button's), and its gap above the bottom edge.
+TOAST_HEIGHT = 40
+TOAST_GAP = SP.xl
+TOAST_COLOURS = {"info": GREEN, "error": DANGER, "warn": WARN}
+
+
+def toast_pill(parent, message, kind="info", on_card=False):
+    """
+    The pill of a toast: green (info), amber (warn) or red (error). Its
+    corners are drawn on the card's colour when it sits on one, else on the
+    window's. Placing it and taking it away is the caller's.
+    """
+    pill = ctk.CTkLabel(
+        parent, text=f"   {message}   ", height=TOAST_HEIGHT,
+        corner_radius=R.inner, fg_color=TOAST_COLOURS.get(kind, GREEN),
+        bg_color=CARD if on_card else BG,
+        text_color=ON_DANGER if kind == "error" else ON_ACCENT,
+        font=F(T.label, "bold"))
+    # Smoothed corners are drawn right at even widths only; the text
+    # decides this one, so round it up (see even_width).
+    pill.update_idletasks()
+    width = pill.winfo_reqwidth()
+    if width % 2:
+        pill.configure(width=(width + 1) / pill._get_widget_scaling())
+    return pill
+
+
+def entry_row(parent, site, subtitle, when, where="", selected=False,
+              on_click=None):
+    """
+    One entry in the main window's list: its tile, the site in bold, the
+    line under it, and on the right when it changed (and, with several
+    vaults showing, which vault). The texts come ready to show; the caller
+    grids the row. A click anywhere on it calls on_click().
+    """
+    row = ctk.CTkFrame(parent, corner_radius=R.row,
+                       fg_color=SELECTED if selected else CARD)
+    row.grid_columnconfigure(1, weight=1)
+    bg, ink, _ = tile_colors(site)
+    tile = ctk.CTkLabel(row, text=(site[:1].upper() or "?"), width=42,
+                        height=42, corner_radius=R.inner, fg_color=bg,
+                        text_color=ink, font=F(T.glyph_s, "bold"))
+    tile.grid(row=0, column=0, padx=(SP.m, SP.m), pady=SP.m)
+    info = ctk.CTkFrame(row, fg_color="transparent")
+    info.grid(row=0, column=1, sticky="w")
+    name = ctk.CTkLabel(info, text=site, anchor="w", font=F(T.body, "bold"),
+                        text_color=TEXT)
+    name.pack(anchor="w")
+    line = ctk.CTkLabel(info, text=subtitle, anchor="w", font=F(T.small),
+                        text_color=MUTED)
+    line.pack(anchor="w")
+    side = ctk.CTkFrame(row, fg_color="transparent")
+    side.grid(row=0, column=2, padx=(SP.s, SP.l))
+    stamp = ctk.CTkLabel(side, text=when, font=F(T.caption), text_color=MUTED)
+    stamp.pack(anchor="e")
+    clickable = [row, tile, info, name, line, side, stamp]
+    if where:
+        label = ctk.CTkLabel(side, text=where, font=F(T.caption, "bold"),
+                             text_color=MUTED, height=16)
+        label.pack(anchor="e")
+        clickable.append(label)
+    if on_click:
+        for w in clickable:
+            w.bind("<Button-1>", lambda e=None: on_click())
+    return row

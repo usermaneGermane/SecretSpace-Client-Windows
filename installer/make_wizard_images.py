@@ -12,18 +12,35 @@ them, so it needs no Pillow for this.
 """
 
 import os
+import re
 
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "sourceFiles")
 
+
+def dark_colour(token):
+    """
+    The dark half of a (light, dark) token in theme.py, read as text: the
+    pictures follow the app's colours without importing CustomTkinter. (They
+    were typed here once, and drifted when the app's changed in 4.3.1.)
+    """
+    with open(os.path.join(SRC, "theme.py"), encoding="utf-8") as f:
+        match = re.search(rf'^{token} = \("#[0-9A-Fa-f]{{6}}", "#([0-9A-Fa-f]{{6}})"\)',
+                          f.read(), re.M)
+    if not match:
+        raise ValueError(f"No {token} pair in theme.py")
+    value = match.group(1)
+    return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
+
+
 # The logo's own black background, so the logo has no visible edge; then
-# theme.py's dark accent and text colours.
+# the app's dark accent and text colours.
 BG = (0x03, 0x05, 0x07)
-ACCENT = (0x56, 0xE3, 0x9F)
-TEXT = (0xF2, 0xF4, 0xF7)
-MUTED = (0x9A, 0xA1, 0xAD)
+ACCENT = dark_colour("GREEN")
+TEXT = dark_colour("TEXT")
+MUTED = dark_colour("MUTED")
 
 # (width, height) at 100%, 150% and 200%, as Inno Setup 6 documents them.
 LARGE = ((164, 314), (246, 471), (328, 628))

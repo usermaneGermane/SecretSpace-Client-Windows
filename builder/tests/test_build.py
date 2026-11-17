@@ -283,3 +283,16 @@ def test_a_missing_product_counts_as_failure(project):
                      exists=lambda p: False)
     assert not ok
 
+
+
+# --- the app's icon -------------------------------------------------------
+def test_the_icon_has_every_size_windows_asks_for():
+    """16-64 for the title bar, taskbar and Start at 100-200 % scaling; a
+    missing one is scaled from another and looks soft (20, 24 and 40 were
+    missing until 4.4.0). installer/make_icon.py writes it."""
+    Image = pytest.importorskip("PIL.Image")
+    sys.path.insert(0, os.path.join(PROJECT, "installer"))
+    import make_icon
+    with Image.open(os.path.join(PROJECT, "sourceFiles", "SecretSpace-logo.ico")) as ico:
+        assert sorted(ico.info["sizes"]) == [(s, s) for s in make_icon.SIZES]
+    assert {16, 20, 24, 32, 40, 48, 256} <= set(make_icon.SIZES)
