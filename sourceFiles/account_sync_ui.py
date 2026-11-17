@@ -19,7 +19,7 @@ import account_sync
 import accounts
 import sync_client
 from sync_ui import _in_background, _still_open, _finish, conflict_dialog
-from theme import F, MUTED, GREEN, DANGER
+from theme import T, SP, F, MUTED, GREEN, DANGER
 from widgets import ghost_button, accent_button, field, note, dialog_shell
 
 
@@ -266,7 +266,7 @@ def server_dialog(app, on_done=None):
             ca_entry.insert(0, chosen)
 
     ghost_button(wrap, "Choose a file…", browse, width=150).pack(
-        anchor="w", pady=(6, 0))
+        anchor="w", pady=(SP.s, 0))
     if editing:
         url_entry.insert(0, account.server["url"])
         ca_entry.insert(0, account.server.get("ca_file", ""))
@@ -276,10 +276,10 @@ def server_dialog(app, on_done=None):
                 "server.") if editing else
          "The token is the one the server's setup shows (the same one 2.x "
          "vaults use). It lets you make an account there; it does not open "
-         "anyone's vault.", shell.text_width, size=11, pady=(10, 0))
-    status = ctk.CTkLabel(wrap, text="", font=F(12), text_color=MUTED,
+         "anyone's vault.", shell.text_width, size=T.caption, pady=(SP.m, 0))
+    status = ctk.CTkLabel(wrap, text="", font=F(T.small), text_color=MUTED,
                           wraplength=shell.text_width, justify="left", anchor="w")
-    status.pack(anchor="w", fill="x", pady=(10, 0))
+    status.pack(anchor="w", fill="x", pady=(SP.m, 0))
 
     def connect():
         url = url_entry.get().strip()
@@ -350,10 +350,10 @@ def sign_in_dialog(app):
     key_entry = field(wrap, "Secret Key (from the Emergency Kit)",
                       placeholder="A4-XXXXX-XXXXX-…")
     note(wrap, "Already have this account on this PC? Leave the Secret Key "
-         "empty; this PC keeps it.", shell.text_width, size=11, pady=(8, 0))
-    status = ctk.CTkLabel(wrap, text="", font=F(12), text_color=DANGER,
+         "empty; this PC keeps it.", shell.text_width, size=T.caption, pady=(SP.s, 0))
+    status = ctk.CTkLabel(wrap, text="", font=F(T.small), text_color=DANGER,
                           wraplength=shell.text_width, justify="left", anchor="w")
-    status.pack(anchor="w", fill="x", pady=(10, 0))
+    status.pack(anchor="w", fill="x", pady=(SP.m, 0))
 
     def sign_in(convert=False):
         url = url_entry.get().strip()

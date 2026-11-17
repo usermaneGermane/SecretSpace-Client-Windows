@@ -20,7 +20,7 @@ import accounts
 import recovery
 import vault
 from sync_ui import _in_background
-from theme import F, MUTED, GREEN
+from theme import T, SP, F, MUTED, GREEN
 from widgets import dialog_shell, error_label, field_label, note
 
 
@@ -40,20 +40,20 @@ def ask_conversion(app, username, on_server=False) -> bool:
     wrap = shell.body
     note(wrap, "Afterwards SecretSpace 3.0 and 3.1 can no longer open this "
          "account. If you use it on other devices, update SecretSpace there "
-         "too before you sync them again.", shell.text_width, pady=(0, 10))
+         "too before you sync them again.", shell.text_width, pady=(0, SP.m))
     has_copy = accounts.account_exists(username)
     if on_server:
         note(wrap, "Signing in converts the account on the server now. A "
              "device that still runs SecretSpace 3 cannot sync it after "
-             "that until it is updated.", shell.text_width, size=11,
-             pady=(0, 8))
+             "that until it is updated.", shell.text_width, size=T.caption,
+             pady=(0, SP.s))
     if has_copy:
         note(wrap, "To be able to go back, save a copy of the account as it "
              "is on this PC now. It is a folder of encrypted files; keep it "
-             "or delete it as you like.", shell.text_width, size=11)
-    saved = ctk.CTkLabel(wrap, text="", font=F(11), text_color=GREEN,
+             "or delete it as you like.", shell.text_width, size=T.caption)
+    saved = ctk.CTkLabel(wrap, text="", font=F(T.caption), text_color=GREEN,
                          wraplength=shell.text_width, justify="left")
-    saved.pack(anchor="w", pady=(8, 0))
+    saved.pack(anchor="w", pady=(SP.s, 0))
     err = error_label(wrap, shell.text_width)
     out = {"go": False}
 
@@ -81,7 +81,7 @@ def ask_conversion(app, username, on_server=False) -> bool:
                        width=120).pack(side="right")
     if has_copy:
         app._ghost_button(shell.buttons, "Save a copy first…", save_copy,
-                          width=170).pack(side="right", padx=(0, 8))
+                          width=170).pack(side="right", padx=(0, SP.s))
     top.bind("<Escape>", lambda e: top.destroy())
     app.root.wait_window(top)
     return out["go"]
@@ -112,7 +112,7 @@ def offer_recovery_conversion(app, asked=False):
     words = recovery_ui._words_box(wrap, shell.text_width)
     note(wrap, "You can do this later in Settings → Security. Until then "
          "the words keep working for a recovery exactly as before.",
-         shell.text_width, size=11, pady=(8, 0))
+         shell.text_width, size=T.caption, pady=(SP.s, 0))
     err = error_label(wrap, shell.text_width)
     busy = {"on": False}
     session = getattr(app, "_session", 0)

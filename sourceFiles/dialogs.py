@@ -27,7 +27,7 @@ import sync_client
 import totp
 import update_check
 import vault
-from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, INPUT_BG, BORDER,
+from theme import (T, SP, R, F, TEXT, MUTED, GREEN, GREEN_HOVER, INPUT_BG, BORDER,
                    CARD, CARD_HOVER, ON_ACCENT, MONO, DANGER, tile_colors,
                    apply_appearance)
 from vault import (add_account, validate_username, export_csv, export_json,
@@ -68,9 +68,9 @@ def create_user_dialog(app):
     confirm_entry = app._field(wrap, "Confirm password", show="•")
     pw_entry.bind("<KeyRelease>", lambda e: update_strength(pw_entry.get()))
 
-    show = ctk.CTkSwitch(wrap, text="Show passwords", font=F(12),
+    show = ctk.CTkSwitch(wrap, text="Show passwords", font=F(T.small),
                          text_color=MUTED, progress_color=GREEN)
-    show.pack(anchor="w", pady=(14, 0))
+    show.pack(anchor="w", pady=(SP.l, 0))
 
     def toggle():
         s = "" if show.get() else "•"
@@ -133,7 +133,7 @@ def _save_kit_file(app, username, secret_key_text):
 
 
 def _secret_key_box(parent, text):
-    box = entry(parent, height=52, font=ctk.CTkFont(family=MONO, size=15))
+    box = entry(parent, height=52, font=ctk.CTkFont(family=MONO, size=T.lead))
     box.pack(fill="x")
     box.insert(0, text)
     box.configure(state="readonly")
@@ -150,25 +150,25 @@ def _emergency_kit_dialog(app, new, password):
     wrap = shell.body
 
     field_label(wrap, "Account")
-    ctk.CTkLabel(wrap, text=new.username, font=F(15, "bold"),
+    ctk.CTkLabel(wrap, text=new.username, font=F(T.lead, "bold"),
                  text_color=TEXT, anchor="w").pack(anchor="w")
     field_label(wrap, "Secret Key")
     _secret_key_box(wrap, new.secret_key_text)
 
     row = ctk.CTkFrame(wrap, fg_color="transparent")
-    row.pack(fill="x", pady=(10, 0))
+    row.pack(fill="x", pady=(SP.m, 0))
     app._accent_button(row, "Save Emergency Kit…",
                        lambda: _save_kit_file(app, new.username,
                                               new.secret_key_text),
                        width=190).pack(side="left")
     app._ghost_button(row, "Copy", lambda: app._copy(
         new.secret_key_text, "Secret Key copied", sensitive=True),
-        width=90).pack(side="left", padx=(8, 0))
+        width=90).pack(side="left", padx=(SP.s, 0))
 
     note(wrap, "Print the kit, or keep the file somewhere offline — not next "
          "to your master password. Without the Secret Key, a stolen copy "
          "of your account cannot be opened by guessing the password.",
-         shell.text_width, pady=(14, 0))
+         shell.text_width, pady=(SP.l, 0))
     saved = check(wrap, "I have saved my Emergency Kit", shell.text_width)
     err = error_label(wrap, shell.text_width)
 
@@ -193,23 +193,23 @@ def _phrase_dialog(app, new, password):
                                  "them on paper, in order."))
     wrap = shell.body
 
-    grid = ctk.CTkFrame(wrap, fg_color=CARD, corner_radius=16)
-    grid.pack(fill="x", pady=(14, 0))
+    grid = ctk.CTkFrame(wrap, fg_color=CARD, corner_radius=R.card)
+    grid.pack(fill="x", pady=(SP.l, 0))
     for c in range(3):
         grid.grid_columnconfigure(c, weight=1, uniform="word")
     for i, word in enumerate(new.recovery_phrase.split()):
         cell = ctk.CTkFrame(grid, fg_color="transparent")
-        cell.grid(row=i // 3, column=i % 3, sticky="w", padx=16, pady=8)
-        ctk.CTkLabel(cell, text=f"{i + 1:>2}", font=F(12), text_color=MUTED,
+        cell.grid(row=i // 3, column=i % 3, sticky="w", padx=SP.l, pady=SP.s)
+        ctk.CTkLabel(cell, text=f"{i + 1:>2}", font=F(T.small), text_color=MUTED,
                      width=22, anchor="e").pack(side="left")
         ctk.CTkLabel(cell, text=word, text_color=TEXT,
-                     font=ctk.CTkFont(family=MONO, size=15, weight="bold")
-                     ).pack(side="left", padx=(8, 0))
+                     font=ctk.CTkFont(family=MONO, size=T.lead, weight="bold")
+                     ).pack(side="left", padx=(SP.s, 0))
 
     note(wrap, "Anyone with these words can open everything in this account. "
          "Keep them like a passport: not in a file or a photo, and not with "
          "the Emergency Kit. SecretSpace does not show them again.",
-         shell.text_width, pady=(14, 0))
+         shell.text_width, pady=(SP.l, 0))
 
     def next_step():
         top.destroy()
@@ -286,7 +286,7 @@ def ask_secret_key(app, username):
                          "Emergency Kit and starts with A4- (A3- on a kit "
                          "from SecretSpace 3; that one works too).")
     box = app._field(shell.body, "Secret Key", placeholder="A4-XXXXX-XXXXX-…")
-    box.configure(font=ctk.CTkFont(family=MONO, size=14))
+    box.configure(font=ctk.CTkFont(family=MONO, size=T.body))
     err = error_label(shell.body, shell.text_width)
     out = {"text": None}
 
@@ -511,17 +511,17 @@ def account_dialog(app, acc):
     pw_row.pack(fill="x")
     pw_row.grid_columnconfigure(0, weight=1)
     pw_entry = entry(pw_row, show="•",
-                     font=ctk.CTkFont(family=MONO, size=14))
+                     font=ctk.CTkFont(family=MONO, size=T.body))
     pw_entry.grid(row=0, column=0, sticky="ew")
     show_btn = ctk.CTkButton(
-        pw_row, text="Show", width=64, height=44, corner_radius=12,
+        pw_row, text="Show", width=64, height=44, corner_radius=R.inner,
         fg_color="transparent", border_width=1, border_color=BORDER,
-        hover_color=CARD_HOVER, text_color=TEXT, font=F(12, "bold"))
-    show_btn.grid(row=0, column=1, padx=(8, 8))
+        hover_color=CARD_HOVER, text_color=TEXT, font=F(T.small, "bold"))
+    show_btn.grid(row=0, column=1, padx=(SP.s, SP.s))
     gen_btn = ctk.CTkButton(
-        pw_row, text="Generate", width=96, height=44, corner_radius=12,
+        pw_row, text="Generate", width=96, height=44, corner_radius=R.inner,
         fg_color=GREEN, hover_color=GREEN_HOVER, text_color=ON_ACCENT,
-        font=F(12, "bold"))
+        font=F(T.small, "bold"))
     gen_btn.grid(row=0, column=2)
 
     bar, label, update_strength = app._strength_widget(wrap)
@@ -531,9 +531,9 @@ def account_dialog(app, acc):
         placeholder="the secret or otpauth:// link the site shows")
 
     field_label(wrap, "Notes (optional)")
-    notes_box = ctk.CTkTextbox(wrap, height=76, corner_radius=12,
+    notes_box = ctk.CTkTextbox(wrap, height=76, corner_radius=R.inner,
                                fg_color=INPUT_BG, border_color=BORDER,
-                               border_width=1, font=F(13))
+                               border_width=1, font=F(T.label))
     notes_box.pack(fill="x")
 
     def toggle():
@@ -622,7 +622,7 @@ def account_dialog(app, acc):
             shell.buttons, list(names),
             lambda label: target.update(id=names[label]), width=140)
         picker.configure(height=40)
-        picker.pack(side="right", padx=(0, 10))
+        picker.pack(side="right", padx=(0, SP.m))
         picker.set(app.vault_name(target["id"]))
         Tooltip(picker, "The vault this entry is saved in")
     for e in (site_entry, user_entry, pw_entry, totp_entry):
@@ -638,7 +638,7 @@ def generator_dialog(app):
     wrap = shell.body
 
     field_label(wrap, "Password")
-    result = entry(wrap, height=52, font=ctk.CTkFont(family=MONO, size=16))
+    result = entry(wrap, height=52, font=ctk.CTkFont(family=MONO, size=T.lead))
     result.pack(fill="x")
     bar, strength_label, update_strength = app._strength_widget(wrap)
 
@@ -656,10 +656,10 @@ def generator_dialog(app):
         update_strength(pw)
 
     len_row = ctk.CTkFrame(card, fg_color="transparent")
-    len_row.pack(fill="x", padx=16, pady=(14, 0))
-    ctk.CTkLabel(len_row, text="Length", font=F(13, "bold"),
+    len_row.pack(fill="x", padx=SP.l, pady=(SP.l, 0))
+    ctk.CTkLabel(len_row, text="Length", font=F(T.label, "bold"),
                  text_color=TEXT).pack(side="left")
-    len_val = ctk.CTkLabel(len_row, text="20", font=F(13, "bold"),
+    len_val = ctk.CTkLabel(len_row, text="20", font=F(T.label, "bold"),
                            text_color=GREEN)
     len_val.pack(side="right")
     ctk.CTkSlider(card, from_=6, to=64, number_of_steps=58, variable=length,
@@ -667,18 +667,18 @@ def generator_dialog(app):
                   button_hover_color=GREEN_HOVER,
                   command=lambda v: (len_val.configure(text=str(int(float(v)))),
                                      regenerate())
-                  ).pack(fill="x", padx=12, pady=(8, 6))
+                  ).pack(fill="x", padx=SP.m, pady=(SP.s, SP.s))
 
     checks = ctk.CTkFrame(card, fg_color="transparent")
-    checks.pack(fill="x", padx=16, pady=(4, 14))
+    checks.pack(fill="x", padx=SP.l, pady=(SP.xs, SP.l))
     for idx, (key, lab) in enumerate((("upper", "A-Z"), ("lower", "a-z"),
                                       ("digits", "0-9"), ("symbols", "!@#"))):
-        ctk.CTkCheckBox(checks, text=lab, variable=opts[key], font=F(13),
+        ctk.CTkCheckBox(checks, text=lab, variable=opts[key], font=F(T.label),
                         text_color=TEXT, fg_color=GREEN,
                         hover_color=GREEN_HOVER, border_color=MUTED,
                         command=regenerate, checkbox_width=22,
                         checkbox_height=22, width=80
-                        ).grid(row=0, column=idx, sticky="w", pady=4)
+                        ).grid(row=0, column=idx, sticky="w", pady=SP.xs)
 
     app._ghost_button(shell.buttons, "Regenerate", regenerate,
                       width=130).pack(side="left")
@@ -890,7 +890,7 @@ def settings_dialog(app):
         "Delete…", lambda: _delete_user_flow(app, top), width=150).pack()
     ctk.CTkFrame(wrap, height=8, fg_color="transparent").pack()
 
-    ctk.CTkLabel(shell.buttons, text=long_version_string(), font=F(11),
+    ctk.CTkLabel(shell.buttons, text=long_version_string(), font=F(T.caption),
                  text_color=MUTED).pack(side="left")
     app._ghost_button(shell.buttons, "Close", top.destroy,
                       width=120).pack(side="right")

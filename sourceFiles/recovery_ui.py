@@ -18,15 +18,15 @@ import accounts
 import dialogs
 import recovery
 from sync_ui import _in_background
-from theme import F, MUTED, DANGER, TEXT, BORDER, INPUT_BG, MONO
+from theme import T, SP, R, F, MUTED, DANGER, TEXT, BORDER, INPUT_BG, MONO
 from widgets import note, error_label, dialog_shell, field, field_label
 
 
 def _words_box(parent, width):
     box = ctk.CTkTextbox(parent, height=92, wrap="word", fg_color=INPUT_BG,
                          border_width=1, border_color=BORDER, text_color=TEXT,
-                         corner_radius=10,
-                         font=ctk.CTkFont(family=MONO, size=14))
+                         corner_radius=R.button,
+                         font=ctk.CTkFont(family=MONO, size=T.body))
     box.pack(fill="x")
     return box
 
@@ -52,7 +52,7 @@ def recover_dialog(app, username=""):
                       "the account)", placeholder="http://192.168.1.50:8787")
     note(wrap, "On a PC that already has the account, the phrase is all it "
          "takes. On a new PC, the account comes from its server.",
-         shell.text_width, size=11, pady=(8, 0))
+         shell.text_width, size=T.caption, pady=(SP.s, 0))
     err = error_label(wrap, shell.text_width)
     busy = {"on": False}
 
@@ -105,7 +105,7 @@ def _password_step(app, opened):
     pw_entry.bind("<KeyRelease>", lambda e: update_strength(pw_entry.get()))
     if opened.server:
         note(wrap, "Your other devices then sign in again with it (Sign in "
-             "from a server).", shell.text_width, size=11, pady=(10, 0))
+             "from a server).", shell.text_width, size=T.caption, pady=(SP.m, 0))
     err = error_label(wrap, shell.text_width)
     busy = {"on": False}
 

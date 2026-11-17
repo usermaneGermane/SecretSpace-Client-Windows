@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import customtkinter as ctk
 
 import vault
-from theme import (F, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
+from theme import (T, SP, R, F, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    BORDER, CARD_HOVER, ON_ACCENT, HEADER_BG, MONO)
 from widgets import Tooltip
 
@@ -75,15 +75,15 @@ def describe(rev: dict) -> str:
 def _small_button(parent, text, command, accent=False, danger=False, width=62):
     if accent:
         return ctk.CTkButton(parent, text=text, command=command, width=width,
-                             height=30, corner_radius=8, fg_color=GREEN,
+                             height=30, corner_radius=R.small, fg_color=GREEN,
                              hover_color=GREEN_HOVER, text_color=ON_ACCENT,
-                             font=F(11, "bold"))
+                             font=F(T.caption, "bold"))
     return ctk.CTkButton(parent, text=text, command=command, width=width,
-                         height=30, corner_radius=8, fg_color="transparent",
+                         height=30, corner_radius=R.small, fg_color="transparent",
                          border_width=1, border_color=BORDER,
                          hover_color=CARD_HOVER,
                          text_color=DANGER if danger else TEXT,
-                         font=F(11, "bold"))
+                         font=F(T.caption, "bold"))
 
 
 def panel(app, parent, acc):
@@ -91,23 +91,23 @@ def panel(app, parent, acc):
     Build the history of ``acc`` into ``parent`` and return the frame, for
     the caller to place. Revert and Clear refresh the app, which rebuilds it.
     """
-    panel = ctk.CTkFrame(parent, fg_color=HEADER_BG, corner_radius=14)
+    panel = ctk.CTkFrame(parent, fg_color=HEADER_BG, corner_radius=R.row)
     panel.grid_columnconfigure(1, weight=1)
 
     history = acc.get("history") or []
     head = ctk.CTkFrame(panel, fg_color="transparent")
-    head.grid(row=0, column=0, columnspan=6, sticky="ew", padx=12, pady=(10, 4))
-    ctk.CTkLabel(head, text="Earlier versions", font=F(13, "bold"),
+    head.grid(row=0, column=0, columnspan=6, sticky="ew", padx=SP.m, pady=(SP.m, SP.xs))
+    ctk.CTkLabel(head, text="Earlier versions", font=F(T.label, "bold"),
                  text_color=TEXT).pack(side="left")
     ctk.CTkLabel(head, text=f"   newest first · the last {vault.HISTORY_LIMIT} "
-                            "are kept", font=F(11),
+                            "are kept", font=F(T.caption),
                  text_color=MUTED).pack(side="left")
 
     if not history:
         ctk.CTkLabel(panel, text="None yet. Each time you edit this entry, "
-                     "the version you replace is kept here.", font=F(12),
+                     "the version you replace is kept here.", font=F(T.small),
                      text_color=MUTED, anchor="w").grid(
-            row=1, column=0, columnspan=6, sticky="w", padx=12, pady=(0, 12))
+            row=1, column=0, columnspan=6, sticky="w", padx=SP.m, pady=(0, SP.m))
         return panel
 
     for i, rev in enumerate(history, start=1):
@@ -120,7 +120,7 @@ def panel(app, parent, acc):
     clear = _small_button(panel, "Clear history",
                           lambda: _clear(app, acc), danger=True, width=110)
     clear.grid(row=len(history) + 1, column=0, columnspan=6, sticky="e",
-               padx=12, pady=(6, 10))
+               padx=SP.m, pady=(SP.s, SP.m))
     Tooltip(clear, "Forget these versions here and on your other PCs")
     return panel
 
@@ -144,20 +144,20 @@ def changed_by(app, acc, rev) -> str:
 
 def _revision_line(app, panel, line, acc, rev):
     ctk.CTkLabel(panel, text=local_time(rev.get("replaced_at", "")), width=150,
-                 anchor="w", font=F(12), text_color=TEXT).grid(
-        row=line, column=0, sticky="w", padx=(12, 8), pady=3)
+                 anchor="w", font=F(T.small), text_color=TEXT).grid(
+        row=line, column=0, sticky="w", padx=(SP.m, SP.s), pady=SP.xs)
     # Wrapped: the details pane is narrower than the old full-width row.
     who = changed_by(app, acc, rev)
     ctk.CTkLabel(panel, text=describe(rev) + ("\n" + who if who else ""),
-                 anchor="w", font=F(11),
+                 anchor="w", font=F(T.caption),
                  text_color=MUTED, wraplength=170, justify="left").grid(
-        row=line, column=1, sticky="w", pady=3)
+        row=line, column=1, sticky="w", pady=SP.xs)
 
     secret = rev.get("password", "")
     pwd = ctk.CTkLabel(panel, text="•" * 8, width=110, anchor="e",
-                       font=ctk.CTkFont(family=MONO, size=13),
+                       font=ctk.CTkFont(family=MONO, size=T.label),
                        text_color=MUTED)
-    pwd.grid(row=line, column=2, padx=(8, 8), pady=3)
+    pwd.grid(row=line, column=2, padx=(SP.s, SP.s), pady=SP.xs)
 
     reveal = {"shown": False, "job": None}
 
@@ -176,16 +176,16 @@ def _revision_line(app, panel, line, acc, rev):
             reveal["job"] = app.root.after(REVEAL_SECONDS * 1000, toggle)
 
     show = _small_button(panel, "Show", toggle)
-    show.grid(row=line, column=3, padx=2, pady=3)
+    show.grid(row=line, column=3, padx=SP.hair, pady=SP.xs)
     _small_button(panel, "Copy",
                   lambda: app._copy(secret, "Earlier password copied",
                                     sensitive=True)).grid(
-        row=line, column=4, padx=2, pady=3)
+        row=line, column=4, padx=SP.hair, pady=SP.xs)
     if not _writable(app, acc):
         return
     revert = _small_button(panel, "Revert", lambda: _revert(app, acc, rev),
                            accent=True)
-    revert.grid(row=line, column=5, padx=(2, 12), pady=3)
+    revert.grid(row=line, column=5, padx=(SP.hair, SP.m), pady=SP.xs)
     Tooltip(revert, "Make this version current again — the current one is "
                     "kept here, so this can be undone")
 

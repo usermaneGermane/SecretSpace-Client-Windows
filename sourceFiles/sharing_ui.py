@@ -24,7 +24,7 @@ import accounts
 import changelog
 from history_ui import local_time
 from sync_ui import _in_background
-from theme import (F, TEXT, MUTED, CARD, BORDER, WARN, DANGER, GREEN, MONO,
+from theme import (T, SP, R, F, TEXT, MUTED, CARD, BORDER, WARN, DANGER, GREEN, MONO,
                    tile_colors)
 from widgets import (dialog_shell, ghost_button, accent_button, small_button,
                      field, error_label, note, option_menu, Tooltip, avatar)
@@ -120,15 +120,15 @@ def members_dialog(app, vault_id, changed=None):
             return
         for child in listing.winfo_children():
             child.destroy()
-        fp = ctk.CTkFrame(listing, fg_color=CARD, corner_radius=14)
-        fp.grid(row=0, column=0, sticky="ew", padx=2, pady=(10, 4))
+        fp = ctk.CTkFrame(listing, fg_color=CARD, corner_radius=R.row)
+        fp.grid(row=0, column=0, sticky="ew", padx=SP.hair, pady=(SP.m, SP.xs))
         fp.grid_columnconfigure(0, weight=1)
         words = ctk.CTkFrame(fp, fg_color="transparent")
-        words.grid(row=0, column=0, sticky="w", padx=(16, 8), pady=(10, 0))
-        ctk.CTkLabel(words, text="Your fingerprint", font=F(12),
+        words.grid(row=0, column=0, sticky="w", padx=(SP.l, SP.s), pady=(SP.m, 0))
+        ctk.CTkLabel(words, text="Your fingerprint", font=F(T.small),
                      text_color=MUTED).pack(anchor="w")
         ctk.CTkLabel(words, text=account.fingerprint,
-                     font=ctk.CTkFont(family=MONO, size=15),
+                     font=ctk.CTkFont(family=MONO, size=T.lead),
                      text_color=TEXT).pack(anchor="w")
 
         def copy_fingerprint():
@@ -136,13 +136,13 @@ def members_dialog(app, vault_id, changed=None):
             app._copy(account.fingerprint, "Fingerprint copied")
 
         small_button(fp, "Copy", copy_fingerprint, width=70).grid(
-            row=0, column=1, padx=(0, 14), pady=(10, 0))
+            row=0, column=1, padx=(0, SP.l), pady=(SP.m, 0))
         ctk.CTkLabel(fp, text="Read it to someone who is about to share a "
                      "vault with you, so they know the key is yours.",
-                     font=F(11), text_color=MUTED,
+                     font=F(T.caption), text_color=MUTED,
                      wraplength=shell.text_width - 40,
                      justify="left").grid(row=1, column=0, columnspan=2,
-                                          sticky="w", padx=16, pady=(2, 10))
+                                          sticky="w", padx=SP.l, pady=(SP.hair, SP.m))
         for i, member in enumerate(members, start=1):
             _member_row(listing, i, member)
         status(f"{len(members)} member{'s' if len(members) != 1 else ''}")
@@ -183,15 +183,15 @@ def members_dialog(app, vault_id, changed=None):
         _with_server(app, both, done, failed)
 
     def _member_row(parent, index, member):
-        row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14)
-        row.grid(row=index, column=0, sticky="ew", padx=2, pady=4)
+        row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=R.row)
+        row.grid(row=index, column=0, sticky="ew", padx=SP.hair, pady=SP.xs)
         row.grid_columnconfigure(1, weight=1)
-        avatar(row, member["username"]).grid(row=0, column=0, padx=(14, 0),
-                                             pady=12)
+        avatar(row, member["username"]).grid(row=0, column=0, padx=(SP.l, 0),
+                                             pady=SP.m)
         info = ctk.CTkFrame(row, fg_color="transparent")
-        info.grid(row=0, column=1, sticky="w", padx=(12, 8), pady=10)
+        info.grid(row=0, column=1, sticky="w", padx=(SP.m, SP.s), pady=SP.m)
         who = member["username"] + ("  (you)" if member["me"] else "")
-        ctk.CTkLabel(info, text=who, anchor="w", font=F(14, "bold"),
+        ctk.CTkLabel(info, text=who, anchor="w", font=F(T.body, "bold"),
                      text_color=TEXT).pack(anchor="w")
         if member["me"]:
             detail, colour = role_label(member["role"]), MUTED
@@ -201,19 +201,19 @@ def members_dialog(app, vault_id, changed=None):
         else:
             detail, colour = (role_label(member["role"]) +
                               "  ·  fingerprint not checked on this PC"), WARN
-        ctk.CTkLabel(info, text=detail, anchor="w", font=F(12),
+        ctk.CTkLabel(info, text=detail, anchor="w", font=F(T.small),
                      text_color=colour).pack(anchor="w")
         # (An empty frame would take its default 200 x 200: none for a row
         # without buttons.)
         if member["me"] or (member["verified"] and not owner):
             return
         buttons = ctk.CTkFrame(row, fg_color="transparent")
-        buttons.grid(row=0, column=2, padx=(0, 14))
+        buttons.grid(row=0, column=2, padx=(0, SP.l))
         who = member["username"]
         if not member["verified"]:
             check = small_button(buttons, "Check", lambda: check_person(who),
                                  width=70)
-            check.pack(side="left", padx=(0, 6))
+            check.pack(side="left", padx=(0, SP.s))
             Tooltip(check, "Compare this person's fingerprint with them")
         if not owner:
             return
@@ -221,7 +221,7 @@ def members_dialog(app, vault_id, changed=None):
                            lambda label: set_role(who, _role_from(label)),
                            width=104)
         menu.set(role_label(member["role"]))
-        menu.pack(side="left", padx=(0, 6))
+        menu.pack(side="left", padx=(0, SP.s))
         small_button(buttons, "Remove", lambda: remove(who), danger=True,
                      width=80).pack(side="left")
 
@@ -288,16 +288,16 @@ def members_dialog(app, vault_id, changed=None):
         if _add_member_dialog(app, vault_id, name):
             reload()
 
-    status_label = ctk.CTkLabel(shell.buttons, text="", font=F(12),
+    status_label = ctk.CTkLabel(shell.buttons, text="", font=F(T.small),
                                 text_color=MUTED, anchor="w", justify="left",
                                 wraplength=230)
     ghost_button(shell.buttons, "Close", top.destroy, width=100).pack(side="left")
-    status_label.pack(side="left", padx=(12, 0))
+    status_label.pack(side="left", padx=(SP.m, 0))
     if owner:
         accent_button(shell.buttons, "Add a person…", add,
                       width=140).pack(side="right")
         rekey = ghost_button(shell.buttons, "Change key", change_key, width=110)
-        rekey.pack(side="right", padx=(0, 8))
+        rekey.pack(side="right", padx=(0, SP.s))
         Tooltip(rekey, "Give the vault a new key without removing anyone")
     top.bind("<Escape>", lambda e: top.destroy())
     reload()
@@ -317,8 +317,8 @@ def _add_member_dialog(app, vault_id, vault_name) -> bool:
         "With someone who has an account on the same server. They get the "
         "vault with their next sync.")
     who = field(shell.body, "Their username", placeholder="e.g. user1")
-    ctk.CTkLabel(shell.body, text="They can", anchor="w", font=F(12, "bold"),
-                 text_color=MUTED).pack(anchor="w", pady=(14, 6))
+    ctk.CTkLabel(shell.body, text="They can", anchor="w", font=F(T.small, "bold"),
+                 text_color=MUTED).pack(anchor="w", pady=(SP.l, SP.s))
     choices = {f"{ROLE_LABELS[r]} — {ROLE_NOTES[r]}": r
                for r in (accounts.ROLE_EDITOR, accounts.ROLE_READER,
                          accounts.ROLE_OWNER)}
@@ -397,18 +397,18 @@ def _fingerprint_dialog(app, keys, sharing) -> bool:
              "this PC has seen before. That happens when an account was "
              "deleted and made again — or when someone is pretending to be "
              f"{who}. Go on only if {who} confirms the fingerprint below.",
-             shell.text_width, color=DANGER, pady=(12, 0))
+             shell.text_width, color=DANGER, pady=(SP.m, 0))
     ctk.CTkLabel(shell.body, text=f"{who}'s fingerprint must be",
-                 font=F(12, "bold"), text_color=MUTED).pack(anchor="w",
-                                                            pady=(16, 4))
+                 font=F(T.small, "bold"), text_color=MUTED).pack(anchor="w",
+                                                            pady=(SP.l, SP.xs))
     ctk.CTkLabel(shell.body, text=keys["fingerprint"],
-                 font=ctk.CTkFont(family=MONO, size=20, weight="bold"),
+                 font=ctk.CTkFont(family=MONO, size=T.code, weight="bold"),
                  text_color=GREEN).pack(anchor="w")
     note(shell.body,
          "If it is different, stop: the vault's key would go to someone "
          "else." if sharing else
          "If it is different, do not trust changes shown under this name.",
-         shell.text_width, size=11, pady=(10, 0))
+         shell.text_width, size=T.caption, pady=(SP.m, 0))
     outcome = {"ok": False}
 
     def yes():
@@ -460,14 +460,14 @@ def activity_dialog(app, vault_id):
         rows = activity_rows(account, vault_id, app.vaults.get(vault_id, {}))
         if not rows:
             ctk.CTkLabel(listing, text="Nothing yet. Changes made from this "
-                         "version on are listed here.", font=F(13),
+                         "version on are listed here.", font=F(T.label),
                          text_color=MUTED).grid(row=0, column=0, columnspan=2,
-                                                pady=60)
+                                                pady=SP.empty)
         unknown = set()
         for i, (when, who, what, state) in enumerate(rows):
             ctk.CTkLabel(listing, text=local_time(when), width=140, anchor="w",
-                         font=F(12), text_color=MUTED).grid(
-                row=i, column=0, sticky="nw", padx=(8, 8), pady=4)
+                         font=F(T.small), text_color=MUTED).grid(
+                row=i, column=0, sticky="nw", padx=(SP.s, SP.s), pady=SP.xs)
             text, colour = f"{who} {what}", TEXT
             if state == changelog.BAD:
                 text += "\n⚠ The signature does not match " \
@@ -478,8 +478,8 @@ def activity_dialog(app, vault_id):
                 colour = WARN
                 unknown.add(who)
             ctk.CTkLabel(listing, text=text, anchor="w", justify="left",
-                         wraplength=440, font=F(13), text_color=colour).grid(
-                row=i, column=1, sticky="w", pady=4)
+                         wraplength=440, font=F(T.label), text_color=colour).grid(
+                row=i, column=1, sticky="w", pady=SP.xs)
         check.configure(state="normal" if unknown and account.server
                         else "disabled")
         return unknown
@@ -511,7 +511,7 @@ def activity_dialog(app, vault_id):
         server_log = ghost_button(shell.buttons, "Server log…",
                                   lambda: server_log_dialog(app, vault_id),
                                   width=120)
-        server_log.pack(side="right", padx=(0, 8))
+        server_log.pack(side="right", padx=(0, SP.s))
         Tooltip(server_log, "What the server noted: uploads, members, key "
                             "changes (owners only)")
     top.bind("<Escape>", lambda e: top.destroy())
@@ -554,9 +554,9 @@ def server_log_dialog(app, vault_id):
         "vault: which entry changed is in Activity.", scroll=True)
     listing = shell.body
     listing.grid_columnconfigure(1, weight=1)
-    waiting = ctk.CTkLabel(listing, text="Asking the server…", font=F(13),
+    waiting = ctk.CTkLabel(listing, text="Asking the server…", font=F(T.label),
                            text_color=MUTED)
-    waiting.grid(row=0, column=0, columnspan=2, pady=60)
+    waiting.grid(row=0, column=0, columnspan=2, pady=SP.empty)
 
     def show(lines):
         if not top.winfo_exists():
@@ -564,15 +564,15 @@ def server_log_dialog(app, vault_id):
         waiting.destroy()
         for i, line in enumerate(reversed(lines)):
             ctk.CTkLabel(listing, text=local_time(str(line.get("at", ""))),
-                         width=140, anchor="w", font=F(12),
+                         width=140, anchor="w", font=F(T.small),
                          text_color=MUTED).grid(row=i, column=0, sticky="nw",
-                                                padx=(8, 8), pady=4)
+                                                padx=(SP.s, SP.s), pady=SP.xs)
             text = f"{line.get('by', '?')} {describe_server_line(line)}"
             if line.get("address"):
                 text += f"   ·   from {line['address']}"
             ctk.CTkLabel(listing, text=text, anchor="w", justify="left",
-                         wraplength=440, font=F(13), text_color=TEXT).grid(
-                row=i, column=1, sticky="w", pady=4)
+                         wraplength=440, font=F(T.label), text_color=TEXT).grid(
+                row=i, column=1, sticky="w", pady=SP.xs)
 
     def failed(error):
         if top.winfo_exists():
