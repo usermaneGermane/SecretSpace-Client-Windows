@@ -28,13 +28,20 @@ BASE_ORIGIN_KEY = "base_origin"
 #: display and for choosing a sensible default in the sync conflict dialog --
 #: never for deciding a merge, because the two PCs' clocks disagree. That
 #: decision belongs to the three-way merge in sync.py.
-OPTIONAL_FIELDS = ("notes", "totp", "updated_at", "archived_at",
+OPTIONAL_FIELDS = ("notes", "totp", "url", "updated_at", "archived_at",
                    "history_cleared_at", "updated_by")
 
 #: What a revision records, and what counts as an edit worth recording.
 #: Everything the user can type into an entry -- not just the password, since
 #: a changed username or site is just as worth being able to undo.
-REVISION_FIELDS = ("site", "username", "password", "notes", "totp")
+#: ``site`` is the entry's name (it held the web address too before
+#: ``url`` existed; the key keeps its old name so no vault changes shape).
+REVISION_FIELDS = ("site", "username", "password", "notes", "totp", "url")
+
+#: The fields a revision id was made of before ``url`` existed. An
+#: earlier version without a web address keeps exactly that id, so adding
+#: the field renames no revision in any vault.
+_KEY_FIELDS_BEFORE_URL = ("site", "username", "password", "notes", "totp")
 
 #: Earlier versions kept per entry. Old passwords are useful (a site that
 #: still has the old one, an edit made by mistake) but they are also old
@@ -645,7 +652,8 @@ def export_csv(vault_data: dict, destination: str) -> int:
         writer = csv.writer(f)
         writer.writerow(["name", "url", "username", "password", "notes", "totp"])
         for acc in accounts:
-            writer.writerow([acc["site"], "", acc["username"], acc["password"],
+            writer.writerow([acc["site"], acc.get("url", ""), acc["username"],
+                             acc["password"],
                              acc.get("notes", ""), acc.get("totp", "")])
     return len(accounts)
 
@@ -670,7 +678,7 @@ def export_json(vault_data: dict, destination: str) -> int:
 # Each entry may carry ``history``: earlier versions of its fields, newest
 # first, at most HISTORY_LIMIT of them. A revision is
 #
-#     {"site", "username", "password", ["notes"], ["totp"],
+#     {"site", "username", "password", ["notes"], ["totp"], ["url"],
 #      "replaced_at": when it stopped being current (UTC ISO-8601),
 #      "changed":     which fields the edit that replaced it changed,
 #      "rid":         a stable id, derived from the two above}
@@ -717,7 +725,9 @@ def snapshot(entry: dict) -> dict:
 
 
 def _content_key(fields: dict) -> tuple:
-    return tuple(str(fields.get(f, "") or "") for f in REVISION_FIELDS)
+    key = tuple(str(fields.get(f, "") or "") for f in _KEY_FIELDS_BEFORE_URL)
+    url = str(fields.get("url", "") or "")
+    return key + (url,) if url else key
 
 
 def changed_fields(old: dict, new: dict) -> list:
@@ -897,7 +907,7 @@ def touch(entry: dict) -> dict:
 
 
 def add_account(vault: dict, site: str, username: str, password: str,
-                notes: str = "", totp: str = "") -> dict:
+                notes: str = "", totp: str = "", url: str = "") -> dict:
     entry = {
         "id": new_id(),
         "site": site,
@@ -909,6 +919,8 @@ def add_account(vault: dict, site: str, username: str, password: str,
         entry["notes"] = notes
     if totp:
         entry["totp"] = totp
+    if url:
+        entry["url"] = url
     vault["accounts"].append(entry)
     return entry
 

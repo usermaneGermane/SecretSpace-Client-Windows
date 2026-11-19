@@ -9,7 +9,7 @@ yourself, on your own hardware. (The one other address it can contact is
 github.com, to see whether a newer version is out — only when you ask it to;
 see [Updates](#updates).)
 
-**This README describes SecretSpace 4** (4.4.0). It has everything
+**This README describes SecretSpace 4** (4.5.0). It has everything
 SecretSpace 3 had — accounts, several vaults, sharing, recovery, the look
 of 3.1 — in a new file format. Coming from 3.x? Read
 [Upgrading from 3.x](#upgrading-from-3x) first: your account is converted
@@ -129,6 +129,33 @@ invites, recovery with an admin's approval), moving an entry from one vault
 to another, and *Sync when I unlock* (2.x had it; here you press **Sync**).
 [SecretSpace for Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux)
 1.0.0 is the same release for Linux.
+
+## New in 4.5: a name and a web address
+
+- **Two fields where there was one.** An entry has a **Name** (what you call
+  it: "GitHub", "Work mail") and, optionally, a **Web address**
+  (`github.com/login`). The old "Website / App" field is now the Name, so
+  every entry you already have keeps what you typed there; the web address
+  starts empty — fill it in when you edit the entry.
+- **The address is a link.** On the entry's card it shows underlined; a left
+  click opens it in your default browser, and *Copy* copies it. Only
+  `http://` and `https://` addresses are links: anything else (`file:`,
+  `javascript:`, …) is refused when you save, and an address like that which
+  is already in a vault — a shared vault can be written by others — is shown
+  as plain text and never opened. Type `github.com` and it is saved as
+  `https://github.com`.
+- **Search finds an entry by its address too.**
+- **Import keeps both.** A Chrome, Bitwarden, LastPass or KeePass export
+  brings the entry's name *and* its address (before, the address was cut
+  down to a name and the rest dropped). The CSV export fills the `url`
+  column.
+- Changing the address is an edit like any other: it is in the entry's
+  history, can be reverted, and shows as "web address" in a shared vault's
+  change log.
+- ⚠️ **Update every device to 4.5 (Linux: 2.4) before you fill in
+  addresses.** An older version does not know the field: when it saves an
+  entry it leaves the address out, and that edit then syncs to your other
+  devices. Nothing else is lost, and the account format does not change.
 
 ## New in 4.4: the finishing of the look
 
@@ -693,7 +720,9 @@ needs no update for this.
 - Its own line icons, drawn by the app in the colour of the text
 - Light and dark: follows Windows, or choose one in Settings → *Appearance*
   *(3.1)*
-- Search with Ctrl+F
+- Each entry has a name and an optional web address, shown as a link that
+  opens in your browser *(4.5)*
+- Search with Ctrl+F (name, username or web address)
 - Sort the list by date modified or by name (the *Sort* menu above the
   list); the choice is remembered
 - Archive with restore, so a deletion is recoverable
