@@ -241,8 +241,8 @@ def record(data: dict, before: dict, username: str, keyset: dict,
 # ---------------------------------------------------------------------------
 # For the screen
 # ---------------------------------------------------------------------------
-_FIELD_LABELS = {"site": "site", "username": "username", "password": "password",
-                 "notes": "notes", "totp": "2FA"}
+_FIELD_LABELS = {"site": "name", "username": "username", "password": "password",
+                 "notes": "notes", "totp": "2FA", "url": "web address"}
 
 
 def describe(line: dict) -> str:

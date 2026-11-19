@@ -13,15 +13,21 @@ import csv
 import json
 from collections import namedtuple
 
-#: One parsed entry. notes/totp are "" when the export did not carry them.
-Account = namedtuple("Account", "site username password notes totp")
+#: One parsed entry. notes/totp/url are "" when the export did not carry
+#: them. ``site`` is the entry's name, ``url`` its web address.
+Account = namedtuple("Account", "site username password notes totp url",
+                     defaults=("",))
 
 #: rows: list of Account; dropped: sorted labels for data still not imported
 ImportResult = namedtuple("ImportResult", "rows dropped")
 
-# Header synonyms used to map arbitrary export columns onto site/user/password.
-SITE_KEYS = ("name", "title", "site", "website", "url", "uri", "login_uri",
-             "hostname", "web/app", "webapp", "account", "grouping")
+# Header synonyms used to map arbitrary export columns onto the fields.
+# The name comes from a name-like column; without one it is made from the
+# web address, as before the address had a field of its own.
+NAME_KEYS = ("name", "title", "site", "web/app", "webapp", "account",
+             "grouping")
+URL_KEYS = ("url", "login_uri", "uri", "website", "hostname")
+SITE_KEYS = NAME_KEYS + URL_KEYS
 USER_KEYS = ("username", "user", "login_username", "login", "email", "e-mail",
              "user/email", "useremail", "user name")
 PASS_KEYS = ("password", "login_password", "pass", "pwd", "passwd",
@@ -74,12 +80,15 @@ def _clean_site(value):
 
 def _row_to_account(row):
     """Map one normalized row dict onto an :class:`Account`."""
-    site = _clean_site(_pick(row, SITE_KEYS, exclude=("pass", "user", "email")))
+    url = _pick(row, URL_KEYS, exclude=("pass", "user", "email"))
+    name = _pick(row, NAME_KEYS, exclude=("pass", "user", "email", "url",
+                                          "uri", "host"))
+    site = _clean_site(name or url)
     user = _pick(row, USER_KEYS, exclude=("pass", "url", "uri", "totp", "note"))
     pwd = _pick(row, PASS_KEYS, exclude=("hint", "note", "totp", "reused", "weak"))
     notes = _pick(row, NOTE_KEYS, exclude=("pass", "user", "totp"))
     totp = _pick(row, TOTP_KEYS, exclude=("pass", "user", "note"))
-    return Account(site, user, pwd, notes, totp)
+    return Account(site, user, pwd, notes, totp, url)
 
 
 #: Every column name we recognise, for telling a header row from data.

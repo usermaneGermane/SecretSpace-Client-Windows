@@ -47,9 +47,12 @@ def test_headerless_csv_assumes_site_user_password(tmp_path):
 
 
 def test_urls_are_tidied_into_site_names(tmp_path):
+    # Without a name column the name is made from the address, and the
+    # address itself is kept whole in its own field.
     text = "url,username,password\nhttps://www.example.com/login?x=1,u,p\n"
     assert importers.parse_csv(write(tmp_path, "e.csv", text)).rows == [
-        importers.Account("example.com", "u", "p", "", "")]
+        importers.Account("example.com", "u", "p", "", "",
+                          "https://www.example.com/login?x=1")]
 
 
 def test_blank_lines_are_ignored(tmp_path):

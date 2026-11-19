@@ -16,8 +16,9 @@ from theme import (T, SP, R, F, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
 from widgets import Tooltip
 
 #: How the fields are named to the user.
-FIELD_LABELS = {"site": "site", "username": "username",
-                "password": "password", "notes": "notes", "totp": "2FA"}
+FIELD_LABELS = {"site": "name", "username": "username",
+                "password": "password", "notes": "notes", "totp": "2FA",
+                "url": "web address"}
 
 #: Seconds a revealed earlier password stays visible, as on the row itself.
 REVEAL_SECONDS = 10
@@ -66,7 +67,7 @@ def describe(rev: dict) -> str:
     # would otherwise be invisible, so name what it used to be.
     was = []
     if "site" in changed:
-        was.append(f"site was {rev.get('site') or '—'}")
+        was.append(f"name was {rev.get('site') or '—'}")
     if "username" in changed:
         was.append(f"username was {rev.get('username') or '—'}")
     return text + ("  ·  " + ", ".join(was) if was else "")

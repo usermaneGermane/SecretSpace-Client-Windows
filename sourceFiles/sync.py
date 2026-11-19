@@ -42,7 +42,8 @@ from vault import (is_archived, new_id, utc_now, snapshot, changed_fields,
 #: than content, and ``updated_at`` is a note about when, not what -- comparing
 #: it would turn "we both made the same edit" into a conflict. ``history`` is
 #: merged, never compared.
-CONTENT_FIELDS = ("site", "username", "password", "notes", "totp", "archived_at")
+CONTENT_FIELDS = ("site", "username", "password", "notes", "totp", "url",
+                  "archived_at")
 
 #: Conflict resolutions.
 KEEP_LOCAL = "local"

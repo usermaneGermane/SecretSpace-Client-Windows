@@ -23,6 +23,7 @@ import account_sync_ui
 import accounts
 import appconfig
 import importers
+import weblink
 import sync_client
 import totp
 import update_check
@@ -474,7 +475,8 @@ def _finish_import(app, parsed, path):
 
     for item in new_items:
         add_account(app.vault, item.site, item.username, item.password,
-                    notes=item.notes, totp=item.totp)
+                    notes=item.notes, totp=item.totp,
+                    url=weblink.openable(item.url) or "")
     app._save()
     app.refresh_account_list()
     app.toast(f"Imported {len(new_items)} account(s)")
@@ -488,7 +490,7 @@ def account_dialog(app, acc):
     subtitle = ("Update this login; the version it replaces is kept in its "
                 "history." if editing else "Store a new login in your vault.")
 
-    top = app._modal(title, 500, 760)
+    top = app._modal(title, 500, 830)
     shell = dialog_shell(top, acc["site"] if editing else title,
                          subtitle, tile=_site_tile(acc["site"] if editing
                                                    else ""))
@@ -502,7 +504,9 @@ def account_dialog(app, acc):
     def target_vault():
         return app.vault_holding(acc["id"]) if editing else app.vaults[target["id"]]
 
-    site_entry = app._field(wrap, "Website / App", placeholder="e.g. GitHub")
+    site_entry = app._field(wrap, "Name", placeholder="e.g. GitHub")
+    url_entry = app._field(wrap, "Web address (optional)",
+                           placeholder="e.g. github.com/login")
     user_entry = app._field(wrap, "Username / Email",
                             placeholder="e.g. you@example.com")
 
@@ -562,6 +566,7 @@ def account_dialog(app, acc):
 
     if editing:
         site_entry.insert(0, acc["site"])
+        url_entry.insert(0, acc.get("url", ""))
         user_entry.insert(0, acc["username"])
         pw_entry.insert(0, acc["password"])
         totp_entry.insert(0, acc.get("totp", ""))
@@ -573,7 +578,10 @@ def account_dialog(app, acc):
     def save():
         site = site_entry.get().strip()
         if not site:
-            err.configure(text="Website / App is required."); return
+            err.configure(text="Name is required."); return
+        url, problem = weblink.clean(url_entry.get())
+        if problem:
+            err.configure(text="Web address: " + problem); return
         password = pw_entry.get()
         if not password:
             err.configure(text="Password is required."); return
@@ -600,10 +608,11 @@ def account_dialog(app, acc):
             # nothing. It also stamps updated_at -- shown in the conflict
             # dialog, never used by the merge, which goes by the sync base.
             update_entry(acc, site=site, username=username,
-                         password=password, notes=notes, totp=totp_secret)
+                         password=password, notes=notes, totp=totp_secret,
+                         url=url)
         else:
             add_account(target_vault(), site, username,
-                        password, notes=notes, totp=totp_secret)
+                        password, notes=notes, totp=totp_secret, url=url)
         app._save()
         top.destroy()
         app.refresh_account_list()
@@ -625,7 +634,7 @@ def account_dialog(app, acc):
         picker.pack(side="right", padx=(0, SP.m))
         picker.set(app.vault_name(target["id"]))
         Tooltip(picker, "The vault this entry is saved in")
-    for e in (site_entry, user_entry, pw_entry, totp_entry):
+    for e in (site_entry, url_entry, user_entry, pw_entry, totp_entry):
         e.bind("<Return>", lambda ev: save())
     site_entry.focus()
 

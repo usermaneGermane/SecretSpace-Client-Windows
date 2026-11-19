@@ -36,7 +36,8 @@ import vaults_ui
 import recovery_ui
 import totp
 import update_check
-from theme import (T, SP, R, F, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
+import weblink
+from theme import (T, SP, R, F, FONT, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    BORDER, TEXT, MUTED, GREEN, GREEN_HOVER, DANGER,
                    ON_ACCENT, WARN, MONO, DECOR_DISC_A, DECOR_DISC_B,
                    DECOR_DOT, DECOR_INK, pick, apply_appearance,
@@ -1290,7 +1291,8 @@ class PasswordManagerGUI:
         q = self.search_query.strip().lower()
         if q:
             accounts = [a for a in accounts
-                        if q in a["site"].lower() or q in a["username"].lower()]
+                        if q in a["site"].lower() or q in a["username"].lower()
+                        or q in a.get("url", "").lower()]
         accounts = sort_accounts(accounts, self.sort_order)
 
         self.all_chip.configure(
@@ -1501,6 +1503,10 @@ class PasswordManagerGUI:
                                         corner_radius=0)
         scroll.pack(fill="both", expand=True, padx=SP.l, pady=(SP.l, SP.l))
 
+        if acc.get("url"):
+            self._web_box(scroll, acc).pack(fill="x", padx=SP.s,
+                                            pady=(0, SP.l))
+
         fields = ctk.CTkFrame(scroll, fg_color="transparent")
         fields.pack(fill="x", padx=SP.s)
         fields.grid_columnconfigure((0, 1), weight=1, uniform="field")
@@ -1547,6 +1553,38 @@ class PasswordManagerGUI:
             hover_color=GREEN_HOVER if accent else CARD_HOVER,
             border_width=0 if accent else 1, border_color=BORDER,
             text_color=ON_ACCENT if accent else TEXT, font=F(T.small, "bold"))
+
+    def _web_box(self, parent, acc):
+        """The web address as a link: a left click opens it in the
+        default browser. Only http/https ever opens (weblink.py)."""
+        box = self._field_box(parent, "Web address")
+        address = acc.get("url", "")
+        link = weblink.openable(address)
+        text = _clip(weblink.display(address), 52)
+        if link:
+            shown = ctk.CTkLabel(
+                box, text=text, text_color=GREEN, anchor="w", cursor="hand2",
+                font=ctk.CTkFont(family=FONT, size=T.lead, weight="bold",
+                                 underline=True))
+            shown.bind("<Button-1>", lambda e: self._open_link(address))
+            Tooltip(shown, "Open " + _clip(link, 60) + " in your browser")
+        else:
+            # Written by an older or another program: shown, never opened.
+            shown = ctk.CTkLabel(box, text=text, text_color=TEXT, anchor="w",
+                                 font=F(T.lead, "bold"))
+            Tooltip(shown, "Not a web link (only http:// and https:// "
+                           "open)")
+        shown.grid(row=1, column=0, sticky="w", padx=SP.l,
+                   pady=(SP.hair, SP.m))
+        copy_url = self._small_button(
+            box, "Copy", lambda: self._copy(address, "Web address copied"))
+        copy_url.grid(row=0, column=1, rowspan=2, padx=(SP.xs, SP.m))
+        Tooltip(copy_url, "Copy web address")
+        return box
+
+    def _open_link(self, address):
+        if not weblink.open_in_browser(address):
+            self.toast("Could not open that address", "warn")
 
     def _username_box(self, parent, acc):
         box = self._field_box(parent, "Username")
