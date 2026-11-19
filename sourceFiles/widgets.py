@@ -10,6 +10,7 @@ body, and a footer bar for its buttons; :func:`section` groups settings into
 cards like the details card's.
 """
 
+import gc
 import tkinter as tk
 from types import SimpleNamespace
 
@@ -19,6 +20,51 @@ from theme import (WARN, SELECTED, T, SP, R, ON_DANGER, TOOLTIP_BG, TOOLTIP_TEXT
                    GREEN_HOVER, DANGER, DANGER_HOVER, INPUT_BG, BORDER,
                    CARD_HOVER, ON_ACCENT)
 from password_generator import estimate_strength
+
+
+#: How often the main thread collects garbage while the window is open.
+GC_EVERY_MS = 2000
+
+
+def collect_on_main_thread(root, every_ms=GC_EVERY_MS):
+    """
+    Run Python's cycle collector on the Tk thread only, for as long as
+    ``root`` lives.
+
+    Automatic collection runs in whichever thread happens to allocate. When
+    that is a worker thread and the garbage holds a Tk font (old CTkFonts are
+    garbage after every redraw), the font's ``__del__`` sends ``font delete``
+    to Tk from that thread, and that call waits for the main thread. If the
+    main thread is itself waiting for the worker -- ``Thread.start()`` waits
+    for the new thread to begin, and the new thread collects while beginning
+    -- both wait forever: the window shows "Not responding" for good. Seen
+    on Sync in 3 of 4 runs of the Lab recovery flow (19 Nov 2026).
+
+    Plain reference counting still frees most objects at once, in any
+    thread; only cycles wait for the next collection here. Automatic
+    collection is switched back on when ``root`` is destroyed, so a test
+    that builds a window does not leave the process without it.
+    """
+    gc.disable()
+
+    def collect():
+        try:
+            if root.winfo_exists():
+                gc.collect()
+                root.after(every_ms, collect)
+        except tk.TclError:
+            pass                        # the window went away in between
+
+    def restore(event):
+        if event.widget is root:
+            # Collect what piled up HERE first: switched back on with Tk
+            # garbage still waiting, the next automatic collection may run
+            # in a worker thread and crash Tcl (seen in the test suite).
+            gc.collect()
+            gc.enable()
+
+    root.bind("<Destroy>", restore, add="+")
+    root.after(every_ms, collect)
 
 #: Side padding inside every dialog.
 PAD = SP.dialog

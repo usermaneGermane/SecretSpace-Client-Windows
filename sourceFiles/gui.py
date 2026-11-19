@@ -44,6 +44,7 @@ from theme import (T, SP, R, F, FONT, BG, CARD, CARD_HOVER, SELECTED, INPUT_BG,
                    strength_color,
                    tile_colors, asset_candidates)
 from widgets import (toast_pill, entry_row, TOAST_GAP, Tooltip, ghost_button, accent_button, field,
+                     collect_on_main_thread,
                      strength_widget, modal, fit_modal, safe_grab, confirm,
                      STRENGTH_SEGMENTS)
 from password_generator import estimate_strength
@@ -249,6 +250,9 @@ class VaultNav:
 class PasswordManagerGUI:
     def __init__(self, root):
         self.root = root
+        # Garbage with Tk fonts in it must be freed on this thread, or a
+        # worker thread can deadlock the window (widgets.collect_on_main_thread).
+        collect_on_main_thread(root)
         self.root.title(window_title())
         self.root.geometry("1320x800")
         self.root.minsize(1120, 640)
