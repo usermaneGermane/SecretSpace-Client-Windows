@@ -363,10 +363,10 @@ def fit_modal(root, top):
     sit in a tall, mostly empty window.
     """
     top.update_idletasks()
-    need = top.winfo_reqheight()
     cur_w, cur_h = top.winfo_width(), top.winfo_height()
-    if need < cur_h and not getattr(top, "pm_fit_exact", False):
-        need = cur_h                    # keeps its size, but is still placed
+    need = dialog_height(top.winfo_reqheight(), cur_h,
+                         getattr(top, "pm_fit_exact", False),
+                         top.winfo_screenheight())
     x = root.winfo_rootx() + (root.winfo_width() - cur_w) // 2
     y = root.winfo_rooty() + (root.winfo_height() - need) // 2
     x, y = on_screen(x, y, cur_w, need, top.winfo_screenwidth(),
@@ -378,6 +378,20 @@ def fit_modal(root, top):
 
 #: Room kept below a dialog for the taskbar and the window's frame.
 SCREEN_MARGIN = 64
+
+
+def dialog_height(need, current, fit_exact, screen_h):
+    """
+    The height a dialog gets: what its content needs (a fit_exact one also
+    shrinks to it, the others keep their starting height), but never more
+    than the screen minus SCREEN_MARGIN. Moving alone could not save a
+    dialog taller than the screen: its button bar stayed below the bottom
+    edge (the entry form on a 1280x800 screen, 4.5.0). The button bar is
+    packed first, so a capped window squeezes the body, never the buttons.
+    """
+    if need < current and not fit_exact:
+        need = current                  # keeps its size, but is still placed
+    return max(1, min(need, screen_h - SCREEN_MARGIN))
 
 
 def on_screen(x, y, width, height, screen_w, screen_h):
