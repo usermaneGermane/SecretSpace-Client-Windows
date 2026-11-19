@@ -490,10 +490,12 @@ def account_dialog(app, acc):
     subtitle = ("Update this login; the version it replaces is kept in its "
                 "history." if editing else "Store a new login in your vault.")
 
-    top = app._modal(title, 500, 830)
+    top = app._modal(title, 500, 900)
+    # The body scrolls: with the web address the form is taller than a
+    # 1280x800 screen (or 1080p at 125 %), and Save must stay reachable.
     shell = dialog_shell(top, acc["site"] if editing else title,
                          subtitle, tile=_site_tile(acc["site"] if editing
-                                                   else ""))
+                                                   else ""), scroll=True)
     wrap = shell.body
 
     # A new entry goes to the vault picked in the main window; with several

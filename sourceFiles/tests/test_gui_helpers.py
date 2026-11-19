@@ -66,3 +66,26 @@ def test_a_dialog_is_never_pushed_off_the_top_or_left():
     from widgets import on_screen
     assert on_screen(-40, 300, 516, 1200, 1366, 768) == (0, 0)
     assert on_screen(1200, 10, 516, 400, 1366, 768) == (1366 - 516, 10)
+
+
+# ---- a dialog is never taller than the screen --------------------------------
+def test_a_dialog_taller_than_the_screen_is_cut_to_it():
+    from widgets import dialog_height, SCREEN_MARGIN
+    # The 4.5.0 entry form (830 px) on CI's 1280x800 screen: moving it to
+    # y=0 still left Save below the bottom edge.
+    assert dialog_height(830, 830, False, 800) == 800 - SCREEN_MARGIN
+    assert dialog_height(1100, 600, True, 1080) == 1080 - SCREEN_MARGIN
+
+
+def test_a_dialog_that_fits_keeps_its_height():
+    from widgets import dialog_height
+    assert dialog_height(500, 830, False, 1080) == 830     # keeps its size
+    assert dialog_height(500, 830, True, 1080) == 500      # fit_exact shrinks
+    assert dialog_height(900, 830, False, 1080) == 900     # grows to its content
+
+
+def test_the_entry_form_scrolls_so_save_stays_reachable():
+    import inspect
+    import dialogs
+    src = inspect.getsource(dialogs.account_dialog)
+    assert "scroll=True" in src.split("wrap = shell.body")[0]
