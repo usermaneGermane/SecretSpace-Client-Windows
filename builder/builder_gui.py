@@ -23,7 +23,8 @@ import customtkinter as ctk                                    # noqa: E402
 import build                                                   # noqa: E402
 from theme import (F, MONO, HEADER_BG, CARD, BORDER, TEXT,     # noqa: E402
                    MUTED, GREEN, DANGER, asset_candidates)
-from widgets import ghost_button, accent_button               # noqa: E402
+from widgets import (ghost_button, accent_button,             # noqa: E402
+                     collect_on_main_thread)
 
 MARKS = {True: ("✓", GREEN), False: ("✗", DANGER), None: ("–", MUTED)}
 
@@ -34,12 +35,16 @@ class BuilderApp:
         self.project = project
         self.events = queue.Queue()
         self.busy = False
+        self.building = False
         self.checks = []
         self.python = None
 
         root.title("SecretSpace Builder")
         root.geometry("760x640")
         root.minsize(640, 520)
+        root.protocol("WM_DELETE_WINDOW", self.close)
+        # Workers start often here; see widgets.collect_on_main_thread.
+        collect_on_main_thread(root)
         for path in asset_candidates("SecretSpace-logo.ico"):
             if os.path.exists(path):
                 try:
@@ -220,12 +225,14 @@ class BuilderApp:
 
     def start_build(self):
         self.open_btn.pack_forget()
+        self.building = True
         iscc = build.find_iscc()
 
         def job():
             return build.build(self.project, self.python, iscc, log=self.log)
 
         def done(ok):
+            self.building = False
             if ok:
                 self.open_btn.pack(side="right", padx=(0, 10))
             else:
@@ -233,6 +240,18 @@ class BuilderApp:
                                      "log says why.", parent=self.root)
 
         self.work(job, done)
+
+    def close(self):
+        """The window's X. A build is stopped, not left running unseen; an
+        install is left to finish, as a half-done one is worse."""
+        if self.building:
+            if not messagebox.askyesno(
+                    "Stop the build?", "A build is running. Stop it and "
+                    "close the builder?", parent=self.root):
+                return
+            if self.building:           # it may have finished meanwhile
+                build.stop()
+        self.root.destroy()
 
     def choose_folder(self):
         folder = filedialog.askdirectory(
