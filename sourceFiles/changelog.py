@@ -29,6 +29,7 @@ Pure: dicts in, dicts out. Nothing here touches a file, a server or a widget.
 
 import json
 import os
+import re
 
 import account_crypto
 import vault
@@ -57,13 +58,18 @@ OK, BAD, UNKNOWN = "ok", "bad", "unknown"
 
 _TITLE_CHARS = 120
 
+#: A newer version's action or field name. Kept as written: both are covered
+#: by the line's signature, so dropping one would make it look forged.
+_NAME = re.compile(r"[a-z][a-z0-9_]{0,31}")
+_MAX_FIELDS = 64
+
 
 def _clean(line):
     """A stored line in its one form, or None for junk."""
     if not isinstance(line, dict):
         return None
     action = line.get("action")
-    if action not in ACTIONS:
+    if not isinstance(action, str) or not _NAME.fullmatch(action):
         return None
     fields = line.get("fields")
     try:
@@ -77,7 +83,8 @@ def _clean(line):
         "action": action,
         "entry": str(line.get("entry", "") or "")[:64],
         "title": str(line.get("title", "") or "")[:_TITLE_CHARS],
-        "fields": ([f for f in vault.REVISION_FIELDS if f in fields]
+        "fields": ([f for f in fields if isinstance(f, str)
+                    and _NAME.fullmatch(f)][:_MAX_FIELDS]
                    if isinstance(fields, list) else []),
         "count": count,
         "sig": str(line.get("sig", "") or "")[:200],
@@ -144,7 +151,7 @@ def diff(before: dict, after: dict) -> list:
         fields = vault.changed_fields(was, entry)
         if vault.is_archived(was) != vault.is_archived(entry):
             action = ARCHIVED if vault.is_archived(entry) else RESTORED
-        elif fields:
+        elif fields or vault.extra_key(was) != vault.extra_key(entry):
             action = REVERTED if _was_a_version(was, entry) else EDITED
         elif str(was.get("history_cleared_at", "") or "") != \
                 str(entry.get("history_cleared_at", "") or ""):

@@ -1077,3 +1077,16 @@ def test_base_matches(origin, url, revision, trusted):
     if origin:
         base[vault.BASE_ORIGIN_KEY] = origin
     assert sync_client.base_matches(base, url, revision) is trusted
+
+
+def test_a_new_top_level_key_reaches_the_other_pc(two_pcs):
+    """Written by a newer version; nothing else changed."""
+    home, work = two_pcs
+    home.sync()
+    work.sync()
+    with home.at_keyboard():
+        home.vault["tags"] = [1]
+        vault.save_vault(home.password, home.vault, home.username)
+    home.sync()
+    work.sync()
+    assert work.vault["tags"] == [1]
