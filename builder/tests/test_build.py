@@ -145,6 +145,8 @@ def test_a_broken_source_file_blocks_the_build():
 
 
 def test_an_incomplete_folder_is_reported(tmp_path):
+    (tmp_path / "sourceFiles").mkdir()
+    (tmp_path / "sourceFiles" / "gui.py").write_text("")
     checks = build.check_all(str(tmp_path), healthy(), find_iscc=has_iscc)
     files = checks_by_name(checks)["SecretSpace source files"]
     assert not files.ok and "Copy the whole project folder" in files.detail
@@ -314,3 +316,75 @@ def test_a_console_in_an_old_code_page_does_not_stop_the_builder():
     bare = subprocess.run([sys.executable, "-c", code.replace("build.safe_console(); ", "")],
                           capture_output=True, env=env)
     assert bare.returncode != 0 and b"UnicodeEncodeError" in bare.stderr
+
+
+# --- stopping a build ------------------------------------------------------
+@pytest.fixture
+def fresh_stop():
+    build._current, build._stopped = None, False
+    yield
+    build._current, build._stopped = None, False
+
+
+def test_stop_ends_the_command_and_what_it_started(fresh_stop):
+    """A real process tree: killing only the parent leaves the child, which
+    holds the output pipe open, so run() would not return."""
+    import threading
+    child = "import time; time.sleep(60)"
+    parent = ("import subprocess, sys; p = subprocess.Popen([sys.executable, "
+              f"'-c', {child!r}]); print('child', p.pid, flush=True); p.wait()")
+    started, results = threading.Event(), []
+    t = threading.Thread(daemon=True, target=lambda: results.append(build.run(
+        [sys.executable, "-c", parent], on_line=lambda line: started.set())))
+    t.start()
+    assert started.wait(20)
+    build.stop()
+    t.join(20)
+    assert not t.is_alive(), "something it started is still running"
+    assert results[0].code != 0
+
+
+def test_nothing_starts_after_stop(fresh_stop):
+    # Between two build steps no process runs; the next must not start.
+    build.stop()
+    assert build.run([sys.executable, "-c", "print('ran')"]) == \
+        build.Result(1, "stopped")
+
+
+# --- the wrong folder ------------------------------------------------------
+def test_outside_a_source_folder_the_checklist_says_so(tmp_path):
+    c = checks_by_name(build.check_all(str(tmp_path), healthy()))[
+        "SecretSpace source files"]
+    assert not c.ok and c.fix == "manual"
+    assert "not the SecretSpace source folder" in c.detail
+    assert "gui.py" not in c.detail             # no wall of file names
+
+
+# --- closing the window ----------------------------------------------------
+class _Root:
+    destroyed = False
+
+    def destroy(self):
+        self.destroyed = True
+
+
+@pytest.mark.parametrize("building, answer, stops, closes", [
+    (True, True, True, True),
+    (True, False, False, False),
+    (False, None, False, True),        # idle or installing: no question
+])
+def test_closing_the_window(monkeypatch, building, answer, stops, closes):
+    pytest.importorskip("customtkinter")
+    import builder_gui
+    app = builder_gui.BuilderApp.__new__(builder_gui.BuilderApp)
+    app.root, app.building = _Root(), building
+    calls = []
+
+    def ask(*a, **k):
+        assert answer is not None, "asked without a build running"
+        return answer
+
+    monkeypatch.setattr(builder_gui.messagebox, "askyesno", ask)
+    monkeypatch.setattr(build, "stop", lambda: calls.append(1))
+    app.close()
+    assert bool(calls) is stops and app.root.destroyed is closes

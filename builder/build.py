@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass, field
 
 #: Hide the console window a subprocess would otherwise flash up when the
@@ -61,20 +62,54 @@ class Result:
     output: str = ""
 
 
+#: The process run() is waiting for, and whether stop() was called. The
+#: window closes on one thread while the build runs on another.
+_lock = threading.Lock()
+_current = None
+_stopped = False
+
+
+def stop() -> None:
+    """
+    End the running command and everything it started, and start no other.
+    Nuitka works through child processes (Python, zig); without this they
+    outlived a closed builder and kept their files in build\\ open.
+    """
+    global _stopped
+    with _lock:
+        _stopped = True
+        proc = _current
+        if proc is None or proc.poll() is not None:
+            return
+        try:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                           stdin=subprocess.DEVNULL, capture_output=True,
+                           creationflags=_NO_WINDOW, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        if proc.poll() is None:
+            proc.kill()
+
+
 def run(cmd, cwd=None, env=None, on_line=None) -> Result:
     """
     Run ``cmd`` and return its exit code and combined output. With
     ``on_line``, each output line is passed on as it arrives, so a long
     Nuitka run shows progress instead of looking frozen.
     """
-    try:
-        proc = subprocess.Popen(
-            cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, encoding="utf-8", errors="replace",
-            creationflags=_NO_WINDOW)
-    except OSError as e:                       # e.g. "py" is not installed
-        return Result(127, str(e))
+    global _current
+    with _lock:                    # stop() comes wholly before or after this
+        if _stopped:
+            return Result(1, "stopped")
+        try:
+            proc = subprocess.Popen(
+                cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace",
+                creationflags=_NO_WINDOW)
+        except OSError as e:                   # e.g. "py" is not installed
+            return Result(127, str(e))
+        _current = proc
     lines = []
     for line in proc.stdout:
         line = line.rstrip("\r\n")
@@ -95,6 +130,12 @@ def project_dir() -> str:
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def is_source_folder(project: str) -> bool:
+    """Whether this looks like a SecretSpace folder at all, complete or not."""
+    return any(os.path.isfile(os.path.join(project, "sourceFiles", name))
+               for name in ("gui.py", "version.py"))
 
 
 def missing_files(project: str) -> list:
@@ -196,6 +237,9 @@ def check_all(project: str, runner=run, find_iscc=find_iscc) -> list:
     checks.append(Check(
         "SecretSpace source files", not gone,
         "all present" if not gone else
+        "this is not the SecretSpace source folder. Put the builder in it, "
+        "beside README.md, or choose that folder in the builder's window."
+        if not is_source_folder(project) else
         "missing: " + ", ".join(gone) + ". Copy the whole project folder.",
         None if not gone else "manual"))
 
@@ -347,7 +391,8 @@ def build_steps(project: str, py: "Python", iscc: str, version: str) -> list:
     """The commands, as (label, cmd, the file it must produce): the app's
     folder build, then its installer."""
     return [
-        ("Building the app (Nuitka: a few minutes)",
+        ("Building the app (Nuitka: several minutes; the first build takes "
+         "longer and may print nothing for a while)",
          nuitka_command(project, py, version),
          os.path.join(project, "build", "installer", DIST, "SecretSpace.exe")),
         ("Packing SecretSpace-Client-Installer.exe",

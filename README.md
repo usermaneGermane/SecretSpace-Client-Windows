@@ -349,8 +349,10 @@ the build needs:
 it is reported missing, re-run the Python installer, choose **Modify**,
 and tick **tcl/tk and IDLE**.
 
-When every line is ✓, press **Build**. About a minute later the project
-folder holds the installer, `SecretSpace-Client-Installer.exe`. The version
+When every line is ✓, press **Build**. It takes several minutes; the first
+build takes longer and may print nothing for a while. Closing the window
+stops a running build (it asks first). When it is done, the project folder
+holds the installer, `SecretSpace-Client-Installer.exe`. The version
 comes from `sourceFiles/version.py`.
 
 The builder does not compile anything itself. It drives the Python
@@ -395,7 +397,7 @@ a workflow artifact.
 
 Nuitka compiles the source into C and then into `SecretSpace.exe` and the
 folder beside it (since 4.3.0; until 4.2.0 PyInstaller bundled it). The
-builder only checks and drives it. A build takes a few minutes, not seconds;
+builder only checks and drives it. A build takes several minutes, not seconds;
 the first one also downloads Nuitka's C compiler, so it needs the internet.
 Copy the **whole project folder** to the other PC. The build needs:
 
