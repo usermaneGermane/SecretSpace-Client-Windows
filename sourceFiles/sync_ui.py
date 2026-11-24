@@ -405,6 +405,8 @@ def _version_panel(parent, row, column, title, entry, gone="deleted"):
         line("Notes", entry["notes"][:40])
     if entry.get("totp"):
         line("2FA", "seed stored")
+    if vault.extra_fields(entry):
+        line("More", "details from a newer SecretSpace")
 
     when = entry.get("updated_at", "")
     ctk.CTkLabel(panel, text=("Changed " + local_time(when)) if when

@@ -330,3 +330,55 @@ def test_no_server_no_password_change(server, alice):
     with pytest.raises(SyncError):
         account_sync.change_password(alice, "never set")
     accounts.unlock("alice", PW)                            # unchanged here
+
+
+# ---------------------------------------------------------------------------
+# What a newer version wrote (9b)
+# ---------------------------------------------------------------------------
+def test_a_newer_versions_fields_go_through_two_devices(server, device, alice):
+    """Saved, uploaded, edited by this version on another device, and back."""
+    def load(account):
+        return account.load_vault()
+
+    local = load(alice)
+    local["accounts"].append(dict(entry("Mail"), passkey={"n": [1, None]}))
+    local["tags"] = {"work": ["Mail"]}
+    alice.save_vault(local)
+    sync_once(alice, load(alice))
+
+    device("b")
+    other, _ = account_sync.sign_in(server.url, "", "alice", PW, alice.kit)
+    there = load(other)
+    assert there["accounts"][0]["passkey"] == {"n": [1, None]}
+    assert there["tags"] == {"work": ["Mail"]}
+    sync_client.vault.update_entry(there["accounts"][0], password="edited on b")
+    other.save_vault(there)
+    sync_once(other, load(other))
+
+    device("a")
+    back = sync_once(alice, load(alice))
+    assert back["accounts"][0]["password"] == "edited on b"
+    assert back["accounts"][0]["passkey"] == {"n": [1, None]}
+    assert back["tags"] == {"work": ["Mail"]}
+    session = account_sync.AccountSync(alice)
+    session.prepare(load(alice))
+    assert not session.has_work()
+    session.close()
+
+
+def test_a_new_top_level_key_reaches_a_device_that_already_has_the_vault(
+        server, device, alice):
+    alice.save_vault({"accounts": [entry("Mail")]})
+    sync_once(alice, alice.load_vault())
+    device("b")
+    other, _ = account_sync.sign_in(server.url, "", "alice", PW, alice.kit)
+
+    device("a")
+    here = alice.load_vault()
+    here["tags"] = [1]                     # nothing else changed
+    alice.save_vault(here)
+    sync_once(alice, here)
+
+    device("b")
+    assert sync_once(other, other.load_vault())["tags"] == [1]
+    assert other.load_vault()["tags"] == [1]

@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import copy
 import csv
 import json
 import uuid
@@ -42,6 +43,15 @@ REVISION_FIELDS = ("site", "username", "password", "notes", "totp", "url")
 #: earlier version without a web address keeps exactly that id, so adding
 #: the field renames no revision in any vault.
 _KEY_FIELDS_BEFORE_URL = ("site", "username", "password", "notes", "totp")
+
+#: Everything this version knows in an entry. Any other field was written by
+#: a newer SecretSpace: it is kept exactly as it is, through load, merge,
+#: history and save (9b, 4.6.0), so saving here never loses it.
+KNOWN_ENTRY_FIELDS = frozenset(("id", "site", "username", "password",
+                                "history") + OPTIONAL_FIELDS)
+
+#: What a revision says about itself, beside the fields it records.
+REVISION_META = frozenset(("replaced_at", "changed", "by", "rid"))
 
 #: Earlier versions kept per entry. Old passwords are useful (a site that
 #: still has the old one, an edit made by mistake) but they are also old
@@ -407,6 +417,10 @@ def validate_vault(data) -> dict:
             value = str(entry.get(key, "") or "")
             if value:
                 row[key] = value
+        # What a newer version added, untouched (KNOWN_ENTRY_FIELDS).
+        for key, value in entry.items():
+            if key not in KNOWN_ENTRY_FIELDS:
+                row[key] = value
 
         # Every entry carries an id: it is what the merge matches on, so it
         # has to survive a rename of the site or the username. An entry from
@@ -714,19 +728,36 @@ def history_now() -> str:
     return now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
+def extra_fields(entry: dict) -> dict:
+    """The fields of an entry (or a revision) this version does not know."""
+    return {k: v for k, v in entry.items()
+            if k not in KNOWN_ENTRY_FIELDS and k not in REVISION_META}
+
+
+def extra_key(entry: dict) -> str:
+    """extra_fields in one comparable form; "" when there are none."""
+    extra = extra_fields(entry)
+    return json.dumps(extra, sort_keys=True) if extra else ""
+
+
 def snapshot(entry: dict) -> dict:
-    """The user-visible fields of an entry, as a revision records them."""
+    """The user-visible fields of an entry, as a revision records them, and
+    the ones only a newer version can show."""
     snap = {}
     for field in REVISION_FIELDS:
         value = str(entry.get(field, "") or "")
         if value or field in ("site", "username", "password"):
             snap[field] = value
+    snap.update(copy.deepcopy(extra_fields(entry)))
     return snap
 
 
 def _content_key(fields: dict) -> tuple:
     key = tuple(str(fields.get(f, "") or "") for f in _KEY_FIELDS_BEFORE_URL)
     url = str(fields.get("url", "") or "")
+    extra = extra_key(fields)
+    if extra:
+        return key + (url, extra)
     return key + (url,) if url else key
 
 
@@ -749,8 +780,13 @@ def _clean_revision(raw):
     rev = snapshot(raw)
     rev["replaced_at"] = str(raw.get("replaced_at", "") or "")
     changed = raw.get("changed")
-    rev["changed"] = ([f for f in REVISION_FIELDS if f in changed]
-                      if isinstance(changed, list) else [])
+    if not isinstance(changed, list):
+        changed = []
+    # Known names in field order, then a newer version's (they are shown as
+    # they are), in a fixed order so every device computes the same list.
+    rev["changed"] = [f for f in REVISION_FIELDS if f in changed] + sorted(
+        {f for f in changed if isinstance(f, str) and f
+         and f not in REVISION_FIELDS})
     # Who made the edit that replaced this version (3.0 accounts; changelog).
     # Not part of the id: the same revision is the same one with or without.
     by = str(raw.get("by", "") or "")[:64]
@@ -845,13 +881,22 @@ def update_entry(entry: dict, **fields) -> bool:
         raise ValueError(f"Not editable fields: {sorted(unknown)}")
     old = snapshot(entry)
     for field, value in fields.items():
-        value = str(value or "")
-        if value or field in ("site", "username", "password"):
-            entry[field] = value
-        else:
-            entry.pop(field, None)       # optional fields: absent, not empty
+        _set_field(entry, field, value)
+    return _note_edit(entry, old)
+
+
+def _set_field(entry: dict, field: str, value) -> None:
+    value = str(value or "")
+    if value or field in ("site", "username", "password"):
+        entry[field] = value
+    else:
+        entry.pop(field, None)           # optional fields: absent, not empty
+
+
+def _note_edit(entry: dict, old: dict) -> bool:
+    """Record ``old`` as an earlier version if the entry is now different."""
     changed = changed_fields(old, entry)
-    if not changed:
+    if not changed and extra_key(old) == extra_key(entry):
         return False
     add_revision(entry, old, changed)
     touch(entry)
@@ -875,7 +920,13 @@ def revert_entry(entry: dict, rid: str) -> bool:
     rev = find_revision(entry, rid)
     if rev is None:
         return False
-    return update_entry(entry, **{f: rev.get(f, "") for f in REVISION_FIELDS})
+    old = snapshot(entry)
+    for field in REVISION_FIELDS:
+        _set_field(entry, field, rev.get(field, ""))
+    # A newer version's fields come back too. One the revision does not have
+    # stays as it is: nobody here can see it, so nothing here removes it.
+    entry.update(copy.deepcopy(extra_fields(rev)))
+    return _note_edit(entry, old)
 
 
 def clear_history(entry: dict) -> None:
@@ -1132,8 +1183,6 @@ def import_entries(target: dict, source: dict) -> tuple:
     token above all -- belong to 2.x and stay behind. ``source`` is not
     changed.
     """
-    import copy
-
     validate_vault(target)
     have_ids = {a["id"] for a in target["accounts"]}
     have = {(a["site"], a["username"], a["password"]) for a in target["accounts"]}

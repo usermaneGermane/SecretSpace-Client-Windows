@@ -512,7 +512,8 @@ class SyncSession:
             raise SyncError("The vault changed while the sync was open. "
                             "Press Sync again to merge the newer version.")
 
-        merged = merged_vault(local_vault, resolve(self.result, choices))
+        merged = merged_vault(local_vault, resolve(self.result, choices),
+                              self.result.extra)
         set_key_generation(merged, self.target_generation)
         vault.validate_vault(merged)
 

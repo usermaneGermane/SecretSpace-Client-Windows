@@ -35,8 +35,11 @@ PC computes the same list (vault.normalize_history). A difference in history
 alone is still synced, in both directions, but never asks a question.
 """
 
+import json
+
 from vault import (is_archived, new_id, utc_now, snapshot, changed_fields,
-                   add_revision, merge_history, history_signature)
+                   add_revision, merge_history, history_signature,
+                   extra_key)
 
 #: What makes two versions of an entry "the same". ``id`` is identity rather
 #: than content, and ``updated_at`` is a note about when, not what -- comparing
@@ -44,6 +47,11 @@ from vault import (is_archived, new_id, utc_now, snapshot, changed_fields,
 #: merged, never compared.
 CONTENT_FIELDS = ("site", "username", "password", "notes", "totp", "url",
                   "archived_at")
+
+#: The top-level keys of a vault this version knows and looks after itself.
+#: Any other was written by a newer SecretSpace; see merge_extra.
+KNOWN_VAULT_KEYS = frozenset(("accounts", "sync", "changes", "base_origin",
+                              "archive_purge_days"))
 
 #: Conflict resolutions.
 KEEP_LOCAL = "local"
@@ -67,6 +75,9 @@ def content(entry: dict) -> tuple:
     values = [str(entry.get(f, "") or "") for f in CONTENT_FIELDS
               if f != "archived_at"]
     values.append("archived" if is_archived(entry) else "")
+    # A newer version's fields count too: a change to one has to be taken,
+    # and never overwritten without asking.
+    values.append(extra_key(entry))
     return tuple(values)
 
 
@@ -127,10 +138,12 @@ class MergeResult:
     from it until :func:`resolve` puts them back.
     """
 
-    def __init__(self, accounts, conflicts, stats):
+    def __init__(self, accounts, conflicts, stats, extra=None):
         self.accounts = accounts
         self.conflicts = conflicts
         self.stats = stats
+        #: The merged top-level keys this version does not know.
+        self.extra = extra or {}
 
     @property
     def clean(self) -> bool:
@@ -154,7 +167,8 @@ class MergeResult:
         locally and the entire vault has to be uploaded.
         """
         return (bool(self.conflicts) or self.stats["push"] > 0
-                or self.stats["history_out"] > 0)
+                or self.stats["history_out"] > 0
+                or self.stats["extra_out"] > 0)
 
     @property
     def changed(self) -> bool:
@@ -164,7 +178,8 @@ class MergeResult:
         still has to reach both sides.
         """
         return (self.needs_push or self.pulled > 0
-                or self.stats["history_in"] > 0)
+                or self.stats["history_in"] > 0
+                or self.stats["extra_in"] > 0)
 
     def summary(self) -> str:
         """One line for the toast / dialog header."""
@@ -179,6 +194,8 @@ class MergeResult:
             parts.append(f"{len(self.conflicts)} to review")
         if not parts and (self.stats["history_in"] or self.stats["history_out"]):
             return "revision history updated"
+        if not parts and (self.stats["extra_in"] or self.stats["extra_out"]):
+            return "vault details updated"
         return ", ".join(parts) if parts else "already up to date"
 
 
@@ -186,6 +203,31 @@ def _by_id(vault) -> dict:
     if not vault:
         return {}
     return {a["id"]: a for a in vault.get("accounts", []) if a.get("id")}
+
+
+def _extra_keys(data) -> dict:
+    return {k: v for k, v in (data or {}).items() if k not in KNOWN_VAULT_KEYS}
+
+
+def _plain(value) -> str:
+    return json.dumps(value, sort_keys=True)
+
+
+def merge_extra(base, local, remote) -> dict:
+    """
+    The top-level keys this version does not know, from both sides.
+
+    A key only one side has is kept, whatever the base says: a missing key
+    may just mean an app from before 4.6 saved that copy without it. Where
+    the two differ, the side that changed it since the base wins; when both
+    did, this device's, which the next sync of the other then takes.
+    """
+    b, l, r = _extra_keys(base), _extra_keys(local), _extra_keys(remote)
+    merged = {**r, **l}
+    for key in set(l) & set(r):
+        if key in b and _plain(l[key]) == _plain(b[key]):
+            merged[key] = r[key]
+    return merged
 
 
 def merge_vaults(base, local, remote) -> MergeResult:
@@ -205,7 +247,12 @@ def merge_vaults(base, local, remote) -> MergeResult:
     stats = {"new": 0, "updated": 0, "archived": 0, "removed": 0,
              "unchanged": 0, "push": 0,
              # History-only differences: synced, never shown as a change.
-             "history_in": 0, "history_out": 0}
+             "history_in": 0, "history_out": 0,
+             # The same for a newer version's top-level keys.
+             "extra_in": 0, "extra_out": 0}
+    extra = merge_extra(base, local, remote)
+    stats["extra_in"] = int(_plain(extra) != _plain(_extra_keys(local)))
+    stats["extra_out"] = int(_plain(extra) != _plain(_extra_keys(remote)))
 
     def take_remote(entry, was):
         """Record a remote entry landing locally, for the summary."""
@@ -298,7 +345,7 @@ def merge_vaults(base, local, remote) -> MergeResult:
             kind = "archive" if is_archived(l) != is_archived(r) else "edit"
             conflicts.append(Conflict(entry_id, b, l, r, kind=kind))
 
-    return MergeResult(merged, conflicts, stats)
+    return MergeResult(merged, conflicts, stats, extra)
 
 
 def _archived_copy(entry: dict) -> dict:
@@ -379,11 +426,13 @@ def resolve(result: MergeResult, choices=None) -> list:
     return accounts
 
 
-def merged_vault(local, accounts) -> dict:
+def merged_vault(local, accounts, extra=None) -> dict:
     """
     Rebuild a full vault dict around a merged accounts list, preserving any
     top-level keys (sync settings and the like) the vault already carried.
+    ``extra`` is MergeResult.extra: the merged keys of a newer version.
     """
     out = dict(local or {})
+    out.update(extra or {})
     out["accounts"] = accounts
     return out

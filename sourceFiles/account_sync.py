@@ -59,9 +59,11 @@ FEATURE_RECOVERY = "recovery"
 #: a key that comes with no signature is never taken (see check_key).
 FEATURE_SIGNED_KEYS = "signed-keys"
 
-#: ... and of one that holds accounts and vaults in the current format
-#: (SecretSpace Server 2.1.0). This version syncs with nothing older.
+#: ... and of one that holds accounts and vaults in the current format.
+#: This version syncs with nothing older than MIN_SERVER, the first release
+#: that has it (the README's Compatibility table says the same; a test checks).
 FEATURE_FORMAT_2 = "format-2"
+MIN_SERVER = "2.1.0"
 
 
 class LoginFailed(SyncError):
@@ -111,7 +113,7 @@ class AccountServer(SyncClient):
         if API_VERSION not in (health.get("api") or [1]) or \
                 FEATURE_FORMAT_2 not in self._features:
             raise SyncError("This server is too old for this SecretSpace: it "
-                            "needs SecretSpace Server 2.1.0 or newer. Update "
+                            f"needs SecretSpace Server {MIN_SERVER} or newer. Update "
                             "the server, then sync again. Nothing was "
                             "changed; your vaults are on this PC.")
 
@@ -514,7 +516,8 @@ class AccountSync:
             raise SyncError("The vault changed while the sync was open. "
                             "Press Sync again to merge the newer version.")
         merged = vault.validate_vault(
-            merged_vault(local_vault, resolve(self.result, choices)))
+            merged_vault(local_vault, resolve(self.result, choices),
+                         self.result.extra))
         log = changelog.merge(changelog.lines_of(local_vault), self._remote_log)
         if log or changelog.CHANGES_KEY in merged:
             merged[changelog.CHANGES_KEY] = log
