@@ -27,6 +27,8 @@ import appconfig
 import changelog
 import conversion_ui
 import dialogs
+import hello
+import hello_ui
 import history_ui
 from icons import icon
 import lockout
@@ -67,6 +69,7 @@ ROW_SLICE_SECONDS = 0.1         # list work per step before redrawing the window
 
 LOGIN_TILES_PER_ROW = 3
 
+HELLO_TEXT = "Unlock with Windows Hello"
 BACKDROP_REDRAW_MS = 60         # the login backdrop waits for a resize to settle
 BACKDROP_MODE_MS = 1000         # how often the login screen looks for a mode change
 BACKDROP_OVERSAMPLE = 3         # painted this many times larger, then scaled down
@@ -784,6 +787,10 @@ class PasswordManagerGUI:
         self.unlock_button.configure(height=52, corner_radius=R.row,
                                      font=F(T.lead, "bold"))
         self.unlock_button.pack(fill="x", pady=(SP.xs, SP.l))
+        self.hello_button = self._ghost_button(
+            pad, HELLO_TEXT, self.unlock_with_hello, width=360)
+        self.hello_button.configure(height=44)
+        self._show_hello()
 
         links = ctk.CTkFrame(pad, fg_color="transparent")
         links.pack(fill="x")
@@ -939,6 +946,7 @@ class PasswordManagerGUI:
     def _pick_login_user(self, name):
         self._login_user = name
         self._draw_login_tiles(accounts.list_accounts())
+        self._show_hello()
         self._cancel_lockout_timer()
         wait = lockout.remaining(name)
         if wait:
@@ -948,6 +956,16 @@ class PasswordManagerGUI:
                                          text=self._unlock_text())
             self._login_error("")
         self.password_entry.focus()
+
+    def _show_hello(self):
+        """The Hello button, only where it can open the picked account."""
+        self.hello_button.pack_forget()
+        if hello.can_unlock(self._login_user):
+            self.hello_button.pack(fill="x", pady=(0, SP.l),
+                                   after=self.unlock_button)
+
+    def hello_setting(self, parent, hint):
+        hello_ui.setting(self, parent, hint)
 
     def _unlock_text(self):
         return (f"Unlock {_clip(self._login_user, 24)}" if self._login_user
@@ -1026,19 +1044,60 @@ class PasswordManagerGUI:
             self._holding = False
             self._hold.release()
 
-    def unlock_vault(self, secret_key_text=None):
+    # One Hello window at a time.
+    _hello_asking = False
+
+    def unlock_with_hello(self):
+        username = self._login_user
+        if self._hello_asking or not hello.can_unlock(username):
+            return
+        wait = lockout.remaining(username)
+        if wait:
+            self._begin_lockout(username, wait)
+            return
+        session, button = self._session, self.hello_button
+        self._hello_asking = True
+        self._login_error("")
+        button.configure(state="disabled", text="Waiting for Windows Hello…")
+
+        def current():
+            """Still at the login screen it was pressed on?"""
+            self._hello_asking = False
+            if not button.winfo_exists():
+                return False
+            button.configure(state="normal", text=HELLO_TEXT)
+            return (self.account is None and self._session == session
+                    and self._login_user == username)
+
+        def done(password):
+            if current():
+                self.unlock_vault(password=password)
+
+        def failed(error):
+            if current() and not isinstance(error, hello.Cancelled):
+                self._login_error(
+                    (str(error) if isinstance(error, hello.Failed) else
+                     "Windows Hello did not work.") +
+                    " Your master password opens the account.")
+
+        window = hello.window_of(button)
+        sync_ui._in_background(
+            self, lambda: hello.password_for(username, window), done, failed)
+
+    def unlock_vault(self, secret_key_text=None, password=None):
         username = self._login_user
         if username and not self._hold_account(username):
             self._login_error("This account is in use: open in another "
                               "SecretSpace window, or by the command line.")
             return
-        self._unlock_vault(secret_key_text)
+        self._unlock_vault(secret_key_text, password)
         if self.account is None:
             self._release_account()
 
-    def _unlock_vault(self, secret_key_text=None):
+    def _unlock_vault(self, secret_key_text=None, password=None):
+        # ``password``: the one Windows Hello gave back.
         username = self._login_user
-        master_password = self.password_entry.get()
+        master_password = password or self.password_entry.get()
         if not username:
             self._login_error("Create an account first.")
             return
@@ -1074,7 +1133,7 @@ class PasswordManagerGUI:
             # once, from the Emergency Kit, then kept on this device.
             typed = dialogs.ask_secret_key(self, username)
             if typed:
-                self.unlock_vault(secret_key_text=typed)
+                self.unlock_vault(secret_key_text=typed, password=password)
             return
         except FileNotFoundError:
             self._login_error("No account found with that name.")
@@ -1084,6 +1143,13 @@ class PasswordManagerGUI:
             if not (isinstance(e, CryptoError)
                     and msg.startswith("Wrong master password")):
                 self._login_error(msg)    # a real file problem, not a typo
+                return
+            if password and not secret_key_text:
+                # Changed since the lock; nobody mistyped anything.
+                hello.forget(username)
+                self._show_hello()
+                self._login_error("The master password was changed. Enter "
+                                  "the new one.")
                 return
             wait = lockout.record_failure(username)
             if wait:
@@ -1117,6 +1183,7 @@ class PasswordManagerGUI:
             self.toast("This account is in use: open in another SecretSpace "
                        "window, or by the command line", "error")
             return
+        hello.forget(account.username)
         self._session += 1
         self.account = account
         self.vaults, self._saved, self.vault_filter = {}, {}, None
@@ -1920,6 +1987,8 @@ class PasswordManagerGUI:
         # other PC's changes.
         if self.master_password and self.current_user and not self._syncing:
             self._save()
+        if getattr(self, "account", None) and self.master_password:
+            hello.keep(self.account, self.master_password)
         # A copied password outlives the lock: the usual auto-clear timer
         # keeps running, so it can still be pasted until that fires.
         self.vault = self.master_password = self.current_user = None
