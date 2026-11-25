@@ -34,6 +34,7 @@ import moves
 import sync_client
 import sync_ui
 import vault
+import account_sync
 import account_sync_ui
 import vaults_ui
 import recovery_ui
@@ -1160,7 +1161,9 @@ class PasswordManagerGUI:
         server that cannot be reached is a warning, not an error -- the vault
         is open and usable either way.
         """
-        if not sync_client.sync_on_unlock(self.vault):
+        account = getattr(self, "account", None)
+        if not (account_sync.sync_on_unlock(account) if account
+                else sync_client.sync_on_unlock(self.vault)):
             return
         session = self._session
 
@@ -1371,6 +1374,14 @@ class PasswordManagerGUI:
             return ""
         return self.vault_name(self._entry_vault.get(acc["id"]))
 
+    def _row_shared(self, acc):
+        """Is anyone else in this entry's vault?"""
+        return self.account.is_shared(self._entry_vault.get(acc["id"]))
+
+    def _row_mark(self, acc):
+        """What a row shows besides the entry itself."""
+        return self._row_label(acc), self._row_shared(acc)
+
     def refresh_account_list(self):
         self._cancel_row_build()
         if self._empty_box is not None:
@@ -1414,7 +1425,7 @@ class PasswordManagerGUI:
         for eid, cached in list(self._rows.items()):
             sig, frame, pos = cached
             acc = active.get(eid)
-            if acc is None or _row_signature(acc, self._row_label(acc)) != sig:
+            if acc is None or _row_signature(acc, self._row_mark(acc)) != sig:
                 frame.destroy()
                 del self._rows[eid]
             else:
@@ -1450,7 +1461,7 @@ class PasswordManagerGUI:
                 cached[2] = i
             else:
                 self._rows[acc["id"]] = [_row_signature(acc,
-                                                        self._row_label(acc)),
+                                                        self._row_mark(acc)),
                                          self._add_row(i, acc), i]
         if pending:
             self._row_job = self.root.after(1, lambda: self._place_rows(pending))
@@ -1482,6 +1493,8 @@ class PasswordManagerGUI:
         subtitle = acc["username"] or "—"
         extras = [name for name, key in (("2FA", "totp"), ("note", "notes"))
                   if acc.get(key)]
+        if self._row_shared(acc):
+            extras.insert(0, "shared")
         subtitle = _clip(subtitle, 30 if not extras else 22)
         if extras:
             subtitle += "  ·  " + " · ".join(extras)
@@ -1575,6 +1588,8 @@ class PasswordManagerGUI:
         if len(self.vaults) > 1:
             line += ("\n" if line else "") + "In " + _clip(self.vault_name(
                 self._entry_vault.get(acc["id"])), 28)
+        if self.account.is_shared(home):
+            line += " · shared" if line else "Shared"
         ctk.CTkLabel(names, text=line, font=F(T.small), text_color=MUTED,
                      anchor="w", justify="left").pack(anchor="w")
         actions = ctk.CTkFrame(band, fg_color="transparent")
@@ -1887,7 +1902,7 @@ class PasswordManagerGUI:
 
     def sync_now(self, **options):
         if self.account is not None:
-            return account_sync_ui.run_sync(self)
+            return account_sync_ui.run_sync(self, **options)
         sync_ui.run_sync(self, **options)
 
     # ==================================================================

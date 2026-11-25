@@ -26,11 +26,15 @@ from widgets import ghost_button, accent_button, field, note, dialog_shell
 # ==========================================================================
 # The Sync button
 # ==========================================================================
-def run_sync(app):
+def run_sync(app, offline_hint=""):
     """
     One press of Sync: log in once, make the list of vaults the same here
     and on the server (account_sync.reconcile_vaults), then sync each vault
     in turn -- its own merge, its own conflict questions.
+
+    ``offline_hint``: started by itself at unlock, not by the user. It is
+    shown instead of the error when the server cannot be reached, and a
+    conflict is left for a press of Sync: nobody asked for a question.
     """
     if app.account is None or app.vault is None:
         return
@@ -42,7 +46,8 @@ def run_sync(app):
     app._syncing = True
     app.toast("Syncing…")
     account = app.account
-    attempt = {"session": getattr(app, "_session", 0)}
+    attempt = {"session": getattr(app, "_session", 0),
+               "offline_hint": offline_hint}
 
     def work():
         server = account_sync.logged_in(account)
@@ -65,8 +70,15 @@ def run_sync(app):
         _next_vault(app, run, attempt)
 
     _in_background(app, work, done,
-                   on_error=lambda e: _finish(app, str(e), "error")
+                   on_error=lambda e: _failed(app, attempt, e)
                    if _still_open(app, attempt) else None)
+
+
+def _failed(app, attempt, error):
+    if attempt.get("offline_hint") and isinstance(
+            error, sync_client.ServerUnreachable):
+        return _finish(app, attempt["offline_hint"], "warn")
+    _finish(app, str(error), "error")
 
 
 def _next_vault(app, run, attempt):
@@ -122,7 +134,7 @@ def _sync_step(app, run, attempt, vault_id, retry_allowed):
             return _next_vault(app, run, attempt)
         _logout_in_background(run["server"])
         app.refresh_account_list()
-        _finish(app, str(error), "error")
+        _failed(app, attempt, error)
 
     def work():
         session = account_sync.AccountSync(run["account"], run["server"], vault_id)
@@ -135,6 +147,12 @@ def _sync_step(app, run, attempt, vault_id, retry_allowed):
         if not session.has_work():
             return _next_vault(app, run, attempt)
         choices = None
+        if result.conflicts and attempt.get("offline_hint"):
+            _logout_in_background(run["server"])
+            app.refresh_account_list()
+            return _finish(
+                app, f"“{app.vault_name(vault_id)}” was changed here and on "
+                "another device — press Sync to choose what to keep", "warn")
         if result.conflicts:
             choices = conflict_dialog(
                 app, result, app.vault_name(vault_id) if run["many"] else "")

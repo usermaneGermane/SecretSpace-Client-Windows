@@ -359,6 +359,18 @@ def check_key(account: accounts.Account, server: "AccountServer", there: dict,
     return signer
 
 
+def sync_on_unlock(account: accounts.Account) -> bool:
+    """Settings -> Sync: sync by itself right after it is unlocked here. Off
+    unless the user turns it on (owner, 2026-11-06)."""
+    return bool(account.server) and account.info.get("sync_on_unlock") is True
+
+
+def set_sync_on_unlock(account: accounts.Account, on: bool) -> None:
+    info = dict(account.info, sync_on_unlock=bool(on))
+    accounts._write_info(account.username, info)
+    account.info = info
+
+
 def server_for(account: accounts.Account) -> AccountServer:
     found = account.server
     if not found:

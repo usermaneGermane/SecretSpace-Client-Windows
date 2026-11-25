@@ -283,3 +283,175 @@ def test_a_vault_restored_onto_a_new_pc_starts_with_it_off():
     sync_ui._settings_for_restored(fetched, "http://10.0.0.9:8787", "t2")
     assert sync_client.sync_on_unlock(fetched) is False
     assert sync_client.get_settings(fetched)["url"] == "http://10.0.0.9:8787"
+
+# ---------------------------------------------------------------------------
+# Accounts
+# ---------------------------------------------------------------------------
+class FakeAccount:
+    username, personal_id = "alex", "p"
+
+    def __init__(self, on, server=True):
+        self.info = {"sync_on_unlock": on}
+        self.server = {"url": "http://s"} if server else None
+
+
+def account_window(on, server=True):
+    w = FakeWindow(on=False)
+    w.vault = {"accounts": []}
+    w.account = FakeAccount(on, server)
+    return w
+
+
+def test_an_account_syncs_at_unlock_only_when_asked_to():
+    w = account_window(True)
+    w._sync_after_unlock()
+    assert w.syncs == []
+    w.root.run_next()
+    assert "can't be reached" in w.syncs[0]["offline_hint"]
+    for w in (account_window(None), account_window(False),
+              account_window("yes"), account_window(True, server=False)):
+        w._sync_after_unlock()
+        assert w.root.scheduled.empty()
+
+
+def test_the_choice_is_kept_on_this_device(tmp_path, monkeypatch):
+    import account_crypto
+    import account_sync
+    import accounts
+    monkeypatch.setenv("SECRETSPACE_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setattr(account_crypto, "ARGON2_MEMORY_KIB", 64)
+    monkeypatch.setattr(account_crypto, "ARGON2_PASSES", 1)
+    account = accounts.prepare_account("alex", "a long password").save()
+    account.set_server("http://10.0.0.1:1")
+    assert not account_sync.sync_on_unlock(account)
+    account_sync.set_sync_on_unlock(account, True)
+    again = accounts.unlock("alex", "a long password")
+    assert account_sync.sync_on_unlock(again)
+    again.set_server(None)
+    assert not account_sync.sync_on_unlock(again)
+    account_sync.set_sync_on_unlock(again, False)
+    again.set_server("http://10.0.0.1:1")
+    assert not account_sync.sync_on_unlock(again)
+
+
+class SyncApp:
+    """Just enough of the app for account_sync_ui.run_sync."""
+
+    def __init__(self):
+        self.account = FakeAccount(True)
+        self.vaults = {"p": {"accounts": []}}
+        self.vault = self.vaults["p"]
+        self._session, self._syncing = 1, False
+        self.toasts = []
+
+    def toast(self, message, kind="info"):
+        self.toasts.append((message, kind))
+
+    def load_vaults(self):
+        pass
+
+    def refresh_account_list(self):
+        pass
+
+    def vault_name(self, vault_id):
+        return "Personal"
+
+    def set_vault_data(self, vault_id, data, saved=False):
+        pass
+
+    def finish_moves(self):
+        return []
+
+
+def run_account_sync(monkeypatch, error=None, conflicts=(), **options):
+    import account_sync
+    import account_sync_ui
+    asked, committed = [], []
+
+    class Server:
+        def logout(self):
+            pass
+
+    class One:
+        first_push = base_ignored = False
+
+        def __init__(self, *a):
+            pass
+
+        def prepare(self, data):
+            return type("R", (), {"conflicts": list(conflicts),
+                                  "summary": lambda self: "x"})()
+
+        def has_work(self):
+            return True
+
+        def commit(self, data, choices=None):
+            committed.append(choices)
+            return data
+
+    def logged_in(account):
+        if error:
+            raise error
+        return Server()
+
+    def at_once(app, work, done, on_error):
+        try:
+            got = work()
+        except Exception as e:
+            return on_error(e)
+        done(got)
+    monkeypatch.setattr(account_sync, "logged_in", logged_in)
+    monkeypatch.setattr(account_sync, "reconcile_vaults",
+                        lambda a, s: account_sync.VaultChanges())
+    monkeypatch.setattr(account_sync, "syncable_vaults", lambda a, s: ["p"])
+    monkeypatch.setattr(account_sync, "AccountSync", One)
+    monkeypatch.setattr(account_sync_ui, "_in_background", at_once)
+    monkeypatch.setattr(account_sync_ui, "_convert_step",
+                        lambda app, run, attempt: account_sync_ui._all_done(app, run))
+    monkeypatch.setattr(account_sync_ui, "conflict_dialog",
+                        lambda *a: asked.append(1) or None)
+    app = SyncApp()
+    account_sync_ui.run_sync(app, **options)
+    assert app._syncing is False
+    return app, asked, committed
+
+
+def test_a_server_out_of_reach_is_a_hint_at_unlock_and_an_error_otherwise(monkeypatch):
+    down = sync_client.ServerUnreachable("no route")
+    app, _, _ = run_account_sync(monkeypatch, down, offline_hint="Not synced")
+    assert app.toasts[-1] == ("Not synced", "warn")
+    app, _, _ = run_account_sync(monkeypatch, down)
+    assert app.toasts[-1] == ("no route", "error")
+    app, _, _ = run_account_sync(monkeypatch, sync_client.SyncError("bad"),
+                                 offline_hint="Not synced")
+    assert app.toasts[-1] == ("bad", "error")
+
+
+def test_a_conflict_is_not_asked_about_at_unlock(monkeypatch):
+    app, asked, committed = run_account_sync(
+        monkeypatch, conflicts=[1], offline_hint="x")
+    assert not asked and not committed
+    assert "press Sync" in app.toasts[-1][0] and app.toasts[-1][1] == "warn"
+    app, asked, committed = run_account_sync(monkeypatch, conflicts=[1])
+    assert asked and not committed                      # asked, and cancelled
+    app, asked, committed = run_account_sync(monkeypatch, offline_hint="x")
+    assert committed
+
+
+# ---------------------------------------------------------------------------
+# The shared mark
+# ---------------------------------------------------------------------------
+def test_a_row_is_built_again_when_its_vault_becomes_shared():
+    class Window:
+        _row_label = gui.PasswordManagerGUI._row_label
+        _row_mark = gui.PasswordManagerGUI._row_mark
+        _row_shared = gui.PasswordManagerGUI._row_shared
+        vaults, vault_filter, _entry_vault = {"p": {}}, None, {"e": "p"}
+        account = type("A", (), {"shared": False,
+                                 "is_shared": lambda s, v: s.shared})()
+    w, entry = Window(), {"id": "e", "site": "Mail"}
+    assert not w._row_shared(entry)
+    before = gui._row_signature(entry, w._row_mark(entry))
+    w.account.shared = True
+    assert w._row_shared(entry)
+    assert gui._row_signature(entry, w._row_mark(entry)) != before
