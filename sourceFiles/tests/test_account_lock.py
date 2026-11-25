@@ -109,7 +109,7 @@ class Window:
         self._login_error = self.errors.append
         self.toast = lambda m, k="": self.errors.append(m)
 
-    def _unlock_vault(self, secret):
+    def _unlock_vault(self, secret, password=None):
         self.tried += 1
         if self.opens:
             self.account = object()
