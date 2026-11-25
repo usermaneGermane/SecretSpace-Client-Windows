@@ -64,7 +64,23 @@ def session_path(username: str) -> str:
 # ---------------------------------------------------------------------------
 # Which vaults
 # ---------------------------------------------------------------------------
+def is_enabled(account) -> bool:
+    """Settings -> AI agents (MCP), off until the user turns it on."""
+    return account.info.get("ai_enabled") is True
+
+
+def set_enabled(account, on: bool) -> None:
+    info = dict(account.info, ai_enabled=bool(on))
+    accounts._write_info(account.username, info)
+    account.info = info
+
+
 def allowed_vaults(account) -> list:
+    """The vaults AI agents may use now: none when it is off."""
+    return marked_vaults(account) if is_enabled(account) else []
+
+
+def marked_vaults(account) -> list:
     """The vaults marked for AI on this device."""
     found = account.info.get("ai_vaults")
     if not isinstance(found, list):
@@ -74,7 +90,7 @@ def allowed_vaults(account) -> list:
 
 def allow_vault(account, vault_id: str, on: bool) -> None:
     info = dict(account.info)
-    keep = [v for v in allowed_vaults(account) if v != vault_id]
+    keep = [v for v in marked_vaults(account) if v != vault_id]
     info["ai_vaults"] = keep + [vault_id] if on else keep
     accounts._write_info(account.username, info)
     account.info = info
@@ -294,7 +310,8 @@ class Door:
 # The other end
 # ---------------------------------------------------------------------------
 _CLOSED = ("SecretSpace is not open for AI. The user has to unlock the "
-           "SecretSpace app and mark a vault for AI (Vaults, AI).")
+           "SecretSpace app, turn this on and choose a vault: Settings, "
+           "AI agents (MCP).")
 
 
 def ask(username: str, request: dict) -> dict:

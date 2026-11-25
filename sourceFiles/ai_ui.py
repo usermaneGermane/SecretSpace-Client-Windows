@@ -1,20 +1,24 @@
 """
-AI agents: the window that asks, and the one that marks a vault (ai_access).
+AI agents: the window that asks, and the one in Settings (ai_access).
 
 Questions come in on worker threads; widgets are touched only on the main
 one. Nothing is ever allowed without a click in the window, not even twice
 the same.
 """
 
+import json
+import os
+import sys
 import threading
 
 import customtkinter as ctk
 
 import ai_access
+import vault
 from history_ui import local_time
-from theme import T, SP, R, F, MONO, TEXT, MUTED, BORDER, INPUT_BG
-from widgets import (accent_button, danger_button, dialog_shell, ghost_button,
-                     note)
+from theme import T, SP, R, F, MONO, TEXT, MUTED, BORDER, GREEN, INPUT_BG
+from widgets import (danger_button, dialog_shell, ghost_button, note,
+                     section, setting_row)
 
 #: Allow cannot be pressed at once: a click meant for something else, as the
 #: window appears, must not count.
@@ -239,63 +243,126 @@ def request_window(app, wanted, found, decided):
     return end
 
 
-def vault_dialog(app, vault_id, changed=lambda: None):
-    """Mark a vault for AI on this device, and see what was asked."""
+def client_config(account) -> str:
+    """What an AI tool's MCP settings need, with the program's full path:
+    the tool may not have it on its PATH."""
+    if vault.is_installed() and os.name == "nt":
+        command = [os.path.join(vault.get_app_dir(), "cli",
+                                "secretspace-cli.exe")]
+    elif vault.is_installed():
+        command = ["/usr/bin/secretspace-cli"]
+    else:
+        command = [sys.executable, os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "cli.py")]
+    return json.dumps({"mcpServers": {"secretspace": {
+        "command": command[0],
+        "args": command[1:] + ["mcp", "--account", account.username]}}},
+        indent=2)
+
+
+def settings_dialog(app):
+    """Settings -> AI agents (MCP): on or off, which vaults, how to connect,
+    and what was asked."""
     import dialogs                       # late: it imports this module's users
     account = app.account
-    name = app.vault_name(vault_id)
-    on = vault_id in ai_access.allowed_vaults(account)
-    top = app._modal("AI agents", 600, 640)
+    top = app._modal("AI agents (MCP)", 600, 660)
     shell = dialog_shell(
-        top, f"AI agents and “{name}”",
-        "An AI agent on this device can use what is in this vault for a "
-        "command, while the app is unlocked." if on else
-        "Not available to AI agents.", scroll=True)
-    width = shell.text_width
-    for text in (
-            "The agent sees the entries' names, usernames and web addresses, "
-            "never a password, 2FA code or note.",
-            "For each command that needs one, SecretSpace shows you the "
-            "command and asks. An allowed command gets the values as "
-            "environment variables; they are taken out of its output, but a "
-            "command can always send them elsewhere.",
-            "The mark is for this device only. Keep what agents may use in a "
-            "vault of its own."):
-        note(shell.body, "•  " + text, width, color=TEXT, size=T.label,
-             pady=(SP.s, 0))
-    if account.is_shared(vault_id):
-        note(shell.body, "•  This vault is shared: its other members' logins "
-             "are in it too.", width, color=TEXT, size=T.label, pady=(SP.s, 0))
-    note(shell.body, "To connect an agent, have it start:  secretspace-cli mcp",
-         width, size=T.label, pady=(SP.m, SP.m))
-    note(shell.body, "What was asked on this device, in every vault, newest "
-         "first", width, pady=(SP.m, SP.xs))
-    lines = list(reversed(ai_access.read_log(account)))[:50]
-    for line in lines:
-        note(shell.body, f"{local_time(line.get('at', ''))}   "
-             f"{printable(line.get('client', ''))}   "
-             f"{printable(line.get('result', ''))}\n"
-             f"{printable(line.get('what', ''))}", width, color=TEXT,
-             pady=(SP.xs, SP.xs))
-    if not lines:
-        note(shell.body, "Nothing yet.", width)
+        top, "AI agents (MCP)",
+        "An AI agent on this device can use logins of the vaults you choose, "
+        "without seeing the secrets. You are asked about every use.",
+        scroll=True)
+    wrap = shell.body
+    hint = shell.text_width - 150
 
-    def switch():
-        if not on and not dialogs.ask_master_password(
-                app, f"Make “{name}” available to AI agents",
-                "Every use is still asked about. Enter your master password "
-                "to confirm.", action="Make available"):
-            return
-        if app.account is not account:
-            return                       # locked meanwhile
-        ai_access.allow_vault(account, vault_id, not on)
-        app.ai_guard.refresh()
-        top.destroy()
-        changed()
-        app.toast(f"“{name}” is " + ("no longer" if on else "now") +
-                  " available to AI agents")
+    def confirmed(title, text):
+        # Asked only to give more, never to take it back.
+        return dialogs.ask_master_password(app, title, text, action="Allow") \
+            and app.account is account          # not locked meanwhile
 
-    ghost_button(shell.buttons, "Close", top.destroy, width=110).pack(side="left")
-    accent_button(shell.buttons, "Stop" if on else "Make available…", switch,
-                  width=170).pack(side="right")
+    def change(give, title, text, apply):
+        if not give or confirmed(title, text):
+            apply()
+            app.ai_guard.refresh()
+        if app.account is account and top.winfo_exists():
+            rebuild()
+
+    def switch(row, on, command):
+        box = ctk.CTkSwitch(row, text="", width=46, progress_color=GREEN)
+        if on:
+            box.select()
+        box.configure(command=lambda: command(bool(box.get())))
+        box.pack()
+        return box
+
+    def rebuild():
+        for child in wrap.winfo_children():
+            child.destroy()
+        enabled = ai_access.is_enabled(account)
+        marked = ai_access.marked_vaults(account)
+        card = section(wrap, "MCP", first=True)
+        switch(setting_row(
+            card, "Let AI agents connect",
+            "Only while this account is unlocked. Off: agents get nothing.",
+            hint, first=True), enabled, lambda on: change(
+                on, "Let AI agents connect",
+                "Agents reach only the vaults you choose, and every use is "
+                "still asked about. Enter your master password to confirm.",
+                lambda: ai_access.set_enabled(account, on)))
+        if enabled:
+            vaults_section(marked)
+            connect_section()
+        log_section()
+
+    def vaults_section(marked):
+        card = section(wrap, "Vaults agents may use")
+        for i, vault_id in enumerate(account.vault_ids()):
+            name = app.vault_name(vault_id)
+            text = "Allowed: names, usernames and web addresses are visible " \
+                "to agents." if vault_id in marked else "Not visible to agents."
+            if account.is_shared(vault_id):
+                text += " Shared: other members' logins are in it too."
+
+            def flip(on, vault_id=vault_id, name=name):
+                change(on, f"Let AI agents use “{name}”",
+                       "Agents see the names, usernames and web addresses in "
+                       "it, and can ask to use its logins. Enter your master "
+                       "password to confirm.",
+                       lambda: ai_access.allow_vault(account, vault_id, on))
+
+            switch(setting_row(card, name, text, hint, first=not i),
+                   vault_id in marked, flip)
+        note(wrap, "For this device only. A vault of its own for agents is "
+             "the safest.", shell.text_width, pady=(SP.s, 0))
+
+    def connect_section():
+        card = section(wrap, "Connect an AI tool")
+        config = client_config(account)
+        box = ctk.CTkTextbox(card, height=170, corner_radius=R.inner,
+                             fg_color=INPUT_BG, border_color=BORDER,
+                             border_width=1, wrap="none",
+                             font=ctk.CTkFont(family=MONO, size=T.small))
+        box.insert("1.0", config)
+        box.configure(state="disabled")
+        box.pack(fill="x", padx=SP.l, pady=(SP.l, 0))
+        ghost_button(setting_row(
+            card, "MCP configuration",
+            "Add this to the MCP settings of your AI tool. There is no "
+            "secret in it.", hint, first=True), "Copy",
+            lambda: app._copy(config, "Configuration copied"),
+            width=100).pack()
+
+    def log_section():
+        section_title = section(wrap, "What was asked on this device")
+        lines = list(reversed(ai_access.read_log(account)))[:50]
+        for line in lines:
+            note(section_title, f"{local_time(line.get('at', ''))}   "
+                 f"{printable(line.get('client', ''))}   "
+                 f"{printable(line.get('result', ''))}\n"
+                 f"{printable(line.get('what', ''))}", hint + 110, color=TEXT,
+                 pady=(SP.xs, SP.xs))
+        if not lines:
+            note(section_title, "Nothing yet.", hint, pady=(SP.s, SP.s))
+
+    rebuild()
+    ghost_button(shell.buttons, "Close", top.destroy, width=110).pack(side="right")
     top.bind("<Escape>", lambda e: top.destroy())
