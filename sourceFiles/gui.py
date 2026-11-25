@@ -326,7 +326,12 @@ class PasswordManagerGUI:
         if self.vault_filter in self.vaults and \
                 self.account.can_write(self.vault_filter):
             return self.vault_filter
-        return self.account.personal_id
+        personal = self.account.personal_id
+        if not self.account.can_write(personal):
+            # Changed by a newer SecretSpace: another vault, if one can.
+            return next((v for v in self.vaults
+                         if self.account.can_write(v)), personal)
+        return personal
 
     def entry_writable(self, entry_id):
         """May the open account change this entry (it is not in a vault
@@ -342,8 +347,17 @@ class PasswordManagerGUI:
                 return vault_id
         return None
 
-    def read_only_notice(self):
-        self.toast("This vault is shared with you for reading only", "warn")
+    def read_only_notice(self, entry_id=None):
+        self.toast(self.read_only_reason(entry_id), "warn")
+
+    def read_only_reason(self, entry_id=None, vault_id=None):
+        """Why a vault (or an entry's) cannot be changed here."""
+        home = vault_id or self._entry_vault.get(entry_id)             or self._vault_id_of(entry_id)
+        if self.account is not None and home and \
+                self.account.needs_newer_app(home):
+            return ("This vault was changed by a newer SecretSpace: update to "
+                    f"{self.account.newer_app_text(home)} to change it")
+        return "This vault is shared with you for reading only"
 
     @property
     def vault(self):
@@ -545,10 +559,13 @@ class PasswordManagerGUI:
         # across the card's edge; else at the bottom of the window.
         host = getattr(self, "detail", None)
         on_card = host is not None and host.winfo_exists() and host.winfo_ismapped()
-        self._toast = toast_pill(self.root, message, kind, on_card)
+        room = (host if on_card else self.root).winfo_width() - 2 * TOAST_GAP
+        self._toast = toast_pill(self.root, message, kind, on_card, room)
         self._toast.place(in_=host if on_card else self.root,
                           relx=0.5, rely=1.0, anchor="s", y=-TOAST_GAP)
-        self._toast_job = self.root.after(2400, self._hide_toast)
+        # A long message stays long enough to be read.
+        self._toast_job = self.root.after(max(2400, 55 * len(message)),
+                                          self._hide_toast)
 
     def _hide_toast(self):
         if self._toast is not None:
@@ -563,7 +580,7 @@ class PasswordManagerGUI:
         undone from the file.
         """
         try:
-            refused = []
+            refused, newer = [], []
             for vault_id, data in list(self.vaults.items()):
                 if self._saved.get(vault_id) == self._content_mark(data):
                     continue
@@ -573,7 +590,8 @@ class PasswordManagerGUI:
                                              else {"accounts": []})
                     self._saved[vault_id] = self._content_mark(
                         self.vaults[vault_id])
-                    refused.append(file.name)
+                    (newer if self.account.needs_newer_app(vault_id)
+                     else refused).append(file.name)
                     continue
                 self._note_changes(file, data)
                 file.save(data)
@@ -585,7 +603,13 @@ class PasswordManagerGUI:
                     self.toast("“" + "”, “".join(refused) + "” is shared with "
                                "you for reading only — nothing was changed "
                                "there", "warn")))
-            return not refused
+            if newer:
+                self.root.after(60, lambda: (
+                    self.refresh_account_list(),
+                    self.toast("“" + "”, “".join(newer) + "” was changed by a "
+                               "newer SecretSpace — nothing was changed there. "
+                               "Update SecretSpace to change it", "warn")))
+            return not refused and not newer
         except Exception as e:
             self.toast(f"Save failed: {e}", "error")
             return False
@@ -1047,6 +1071,11 @@ class PasswordManagerGUI:
             self._save()
 
         self.show_main_window()
+        newer = [v for v in self.vaults if account.needs_newer_app(v)]
+        if newer:
+            self.toast("Read only here: “" + "”, “".join(
+                self.vault_name(v) for v in newer) + "” — update to " +
+                account.newer_app_text(newer[0]) + " to change it", "warn")
         if unreadable:
             self.toast("Could not read the vault “" + "”, “".join(unreadable) +
                        "” on this PC — sync to fetch it again", "error")
@@ -1500,8 +1529,8 @@ class PasswordManagerGUI:
                                 text_color=MUTED, fg_color=CARD,
                                 corner_radius=R.small, width=92, height=32)
             only.pack(side="left")
-            Tooltip(only, "This vault is shared with you for reading: you can "
-                          "see and copy, not change")
+            Tooltip(only, self.read_only_reason(acc["id"]) +
+                    ": you can see and copy")
 
         scroll = ctk.CTkScrollableFrame(self.detail, fg_color=CARD,
                                         corner_radius=0)
@@ -1731,7 +1760,7 @@ class PasswordManagerGUI:
         delete would be resurrected by the next sync from the other PC.
         """
         if not self.entry_writable(acc["id"]):
-            return self.read_only_notice()
+            return self.read_only_notice(acc["id"])
         if not self._confirm(
                 "Move to archive",
                 f"Move the saved login for “{acc['site']}” to the archive?\n\n"

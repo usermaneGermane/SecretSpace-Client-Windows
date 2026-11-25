@@ -379,6 +379,24 @@ def test_a_toast_is_an_even_number_of_pixels_wide(window, text):
     assert pill.winfo_reqwidth() % 2 == 0
 
 
+@pytest.mark.parametrize("room", [300, 501])
+def test_a_long_toast_wraps_into_the_room_it_has(window, room):
+    import widgets
+    text = "Nothing was changed there, and here is a long reason why. " * 3
+    one = widgets.toast_pill(window, text)
+    pill = widgets.toast_pill(window, text, room=room)
+    pill.update_idletasks()
+    assert one.winfo_reqwidth() > room >= pill.winfo_reqwidth()
+    assert pill.winfo_reqwidth() % 2 == 0
+    assert pill.winfo_reqheight() > one.winfo_reqheight()
+    assert pill.cget("text") == text
+
+
+def test_a_short_toast_does_not_change_for_the_room(window):
+    import widgets
+    assert widgets.toast_pill(window, "Copied", room=500).winfo_reqwidth()         == widgets.toast_pill(window, "Copied").winfo_reqwidth()
+
+
 def test_an_entry_row_shows_its_texts_and_answers_a_click(window):
     import customtkinter as ctk
     import widgets

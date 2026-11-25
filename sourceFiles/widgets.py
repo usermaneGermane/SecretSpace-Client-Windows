@@ -514,11 +514,12 @@ TOAST_GAP = SP.xl
 TOAST_COLOURS = {"info": GREEN, "error": DANGER, "warn": WARN}
 
 
-def toast_pill(parent, message, kind="info", on_card=False):
+def toast_pill(parent, message, kind="info", on_card=False, room=0):
     """
     The pill of a toast: green (info), amber (warn) or red (error). Its
     corners are drawn on the card's colour when it sits on one, else on the
-    window's. Placing it and taking it away is the caller's.
+    window's. Placing it and taking it away is the caller's. A message wider
+    than ``room`` (pixels, when given) wraps instead of being cut off.
     """
     pill = ctk.CTkLabel(
         parent, text=f"   {message}   ", height=TOAST_HEIGHT,
@@ -530,6 +531,12 @@ def toast_pill(parent, message, kind="info", on_card=False):
     # decides this one, so round it up (see even_width).
     pill.update_idletasks()
     width = pill.winfo_reqwidth()
+    if 0 < room < width:
+        scale = pill._get_widget_scaling()
+        pill.configure(text=message, wraplength=max(60, room / scale - 2 * (SP.xl + R.inner)),
+                       padx=SP.l, pady=SP.s)
+        pill.update_idletasks()
+        width = pill.winfo_reqwidth()
     if width % 2:
         pill.configure(width=(width + 1) / pill._get_widget_scaling())
     return pill
