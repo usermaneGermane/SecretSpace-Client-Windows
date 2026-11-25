@@ -196,7 +196,20 @@ def _in_background(app, work, done, on_error):
     it. Exceptions arrive at ``on_error`` the same way, so a network failure
     can never leave the UI wedged with the Sync button disabled.
     """
+    # An app that is locked meanwhile lets go of the account; this may still
+    # be writing to it, so it stays held until the work is done.
+    hold = getattr(app, "_hold", None)
+    if hold is not None and not hold.retain():
+        hold = None
+
     def runner():
+        try:
+            run()
+        finally:
+            if hold is not None:
+                hold.release()
+
+    def run():
         try:
             payload = work()
         except Exception as error:                 # noqa: BLE001 - reported

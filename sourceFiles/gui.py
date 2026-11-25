@@ -20,6 +20,7 @@ import tkinter as tk
 import customtkinter as ctk
 import pyperclip
 
+import account_lock
 import accounts
 import appconfig
 import changelog
@@ -620,23 +621,7 @@ class PasswordManagerGUI:
         Delete the originals of moved entries whose copy has arrived (moves).
         Returns the vaults that changed.
         """
-        synced = {}
-
-        def arrived(vault_id, entry_id):
-            if vault_id not in self.vaults:
-                return False
-            if vault_id not in synced:
-                file = self.account.vault_file(vault_id)
-                try:
-                    # With a server: what it and this PC last agreed on.
-                    data = file.load_base() if self.account.server else \
-                        file.load() if file.has_file else None
-                except Exception:
-                    data = None
-                synced[vault_id] = {a["id"] for a in
-                                    (data or {}).get("accounts", [])}
-            return entry_id in synced[vault_id]
-
+        arrived = moves.arrived_in(self.account, self.vaults)
         changed = [v for v, data in self.vaults.items()
                    if self.account.can_write(v) and moves.settle(data, arrived)]
         if changed:
@@ -1004,7 +989,44 @@ class PasswordManagerGUI:
     def _login_error(self, msg):
         self.login_error.configure(text=msg)
 
+    # What keeps other programs from writing to the open account
+    # (account_lock), and whether this window is one of its holders.
+    _hold = None
+    _holding = False
+
+    def _hold_account(self, username):
+        """Hold the account until it is locked. False: it is open in another
+        window, or the command line is working in it."""
+        hold = self._hold
+        if hold is not None and hold.username == username and (
+                self._holding or hold.retain()):
+            self._holding = True        # (a sync from before still had it)
+            return True
+        self._release_account()
+        try:
+            self._hold = account_lock.take(username, wait=3)
+        except account_lock.Busy:
+            return False
+        self._holding = True
+        return True
+
+    def _release_account(self):
+        # A sync that is still running keeps its own hold until it is done.
+        if self._holding:
+            self._holding = False
+            self._hold.release()
+
     def unlock_vault(self, secret_key_text=None):
+        username = self._login_user
+        if username and not self._hold_account(username):
+            self._login_error("This account is in use: open in another "
+                              "SecretSpace window, or by the command line.")
+            return
+        self._unlock_vault(secret_key_text)
+        if self.account is None:
+            self._release_account()
+
+    def _unlock_vault(self, secret_key_text=None):
         username = self._login_user
         master_password = self.password_entry.get()
         if not username:
@@ -1081,6 +1103,10 @@ class PasswordManagerGUI:
 
     def open_account(self, account, loaded, master_password):
         """After an unlock or a new account: the main window."""
+        if not self._hold_account(account.username):
+            self.toast("This account is in use: open in another SecretSpace "
+                       "window, or by the command line", "error")
+            return
         self._session += 1
         self.account = account
         self.vaults, self._saved, self.vault_filter = {}, {}, None
@@ -1870,6 +1896,7 @@ class PasswordManagerGUI:
         # keeps running, so it can still be pasted until that fires.
         self.vault = self.master_password = self.current_user = None
         self.account = None
+        self._release_account()
         self._selected_id = None
         self.search_query = ""
         self.show_login_screen()

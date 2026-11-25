@@ -132,10 +132,18 @@ def frozen_dir():
     4.3.5), one level too high again.
     """
     if globals().get("__compiled__") is not None:
-        return os.path.dirname(os.path.abspath(__file__))
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(os.path.abspath(sys.executable))
-    return None
+        folder = os.path.dirname(os.path.abspath(__file__))
+    elif getattr(sys, "frozen", False):
+        folder = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        return None
+    # The command line is a program of its own in the "cli" folder of the
+    # app's folder; both have the same data.
+    if os.path.basename(folder).lower() == "cli":
+        above = os.path.dirname(folder)
+        if os.path.isfile(os.path.join(above, "SecretSpace.exe")):
+            return above
+    return folder
 
 
 def get_app_dir() -> str:

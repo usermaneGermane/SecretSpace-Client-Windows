@@ -201,9 +201,10 @@ def test_build_runs_the_steps_in_order(project):
                        runner=runner, exists=lambda p: True)
     cmds = [" ".join(c) for c, _ in runner.calls]
     assert " -m nuitka --standalone " in cmds[0] and cmds[0].endswith("gui.py")
-    assert "/DAppVersion=9.8.7" in cmds[1] and "SecretSpace.iss" in cmds[1]
-    assert "/DFileVersion=9.8.7.0" in cmds[1]
-    assert len(cmds) == 2
+    assert " -m nuitka --standalone " in cmds[1] and cmds[1].endswith("cli.py")
+    assert "/DAppVersion=9.8.7" in cmds[2] and "SecretSpace.iss" in cmds[2]
+    assert "/DFileVersion=9.8.7.0" in cmds[2]
+    assert len(cmds) == 3
 
 
 def test_the_portable_exe_is_no_longer_built(project):
@@ -219,7 +220,8 @@ def test_only_the_app_is_built():
     """The server has its own repository and its own build."""
     steps = build.build_steps("P", build.Python(["py"], "3", "p"), "iscc", "1.0.0")
     products = [os.path.basename(product) for _, _, product in steps]
-    assert products == ["SecretSpace.exe", "SecretSpace-Client-Installer.exe"]
+    assert products == ["SecretSpace.exe", "secretspace-cli.exe",
+                        "SecretSpace-Client-Installer.exe"]
 
 
 def test_nuitka_builds_the_folder_the_installer_packs():
@@ -245,6 +247,26 @@ def test_nuitka_builds_the_folder_the_installer_packs():
     with open(os.path.join(os.path.dirname(build.__file__), "..", "installer",
                            "SecretSpace.iss"), encoding="utf-8") as f:
         assert r'Source: "..\build\installer\SecretSpace.dist\*"' in f.read()
+
+
+def test_the_command_line_has_a_console_and_no_tk():
+    py = build.Python(["py", "-3"], "3.13.5", "python.exe")
+    cmd = build.cli_command("P", py, "4.9.0")
+    opts = dict(a.split("=", 1) for a in cmd if a.startswith("--") and "=" in a)
+    assert opts["--windows-console-mode"] == "force"
+    assert "tkinter" in opts["--nofollow-import-to"]
+    assert "--enable-plugin=tk-inter" not in cmd and "--onefile" not in cmd
+    assert opts["--file-version"] == "4.9.0.0"
+    assert opts["--output-folder-name"] + ".dist" == build.CLI_DIST
+    product = build.build_steps("P", py, "iscc", "4.9.0")[1][2]
+    assert product == os.path.join("P", "build", "installer", build.CLI_DIST,
+                                   opts["--output-filename"])
+    with open(os.path.join(os.path.dirname(build.__file__), "..", "installer",
+                           "SecretSpace.iss"), encoding="utf-8") as f:
+        script = f.read()
+    # ... and the app looks for its data above a folder of exactly this name.
+    assert r'Source: "..\build\installer\SecretSpace-CLI.dist\*"; ' \
+        r'DestDir: "{app}\cli"' in script
 
 
 def test_every_asset_exists():

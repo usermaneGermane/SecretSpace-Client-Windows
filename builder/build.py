@@ -339,7 +339,7 @@ def remove_previous(project: str) -> None:
         path = os.path.join(project, name)
         if os.path.exists(path):
             os.remove(path)
-    for name in ("SecretSpace", DIST):        # PyInstaller's, Nuitka's
+    for name in ("SecretSpace", DIST, CLI_DIST):    # PyInstaller's, Nuitka's
         folder = os.path.join(project, "build", "installer", name)
         if os.path.isdir(folder):
             shutil.rmtree(folder)
@@ -348,6 +348,9 @@ def remove_previous(project: str) -> None:
 #: The folder Nuitka writes: --output-folder-name plus ".dist" (Nuitka 4.3.5;
 #: without the option it is gui.dist, after the main module).
 DIST = "SecretSpace.dist"
+#: The command line: a program of its own, installed into {app}\cli.
+CLI_DIST = "SecretSpace-CLI.dist"
+CLI_EXE = "secretspace-cli.exe"
 
 #: The files the app reads beside itself (theme.asset_candidates).
 ASSETS = ("SecretSpace-logo.png", "SecretSpace-logo.ico", "Manrope-Regular.ttf",
@@ -387,14 +390,42 @@ def nuitka_command(project: str, py: "Python", version: str) -> list:
     return cmd + [os.path.join(src, "gui.py")]
 
 
+def cli_command(project: str, py: "Python", version: str) -> list:
+    """
+    Compile the command line into build/installer/SecretSpace-CLI.dist. Apart
+    from the app: one exe has either a console or none, and this one needs
+    no Tk.
+    """
+    src = os.path.join(project, "sourceFiles")
+    numbers = file_version(version)
+    return py.cmd + [
+        "-m", "nuitka", "--standalone", "--assume-yes-for-downloads",
+        "--nofollow-import-to=tkinter,customtkinter,PIL",
+        "--windows-console-mode=force",
+        "--windows-icon-from-ico=" + os.path.join(src, "SecretSpace-logo.ico"),
+        "--output-filename=" + CLI_EXE,
+        "--output-dir=" + os.path.join(project, "build", "installer"),
+        "--output-folder-name=SecretSpace-CLI",
+        "--remove-output",
+        "--company-name=SecretSpace", "--product-name=SecretSpace",
+        "--file-description=SecretSpace command line",
+        "--copyright=GPL-3.0-only",
+        "--file-version=" + numbers, "--product-version=" + numbers,
+        os.path.join(src, "cli.py"),
+    ]
+
+
 def build_steps(project: str, py: "Python", iscc: str, version: str) -> list:
     """The commands, as (label, cmd, the file it must produce): the app's
-    folder build, then its installer."""
+    folder build, the command line's, then the installer of both."""
     return [
         ("Building the app (Nuitka: several minutes; the first build takes "
          "longer and may print nothing for a while)",
          nuitka_command(project, py, version),
          os.path.join(project, "build", "installer", DIST, "SecretSpace.exe")),
+        ("Building the command line (Nuitka)",
+         cli_command(project, py, version),
+         os.path.join(project, "build", "installer", CLI_DIST, CLI_EXE)),
         ("Packing SecretSpace-Client-Installer.exe",
          [iscc, "/Q", f"/DAppVersion={version}",
           f"/DFileVersion={file_version(version)}",

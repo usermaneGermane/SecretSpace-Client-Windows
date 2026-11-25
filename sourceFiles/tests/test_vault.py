@@ -308,6 +308,17 @@ def test_nuitka_build_uses_the_exe_folder(tmp_path, monkeypatch):
     assert vault.get_data_dir() == str(tmp_path / "Roaming" / "SecretSpace" / "vault")
 
 
+def test_the_command_line_has_the_data_of_the_app_above_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(vault.sys, "frozen", True, raising=False)
+    app = tmp_path / "SecretSpace"
+    (app / "cli").mkdir(parents=True)
+    monkeypatch.setattr(vault.sys, "executable",
+                        str(app / "cli" / "secretspace-cli.exe"))
+    assert vault.get_app_dir() == str(app / "cli")      # just a folder's name
+    (app / "SecretSpace.exe").write_text("x")
+    assert vault.get_app_dir() == str(app)
+
+
 def test_pyinstaller_build_uses_the_exe_folder(tmp_path, monkeypatch):
     monkeypatch.setattr(vault.sys, "frozen", True, raising=False)
     monkeypatch.setattr(vault.sys, "executable", str(tmp_path / "SecretSpace.exe"))
