@@ -21,6 +21,8 @@ import account_crypto
 import account_sync
 import account_sync_ui
 import accounts
+import ai_access
+import ai_ui
 import appconfig
 import importers
 import moves
@@ -894,6 +896,16 @@ def settings_dialog(app):
             "Set up…", lambda: (top.destroy(),
                                account_sync_ui.server_dialog(app)),
             width=150).pack()
+
+    # ---- AI agents ----
+    agents = section(wrap, "AI agents (MCP)")
+    app._ghost_button(
+        setting_row(agents, "On" if ai_access.is_enabled(app.account)
+                    else "Off",
+                    "Let an AI agent use logins of the vaults you choose, "
+                    "without seeing the secrets.", hint, first=True),
+        "Set up…", lambda: (top.destroy(), ai_ui.settings_dialog(app)),
+        width=150).pack()
 
     # ---- archive ----
     arc = section(wrap, "Archive")

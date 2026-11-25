@@ -133,18 +133,14 @@ to another, and *Sync when I unlock* (2.x had it; here you press **Sync**).
 ## New in 4.10: AI agents (MCP)
 
 An AI agent can use a credential **without seeing it** and without a `.env`
-file. Add SecretSpace to the AI tool as an MCP server:
+file.
 
-```
-{"mcpServers": {"secretspace": {"command": "secretspace-cli", "args": ["mcp"]}}}
-```
+Everything is set up in *Settings → AI agents (MCP)*: turn it on, choose the
+vaults, and copy the configuration into the MCP settings of your AI tool.
 
-(If it is not on your PATH, give the full path of
-`cli\secretspace-cli.exe` in the program's folder.)
-
-- **Nothing is available until you mark a vault:** *Manage vaults → AI*, on
-  this device only, with your master password. Keep what agents may use in a
-  vault of its own.
+- **Off until you turn it on**, with your master password, and only the vaults
+  you choose are reachable, on this device only. Every other vault does not
+  exist for an agent. A vault of its own for agents is the safest.
 - **The unlocked app is the gatekeeper.** Locked or closed, agents get
   nothing. The MCP server holds no key and opens no vault.
 - **Every use is asked.** A window shows the exact command, its folder and
@@ -152,7 +148,7 @@ file. Add SecretSpace to the AI tool as an MCP server:
   minute is a no.
 - **The secret goes to the command, not to the model:** as environment
   variables. The output goes back with the values replaced by `[hidden]`.
-- Agents can list names, usernames and web addresses of marked vaults
+- Agents can list names, usernames and web addresses of chosen vaults
   (`list_entries`) and ask to run a command (`run_with_secrets`). They cannot
   add or change anything. Both are noted in an encrypted log on this device.
 - **What it is not:** an allowed command can do anything with what it gets,

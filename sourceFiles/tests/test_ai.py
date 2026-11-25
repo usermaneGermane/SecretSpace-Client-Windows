@@ -39,6 +39,7 @@ def vaults(acc):
     vault.add_account(theirs, "Old", "bot", "old-pass")
     vault.archive_account(theirs, theirs["accounts"][1]["id"])
     ai_access.allow_vault(acc, work.hex, True)
+    ai_access.set_enabled(acc, True)
     return {acc.personal_id: ours, work.hex: theirs}
 
 
@@ -56,6 +57,9 @@ def use(vaults, site="GitHub", field="password", **more):
 # --- marking -----------------------------------------------------------------
 def test_nothing_is_marked_at_first_and_marks_are_kept(acc):
     assert ai_access.allowed_vaults(acc) == []
+    assert not ai_access.is_enabled(acc)
+    ai_access.set_enabled(acc, True)
+    assert ai_access.allowed_vaults(acc) == []
     work = acc.create_vault("Work").hex
     ai_access.allow_vault(acc, work, True)
     ai_access.allow_vault(acc, work, True)
@@ -67,6 +71,38 @@ def test_nothing_is_marked_at_first_and_marks_are_kept(acc):
     assert ai_access.allowed_vaults(acc) == []
     acc.info = dict(acc.info, ai_vaults="junk")
     assert ai_access.allowed_vaults(acc) == []
+
+
+def test_off_means_nothing_whatever_is_marked(acc, vaults):
+    marked = ai_access.marked_vaults(acc)
+    ai_access.set_enabled(acc, False)
+    assert ai_access.allowed_vaults(acc) == ai_access.describe(acc, vaults) == []
+    with pytest.raises(Refused):
+        ai_access.find_entries(acc, vaults, use(vaults)["env"])
+    # The choice of vaults is kept, also when one is changed while it is off.
+    other = acc.create_vault("Other").hex
+    ai_access.allow_vault(acc, other, True)
+    again = accounts.unlock("alice", PW)
+    assert ai_access.allowed_vaults(again) == []
+    ai_access.set_enabled(again, True)
+    assert set(ai_access.allowed_vaults(again)) == {*marked, other}
+    acc.info = dict(acc.info, ai_enabled="yes")
+    assert not ai_access.is_enabled(acc)
+
+
+def test_the_configuration_for_an_ai_tool(acc, monkeypatch):
+    def made():
+        return json.loads(ai_ui.client_config(acc))["mcpServers"]["secretspace"]
+    server = made()                                     # run from source
+    assert server["args"][0].endswith("cli.py")
+    assert server["args"][1:] == ["mcp", "--account", "alice"]
+    monkeypatch.setattr(vault, "is_installed", lambda: True)
+    server = made()
+    assert server["args"] == ["mcp", "--account", "alice"]
+    if os.name == "nt":
+        assert server["command"].endswith("\\cli\\secretspace-cli.exe")
+    else:
+        assert server["command"] == "/usr/bin/secretspace-cli"
 
 
 # --- the questions -----------------------------------------------------------
@@ -357,6 +393,12 @@ def test_another_account_is_not_answered_for(app, vaults):
         with pytest.raises(Refused, match="locked"):
             ai_access.ask("alice", request)
     assert not app.windows
+
+
+def test_turning_it_off_closes_the_door(app, acc):
+    ai_access.set_enabled(acc, False)
+    app.ai_guard.refresh()
+    assert ai_access.open_accounts() == []
 
 
 def test_the_door_follows_the_marks(app, acc):
