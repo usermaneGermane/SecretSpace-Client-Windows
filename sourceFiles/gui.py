@@ -28,6 +28,7 @@ import dialogs
 import history_ui
 from icons import icon
 import lockout
+import moves
 import sync_client
 import sync_ui
 import vault
@@ -614,6 +615,34 @@ class PasswordManagerGUI:
             self.toast(f"Save failed: {e}", "error")
             return False
 
+    def finish_moves(self):
+        """
+        Delete the originals of moved entries whose copy has arrived (moves).
+        Returns the vaults that changed.
+        """
+        synced = {}
+
+        def arrived(vault_id, entry_id):
+            if vault_id not in self.vaults:
+                return False
+            if vault_id not in synced:
+                file = self.account.vault_file(vault_id)
+                try:
+                    # With a server: what it and this PC last agreed on.
+                    data = file.load_base() if self.account.server else \
+                        file.load() if file.has_file else None
+                except Exception:
+                    data = None
+                synced[vault_id] = {a["id"] for a in
+                                    (data or {}).get("accounts", [])}
+            return entry_id in synced[vault_id]
+
+        changed = [v for v, data in self.vaults.items()
+                   if self.account.can_write(v) and moves.settle(data, arrived)]
+        if changed:
+            self._save()
+        return changed
+
     def _note_changes(self, file, data):
         """Add to ``data``'s change log what differs from the vault as it was
         last written. Never stops a save: a log line is worth less than the
@@ -1069,6 +1098,7 @@ class PasswordManagerGUI:
                      if account.can_write(vault_id))
         if purged:
             self._save()
+        self.finish_moves()
 
         self.show_main_window()
         newer = [v for v in self.vaults if account.needs_newer_app(v)]

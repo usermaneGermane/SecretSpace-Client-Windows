@@ -23,6 +23,7 @@ import account_sync_ui
 import accounts
 import appconfig
 import importers
+import moves
 import weblink
 import sync_client
 import totp
@@ -485,6 +486,21 @@ def _finish_import(app, parsed, path):
     app.toast(f"Imported {len(new_items)} account(s)")
 
 
+def _move_question(app, site, home, into) -> str:
+    """What moving an entry between these vaults means, for the people who
+    are in them."""
+    text = (f"Move “{site}” from “{app.vault_name(home)}” to "
+            f"“{app.vault_name(into)}”, with its earlier versions?")
+    if app.account.is_shared(into):
+        text += ("\n\nEveryone who is in “" + app.vault_name(into) + "” can "
+                 "then see it, earlier passwords included.")
+    if app.account.is_shared(home):
+        text += ("\n\nThe other people in “" + app.vault_name(home) + "” lose "
+                 "it. Someone may have a copy: change the password if they "
+                 "should not have it any more.")
+    return text
+
+
 def account_dialog(app, acc):
     editing = acc is not None
     if editing and not app.entry_writable(acc["id"]):
@@ -506,12 +522,11 @@ def account_dialog(app, acc):
     wrap = shell.body
 
     # A new entry goes to the vault picked in the main window; with several
-    # vaults it can be changed here. An edit stays in the entry's own vault.
+    # vaults it can be changed here. For an entry being edited, picking
+    # another vault moves it there.
     # (The picker sits in the button bar, so the form is no taller.)
-    target = {"id": app.active_vault_id}
-
-    def target_vault():
-        return app.vault_holding(acc["id"]) if editing else app.vaults[target["id"]]
+    started_in = app._vault_id_of(acc["id"]) if editing else None
+    target = {"id": started_in or app.active_vault_id}
 
     site_entry = app._field(wrap, "Name", placeholder="e.g. GitHub")
     url_entry = app._field(wrap, "Web address (optional)",
@@ -588,8 +603,22 @@ def account_dialog(app, acc):
         # A sync may have made the vault read-only while this was open:
         # keep the form, and what was typed, rather than lose it.
         home = app._vault_id_of(acc["id"]) if editing else target["id"]
-        if not app.account.can_write(home):
-            err.configure(text=app.read_only_reason(vault_id=home)); return
+        # The entry as it is now: a sync while the form was open replaced
+        # the one it was opened with, and a change to that would be lost.
+        current = vault.find_entry(app.vaults[home], acc["id"]) \
+            if editing and home else None
+        if editing and (current is None or vault.is_archived(current)):
+            err.configure(text="This entry is no longer here: it was archived, "
+                          "moved or deleted on another device. What you typed "
+                          "was not saved."); return
+        moving = editing and target["id"] not in (started_in, home)
+        into = target["id"] if moving else home
+        for vault_id in (home, into):
+            if vault_id not in app.vaults:
+                err.configure(text="That vault is no longer here. Pick "
+                              "another one."); return
+            if not app.account.can_write(vault_id):
+                err.configure(text=app.read_only_reason(vault_id=vault_id)); return
         site = site_entry.get().strip()
         if not site:
             err.configure(text="Name is required."); return
@@ -608,7 +637,7 @@ def account_dialog(app, acc):
         username = user_entry.get().strip()
         # Ask before the same login is stored twice -- on add, or when an
         # edit would turn this entry into a copy of another one.
-        twin = find_duplicate(target_vault(), site, username,
+        twin = find_duplicate(app.vaults[into], site, username,
                               exclude_id=acc["id"] if editing else None)
         if twin is not None and not app._confirm(
                 "Already saved",
@@ -616,21 +645,34 @@ def account_dialog(app, acc):
                 f"username {twin['username'] or '(none)'}. Save another "
                 "one anyway?", danger=False):
             return
+        if moving and not app._confirm(
+                "Move to another vault",
+                _move_question(app, site, home, into), danger=False):
+            return
         if editing:
             # Through update_entry, so the version being replaced is kept in
             # the entry's history, and saving with no real change records
             # nothing. It also stamps updated_at -- shown in the conflict
             # dialog, never used by the merge, which goes by the sync base.
-            update_entry(acc, site=site, username=username,
+            update_entry(current, site=site, username=username,
                          password=password, notes=notes, totp=totp_secret,
                          url=url)
         else:
-            add_account(target_vault(), site, username,
+            add_account(app.vaults[into], site, username,
                         password, notes=notes, totp=totp_secret, url=url)
-        app._save()
+        if moving:
+            moved = moves.move(app.vaults[home], app.vaults[into],
+                               current["id"], into)
+            if app._save() and not app.account.server:
+                app.finish_moves()              # with one: after the next sync
+            if app._selected_id == acc["id"]:
+                app._selected_id = moved["id"]
+        else:
+            app._save()
         top.destroy()
         app.refresh_account_list()
-        app.toast("Account updated" if editing else "Account added")
+        app.toast(f"Moved to “{app.vault_name(into)}”" if moving else
+                  "Account updated" if editing else "Account added")
 
     app._ghost_button(shell.buttons, "Cancel", top.destroy,
                       width=120).pack(side="left")
@@ -642,15 +684,16 @@ def account_dialog(app, acc):
              if app.account.can_write(v)}
     # A single one is shown too when it is not the personal vault (that one
     # needs a newer SecretSpace): where the entry goes must not be a surprise.
-    if not editing and (len(names) > 1 or
-                        names and target["id"] != app.account.personal_id):
+    if len(names) > 1 or not editing and \
+            names and target["id"] != app.account.personal_id:
         picker = option_menu(
             shell.buttons, list(names),
             lambda label: target.update(id=names[label]), width=140)
         picker.configure(height=40)
         picker.pack(side="right", padx=(0, SP.m))
         picker.set(app.vault_name(target["id"]))
-        Tooltip(picker, "The vault this entry is saved in")
+        Tooltip(picker, "The vault this entry is in: pick another to move it"
+                if editing else "The vault this entry is saved in")
     for e in (site_entry, url_entry, user_entry, pw_entry, totp_entry):
         e.bind("<Return>", lambda ev: save())
     site_entry.focus()

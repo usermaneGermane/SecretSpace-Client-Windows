@@ -16,6 +16,7 @@ import threading
 
 import customtkinter as ctk
 
+import moves
 import sync
 import sync_client
 import vault
@@ -540,6 +541,17 @@ def archive_dialog(app):
     top.bind("<Escape>", lambda e: top.destroy())
 
 
+def _archived_how(app, entry) -> str:
+    """“archived”, or where a moved entry went. (Its original is here only
+    until the next sync.)"""
+    mark = moves.marker(entry)
+    if not mark:
+        return "archived"
+    name = app.vault_name(mark.get("vault")) \
+        if mark.get("vault") in app.vaults else ""
+    return f"moved to “{name}”" if name else "moved to another vault"
+
+
 def _archive_row(app, parent, index, entry, rebuild):
     """A row like the main list's: tile, site, who and when, then actions."""
     row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=R.row)
@@ -559,7 +571,8 @@ def _archive_row(app, parent, index, entry, rebuild):
                  text_color=TEXT).pack(anchor="w")
     when = entry.get("archived_at")
     ctk.CTkLabel(info,
-                 text=f"{entry.get('username') or '—'}   ·   archived "
+                 text=f"{entry.get('username') or '—'}   ·   "
+                      f"{_archived_how(app, entry)} "
                       f"{local_time(when) if when else 'at an unknown time'}",
                  anchor="w", font=F(T.small), text_color=MUTED).pack(anchor="w")
 
