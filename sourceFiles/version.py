@@ -12,7 +12,7 @@ has 0).
 
 import re
 
-__version__ = "4.10.0"
+__version__ = "4.11.0"
 
 #: Which app this is, for the server and for "needs at least" (9c).
 PLATFORM = "windows"

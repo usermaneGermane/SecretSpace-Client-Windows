@@ -9,7 +9,7 @@ yourself, on your own hardware. (The one other address it can contact is
 github.com, to see whether a newer version is out — only when you ask it to;
 see [Updates](#updates).)
 
-**This README describes SecretSpace 4** (4.10.0). It has everything
+**This README describes SecretSpace 4** (4.11.0). It has everything
 SecretSpace 3 had — accounts, several vaults, sharing, recovery, the look
 of 3.1 — in a new file format. Coming from 3.x? Read
 [Upgrading from 3.x](#upgrading-from-3x) first: your account is converted
@@ -129,6 +129,14 @@ invites, recovery with an admin's approval), moving an entry from one vault
 to another, and *Sync when I unlock* (2.x had it; here you press **Sync**).
 [SecretSpace for Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux)
 1.0.0 is the same release for Linux.
+
+## New in 4.11: shared mark, sync at unlock
+
+- An entry in a vault other people are in says **shared** in the list and in
+  its details.
+- **Sync when I unlock** (*Settings → Sync*, off until you turn it on, on this
+  device only). If the server cannot be reached it says so and you go on
+  working; a question about a conflict waits until you press Sync.
 
 ## New in 4.10: AI agents (MCP)
 

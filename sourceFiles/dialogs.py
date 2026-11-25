@@ -874,6 +874,16 @@ def settings_dialog(app):
         app._ghost_button(
             setting_row(syn, "Synced with", where, hint, first=True),
             "Sync now", lambda: (top.destroy(), app.sync_now()), width=150).pack()
+        at_unlock = ctk.CTkSwitch(
+            setting_row(syn, "Sync when I unlock",
+                        "On this PC. Questions wait until you press Sync.",
+                        hint),
+            text="", width=46, progress_color=GREEN,
+            command=lambda: account_sync.set_sync_on_unlock(
+                app.account, bool(at_unlock.get())))
+        at_unlock.pack()
+        if account_sync.sync_on_unlock(app.account):
+            at_unlock.select()
         app._ghost_button(
             setting_row(syn, "Server address or certificate",
                         "Change one or both - no token needed; your vaults "
@@ -904,7 +914,7 @@ def settings_dialog(app):
                     else "Off",
                     "Let an AI agent use logins of the vaults you choose, "
                     "without seeing the secrets.", hint, first=True),
-        "Set up…", lambda: (top.destroy(), ai_ui.settings_dialog(app)),
+        "Configure…", lambda: (top.destroy(), ai_ui.settings_dialog(app)),
         width=150).pack()
 
     # ---- archive ----
