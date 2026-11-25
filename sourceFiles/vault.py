@@ -48,7 +48,10 @@ _KEY_FIELDS_BEFORE_URL = ("site", "username", "password", "notes", "totp")
 #: a newer SecretSpace: it is kept exactly as it is, through load, merge,
 #: history and save (9b, 4.6.0), so saving here never loses it.
 KNOWN_ENTRY_FIELDS = frozenset(("id", "site", "username", "password",
-                                "history") + OPTIONAL_FIELDS)
+                                "history", "moved") + OPTIONAL_FIELDS)
+
+#: On an archived entry: it was moved to another vault (moves.py).
+MOVED_KEY = "moved"
 
 #: How much of a vault's data this version understands. A version that adds
 #: something an older one would damage raises its own level and calls
@@ -428,6 +431,8 @@ def validate_vault(data) -> dict:
             value = str(entry.get(key, "") or "")
             if value:
                 row[key] = value
+        if row.get("archived_at") and isinstance(entry.get(MOVED_KEY), dict):
+            row[MOVED_KEY] = entry[MOVED_KEY]
         # What a newer version added, untouched (KNOWN_ENTRY_FIELDS).
         for key, value in entry.items():
             if key not in KNOWN_ENTRY_FIELDS:
@@ -1108,6 +1113,7 @@ def restore_account(vault: dict, entry_id: str) -> bool:
     if entry is None or not is_archived(entry):
         return False
     del entry["archived_at"]
+    entry.pop(MOVED_KEY, None)
     return touch(entry) is not None
 
 

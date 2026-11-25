@@ -32,6 +32,7 @@ import os
 import re
 
 import account_crypto
+import moves
 import vault
 
 #: The vault's top-level key holding the log. Top-level keys other than
@@ -48,10 +49,10 @@ BULK = 20
 
 ADDED, EDITED, ARCHIVED, RESTORED, DELETED, REVERTED = (
     "added", "edited", "archived", "restored", "deleted", "reverted")
-IMPORTED, DELETED_MANY, HISTORY_CLEARED = (
-    "imported", "deleted_many", "history_cleared")
+IMPORTED, DELETED_MANY, HISTORY_CLEARED, MOVED = (
+    "imported", "deleted_many", "history_cleared", "moved")
 ACTIONS = (ADDED, EDITED, ARCHIVED, RESTORED, DELETED, REVERTED, IMPORTED,
-           DELETED_MANY, HISTORY_CLEARED)
+           DELETED_MANY, HISTORY_CLEARED, MOVED)
 
 #: What check() says about a line.
 OK, BAD, UNKNOWN = "ok", "bad", "unknown"
@@ -118,6 +119,17 @@ def merge(*logs) -> list:
     return ordered[-CHANGES_LIMIT:]
 
 
+def moved_away(entry_id: str, here: dict, there: dict) -> bool:
+    """Does the log of both copies end with this entry's move to another
+    vault -- and does the other copy itself know of it?"""
+    def last(lines):
+        return next((l["action"] for l in reversed(lines)
+                     if l["entry"] == entry_id), None)
+    remote = lines_of(there)
+    return last(remote) == MOVED and \
+        last(merge(lines_of(here), remote)) == MOVED
+
+
 # ---------------------------------------------------------------------------
 # What changed between two states of a vault
 # ---------------------------------------------------------------------------
@@ -150,7 +162,8 @@ def diff(before: dict, after: dict) -> list:
             continue
         fields = vault.changed_fields(was, entry)
         if vault.is_archived(was) != vault.is_archived(entry):
-            action = ARCHIVED if vault.is_archived(entry) else RESTORED
+            action = RESTORED if not vault.is_archived(entry) else \
+                MOVED if moves.marker(entry) else ARCHIVED
         elif fields or vault.extra_key(was) != vault.extra_key(entry):
             action = REVERTED if _was_a_version(was, entry) else EDITED
         elif str(was.get("history_cleared_at", "") or "") != \
@@ -161,7 +174,8 @@ def diff(before: dict, after: dict) -> list:
         rest.append({"action": action, "entry": entry_id, "title": title,
                      "fields": fields, "count": 0})
     for entry_id, was in old.items():
-        if entry_id not in new:
+        # The end of a move is not a second change: its line is there already.
+        if entry_id not in new and not moves.marker(was):
             deleted.append({"action": DELETED, "entry": entry_id,
                             "title": str(was.get("site", "") or "")[:_TITLE_CHARS],
                             "fields": [], "count": 0})
@@ -271,6 +285,8 @@ def describe(line: dict) -> str:
             f" ({what})" if what else "")
     if action == ARCHIVED:
         return f"archived {title}"
+    if action == MOVED:
+        return f"moved {title} to another vault"
     if action == RESTORED:
         return f"restored {title} from the archive"
     if action == DELETED:

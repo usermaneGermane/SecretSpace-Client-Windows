@@ -37,9 +37,10 @@ alone is still synced, in both directions, but never asks a question.
 
 import json
 
+import changelog
 from vault import (is_archived, new_id, utc_now, snapshot, changed_fields,
                    add_revision, merge_history, history_signature,
-                   extra_key, needed_level, NEEDS_KEY)
+                   extra_key, needed_level, NEEDS_KEY, MOVED_KEY)
 
 #: What makes two versions of an entry "the same". ``id`` is identity rather
 #: than content, and ``updated_at`` is a note about when, not what -- comparing
@@ -329,6 +330,8 @@ def merge_vaults(base, local, remote) -> MergeResult:
                 conflicts.append(Conflict(entry_id, b, l, None, kind="purge"))
             elif is_archived(l):
                 stats["removed"] += 1                # purged there, untouched here
+            elif changelog.moved_away(entry_id, local, remote):
+                stats["removed"] += 1                # moved to another vault
             else:
                 # Purging is only offered from the Archive, so a live entry
                 # that is simply gone from the server was not deleted there
@@ -368,6 +371,7 @@ def _archived_copy(entry: dict) -> dict:
     copy = dict(entry)
     copy["id"] = new_id()
     copy["archived_at"] = entry.get("archived_at") or utc_now()
+    copy.pop(MOVED_KEY, None)            # a copy of its own, not the original
     copy["updated_at"] = utc_now()
     return copy
 
@@ -377,6 +381,7 @@ def _active_copy(entry: dict) -> dict:
     copy = dict(entry)
     copy["id"] = new_id()
     copy["updated_at"] = utc_now()
+    copy.pop(MOVED_KEY, None)
     return copy
 
 

@@ -208,7 +208,7 @@ def line(**more):
 
 
 def test_a_newer_field_or_action_in_the_log_is_kept_as_signed():
-    newer = line(action="moved", fields=["passkey", "url"])
+    newer = line(action="beamed_up", fields=["passkey", "url"])
     assert changelog.lines_of({"changes": [newer]}) == [newer]
     assert changelog.describe(newer) == "changed something"
     assert changelog.message("ab", changelog.lines_of(

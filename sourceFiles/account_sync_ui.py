@@ -60,7 +60,7 @@ def run_sync(app):
         app.load_vaults()               # vaults that just arrived, or left
         run = {"server": server, "changes": changes, "queue": list(vault_ids),
                "many": len(vault_ids) > 1, "updated": [], "summary": None,
-               "too_new": [],
+               "too_new": [], "synced": set(vault_ids), "moves_done": False,
                "account": account}
         _next_vault(app, run, attempt)
 
@@ -70,6 +70,11 @@ def run_sync(app):
 
 
 def _next_vault(app, run, attempt):
+    if not run["queue"] and not run["moves_done"]:
+        # Entries moved to a vault the server now has: the originals go, and
+        # the vaults they were in are synced once more.
+        run["moves_done"] = True
+        run["queue"] = [v for v in app.finish_moves() if v in run["synced"]]
     if not run["queue"]:
         return _convert_step(app, run, attempt)
     _sync_step(app, run, attempt, run["queue"].pop(0), retry_allowed=True)
@@ -148,7 +153,8 @@ def _sync_step(app, run, attempt, vault_id, retry_allowed):
             if not _still_open(app, attempt):
                 return _logout_in_background(run["server"])
             app.set_vault_data(vault_id, merged, saved=True)
-            run["updated"].append(vault_id)
+            if vault_id not in run["updated"]:
+                run["updated"].append(vault_id)
             summary = f"Synced — {result.summary()}"
             if session.first_push:
                 summary = "Synced — the server now has this account's vault"
