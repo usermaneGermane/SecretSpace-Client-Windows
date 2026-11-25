@@ -827,6 +827,9 @@ def settings_dialog(app):
         width=150)
     lock_menu.pack()
     lock_menu.set(label_for(appconfig.autolock_minutes()))
+    # Only the Windows app has it (Windows Hello).
+    if hasattr(app, "hello_setting"):
+        app.hello_setting(sec, hint)
 
     # ---- look ----
     look = section(wrap, "Appearance")

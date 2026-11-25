@@ -130,6 +130,21 @@ to another, and *Sync when I unlock* (2.x had it; here you press **Sync**).
 [SecretSpace for Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux)
 1.0.0 is the same release for Linux.
 
+## New in 4.12: Windows Hello
+
+*Settings → Security → Unlock with Windows Hello*: your fingerprint, face or
+Windows PIN opens the account again after a lock. Off until you turn it on,
+for that account on that PC, with your master password.
+
+- **The master password is needed once each time SecretSpace starts**, so also
+  after a restart of the PC. Nothing Hello can open is written to disk: while
+  the account is locked, the password stays in memory, encrypted to the key
+  Windows Hello guards.
+- Showing a 2FA code, allowing a vault for AI and the like still ask for the
+  master password.
+- Anyone who knows your Windows PIN can open an account that is locked but not
+  closed. Windows only; the command line is not part of it.
+
 ## New in 4.11: shared mark, sync at unlock
 
 - An entry in a vault other people are in says **shared** in the list and in
@@ -655,6 +670,8 @@ SecretSpace-Client-Windows/
     │                    cli_clipboard.py: its clipboard)
     ├── mcp_server.py    AI agents: the MCP server (ai_access.py: what the app
     │                    answers and its log, ai_ui.py: its windows)
+    ├── hello.py         unlock again with Windows Hello (hello_ui.py: its
+    │                    row in Settings)
     ├── account_lock.py  one program at a time in an account
     ├── sync.py          three-way merge; pure functions, no I/O
     ├── sync_client.py   talking to the sync server
@@ -865,6 +882,7 @@ needs no update for this.
   carrying notes and TOTP secrets across
 - Backups by copying the account folder, plus a plaintext export for
   migrating away
+- Unlock again with Windows Hello *(4.12)*
 - Clipboard auto-clear, idle auto-lock, and a delay after repeated wrong
   master passwords
 - A check for a new version, when you ask for it (Settings → *Updates*)
