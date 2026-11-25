@@ -23,6 +23,8 @@ class FakeApp:
 
     lock_vault = gui.PasswordManagerGUI.lock_vault
     _release_account = gui.PasswordManagerGUI._release_account
+    _close_ai = gui.PasswordManagerGUI._close_ai
+    ai_guard = None
     _holding = False
 
     def __init__(self):

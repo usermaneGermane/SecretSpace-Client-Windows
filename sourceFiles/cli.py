@@ -31,6 +31,7 @@ import changelog
 import cli_agent
 import cli_clipboard
 import lockout
+import mcp_server
 import moves
 import sync_client
 import totp
@@ -770,6 +771,15 @@ def cmd_sync(term, args):
 
 
 # ---------------------------------------------------------------------------
+# For AI tools
+# ---------------------------------------------------------------------------
+def cmd_mcp(term, args):
+    wanted = args.account or os.environ.get(ACCOUNT_VARIABLE)
+    # Not pick_account: without a name, the one that is open in the app.
+    mcp_server.serve(pick_account(wanted) if wanted else None)
+
+
+# ---------------------------------------------------------------------------
 # The command line
 # ---------------------------------------------------------------------------
 def build_parser():
@@ -877,6 +887,8 @@ def build_parser():
     p.add_argument("--no-symbols", action="store_true")
     p.add_argument("--copy", "-c", action="store_true", help="to the clipboard")
     command("sync", cmd_sync, "sync with the server")
+    command("mcp", cmd_mcp, "for AI tools: an MCP server that asks the "
+            "unlocked app")
     return parser
 
 

@@ -55,5 +55,16 @@ run("archive", "Bank")
 assert b"Bank" not in run("list")
 assert b"Locked: ci" in run("lock")
 assert b"locked" in run("status")
+# The MCP server: speaks, and says the app is not open.
+import json                                                     # noqa: E402
+said = run("mcp", input=b"".join(json.dumps(dict(x, jsonrpc="2.0")).encode()
+                                 + bytes([10]) for x in (
+    {"id": 1, "method": "initialize", "params": {}},
+    {"id": 2, "method": "tools/list"},
+    {"id": 3, "method": "tools/call", "params": {"name": "list_entries"}})))
+replies = [json.loads(x) for x in said.splitlines()]
+assert [r["id"] for r in replies] == [1, 2, 3]
+assert len(replies[1]["result"]["tools"]) == 2
+assert replies[2]["result"]["isError"]
 cli_agent.start(account, 5)         # left running: uninstalling must end it
 print("the installed command line works")

@@ -21,6 +21,7 @@ import customtkinter as ctk
 import pyperclip
 
 import account_lock
+import ai_ui
 import accounts
 import appconfig
 import changelog
@@ -994,6 +995,14 @@ class PasswordManagerGUI:
     _hold = None
     _holding = False
 
+    # Answers AI agents while the account is open (ai_ui).
+    ai_guard = None
+
+    def _close_ai(self):
+        guard, self.ai_guard = self.ai_guard, None
+        if guard is not None:
+            guard.close()
+
     def _hold_account(self, username):
         """Hold the account until it is locked. False: it is open in another
         window, or the command line is working in it."""
@@ -1127,6 +1136,9 @@ class PasswordManagerGUI:
         self.finish_moves()
 
         self.show_main_window()
+        self._close_ai()
+        self.ai_guard = ai_ui.Guard(self)
+        self.ai_guard.refresh()
         newer = [v for v in self.vaults if account.needs_newer_app(v)]
         if newer:
             self.toast("Read only here: “" + "”, “".join(
@@ -1884,6 +1896,7 @@ class PasswordManagerGUI:
     def lock_vault(self, auto=False):
         self._cancel_idle_timer()
         self._cancel_totp()
+        self._close_ai()
         self._session += 1
         # Every change is saved as it is made, so this save is only a safety
         # net -- and while a sync runs it would be a hazard: it could land
@@ -1906,6 +1919,7 @@ class PasswordManagerGUI:
     def _on_close(self):
         self._cancel_idle_timer()
         self._cancel_lockout_timer()
+        self._close_ai()
         try:
             if self.master_password and self.current_user and self.vault is not None:
                 self._save()

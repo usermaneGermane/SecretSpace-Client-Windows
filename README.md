@@ -9,7 +9,7 @@ yourself, on your own hardware. (The one other address it can contact is
 github.com, to see whether a newer version is out — only when you ask it to;
 see [Updates](#updates).)
 
-**This README describes SecretSpace 4** (4.9.0). It has everything
+**This README describes SecretSpace 4** (4.10.0). It has everything
 SecretSpace 3 had — accounts, several vaults, sharing, recovery, the look
 of 3.1 — in a new file format. Coming from 3.x? Read
 [Upgrading from 3.x](#upgrading-from-3x) first: your account is converted
@@ -129,6 +129,36 @@ invites, recovery with an admin's approval), moving an entry from one vault
 to another, and *Sync when I unlock* (2.x had it; here you press **Sync**).
 [SecretSpace for Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux)
 1.0.0 is the same release for Linux.
+
+## New in 4.10: AI agents (MCP)
+
+An AI agent can use a credential **without seeing it** and without a `.env`
+file. Add SecretSpace to the AI tool as an MCP server:
+
+```
+{"mcpServers": {"secretspace": {"command": "secretspace-cli", "args": ["mcp"]}}}
+```
+
+(If it is not on your PATH, give the full path of
+`cli\secretspace-cli.exe` in the program's folder.)
+
+- **Nothing is available until you mark a vault:** *Manage vaults → AI*, on
+  this device only, with your master password. Keep what agents may use in a
+  vault of its own.
+- **The unlocked app is the gatekeeper.** Locked or closed, agents get
+  nothing. The MCP server holds no key and opens no vault.
+- **Every use is asked.** A window shows the exact command, its folder and
+  the credentials it would get. *Allow once* is the only yes; no answer in a
+  minute is a no.
+- **The secret goes to the command, not to the model:** as environment
+  variables. The output goes back with the values replaced by `[hidden]`.
+- Agents can list names, usernames and web addresses of marked vaults
+  (`list_entries`) and ask to run a command (`run_with_secrets`). They cannot
+  add or change anything. Both are noted in an encrypted log on this device.
+- **What it is not:** an allowed command can do anything with what it gets,
+  also send it away or write it down in a form that is not recognised. And,
+  as with any password manager, a program that already runs as you is not
+  kept out by this.
 
 ## New in 4.9: the command line
 
@@ -619,6 +649,8 @@ SecretSpace-Client-Windows/
     ├── dialogs.py       the modal dialogs
     ├── cli.py           the command line (cli_agent.py: its unlock session,
     │                    cli_clipboard.py: its clipboard)
+    ├── mcp_server.py    AI agents: the MCP server (ai_access.py: what the app
+    │                    answers and its log, ai_ui.py: its windows)
     ├── account_lock.py  one program at a time in an account
     ├── sync.py          three-way merge; pure functions, no I/O
     ├── sync_client.py   talking to the sync server
