@@ -15,6 +15,8 @@ import customtkinter as ctk
 
 import account_sync
 import accounts
+import ai_access
+import ai_ui
 import sharing_ui
 from sync_ui import _in_background
 from theme import T, SP, R, F, TEXT, MUTED, CARD, WARN, tile_colors
@@ -59,7 +61,7 @@ def vaults_dialog(app):
     account = app.account
     if account is None:
         return
-    top = app._modal("Vaults", 580, 640)
+    top = app._modal("Vaults", 640, 640)
     shell = dialog_shell(
         top, "Vaults",
         "Keep logins apart: home, work, a project. Every vault has its own "
@@ -143,6 +145,10 @@ def _vault_row(app, parent, index, vault_id, changed):
     small_button(upper, "Activity",
                  lambda: sharing_ui.activity_dialog(app, vault_id),
                  width=78).pack(side="left")
+    small_button(upper, "AI: on" if vault_id in ai_access.allowed_vaults(account)
+                 else "AI: off", lambda: ai_ui.vault_dialog(
+                     app, vault_id, lambda: changed()),
+                 width=66).pack(side="left", padx=(SP.s, 0))
     if personal:
         return
 

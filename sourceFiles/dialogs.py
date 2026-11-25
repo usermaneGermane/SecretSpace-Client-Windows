@@ -1118,6 +1118,7 @@ def _delete_user_flow(app, parent_top):
         top.destroy(); parent_top.destroy()
         app.vault = app.master_password = app.current_user = None
         app.account = None
+        app._close_ai()
         app._release_account()
         app.show_login_screen()
         app.toast("Account deleted")
