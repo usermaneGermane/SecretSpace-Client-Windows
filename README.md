@@ -9,7 +9,7 @@ yourself, on your own hardware. (The one other address it can contact is
 github.com, to see whether a newer version is out — only when you ask it to;
 see [Updates](#updates).)
 
-**This README describes SecretSpace 4** (4.8.0). It has everything
+**This README describes SecretSpace 4** (4.9.0). It has everything
 SecretSpace 3 had — accounts, several vaults, sharing, recovery, the look
 of 3.1 — in a new file format. Coming from 3.x? Read
 [Upgrading from 3.x](#upgrading-from-3x) first: your account is converted
@@ -129,6 +129,47 @@ invites, recovery with an admin's approval), moving an entry from one vault
 to another, and *Sync when I unlock* (2.x had it; here you press **Sync**).
 [SecretSpace for Linux](https://github.com/usermaneGermane/SecretSpace-Client-Linux)
 1.0.0 is the same release for Linux.
+
+## New in 4.9: the command line
+
+`secretspace-cli` works in the same accounts and vaults as the app:
+
+```
+secretspace-cli unlock                     # ten minutes; --minutes 1 to 60
+secretspace-cli list git
+secretspace-cli get GitHub | some-program  # a field, to a pipe
+secretspace-cli copy GitHub otp            # or to the clipboard
+secretspace-cli add Mail --username me --generate
+secretspace-cli edit Mail --password       # typed at a hidden prompt
+secretspace-cli archive Mail
+secretspace-cli sync
+secretspace-cli lock
+```
+
+- **All of it:** `accounts`, `unlock`, `lock`, `status`, `vaults`, `list`,
+  `show`, `get`, `copy`, `add`, `edit`, `archive`, `restore`, `delete`,
+  `move`, `generate`, `sync`. Each explains itself with `--help`; `list` and
+  `show` have `--json` (without secrets). Several accounts: `--account NAME`.
+  Accounts, vaults, sharing and a sync conflict are for the app.
+- **The master password is typed, always.** It is not an argument, a variable
+  or a pipe, so nothing can unlock unattended. Without `unlock` every command
+  asks for it. `unlock` keeps the account's keys (not the password) in the
+  memory of a small background program, which ends after the time given, at
+  `lock`, or when the master password changes. Like the app's own
+  memory, it is open to programs that already run as you; it is not a wall
+  against malware.
+- **A secret goes to a pipe or the clipboard** (cleared after 30 seconds),
+  to the screen only with `--print`. New passwords are typed, generated or
+  piped in (`--password-stdin`), never an argument.
+- **One program at a time.** While the app has an account open, the command
+  line reads but does not change or sync it: lock the app first. For the
+  same reason an account opens in one window only now; before, two windows
+  could overwrite each other's changes.
+- The installer puts it in the `cli` folder of the program and, if you tick
+  it, on your PATH. It needs a Windows console (PowerShell, cmd, Windows
+  Terminal); in Git Bash start it with `winpty`. A pipe carries UTF-8, so
+  for other than plain letters set `$OutputEncoding` and
+  `[Console]::OutputEncoding` in PowerShell 5 to UTF-8.
 
 ## New in 4.8: move an entry to another vault
 
@@ -576,6 +617,9 @@ SecretSpace-Client-Windows/
 └── sourceFiles/         the program itself
     ├── gui.py           app shell: login, account list + details, lifecycle
     ├── dialogs.py       the modal dialogs
+    ├── cli.py           the command line (cli_agent.py: its unlock session,
+    │                    cli_clipboard.py: its clipboard)
+    ├── account_lock.py  one program at a time in an account
     ├── sync.py          three-way merge; pure functions, no I/O
     ├── sync_client.py   talking to the sync server
     ├── sync_ui.py       the sync, conflict and archive screens

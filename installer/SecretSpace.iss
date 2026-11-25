@@ -54,6 +54,8 @@ WizardSmallImageFile=wizard-small-100.bmp,wizard-small-150.bmp,wizard-small-200.
 InfoBeforeFile=licence-notice.txt
 Compression=lzma2
 SolidCompression=yes
+; The PATH task below.
+ChangesEnvironment=yes
 ; Close a running SecretSpace before replacing its files.
 CloseApplications=yes
 ; The vault move below writes to the user's own profile on purpose.
@@ -61,6 +63,7 @@ UsedUserAreasWarning=no
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Shortcuts:"
+Name: "clipath"; Description: "Make the &command line (secretspace-cli) available in every terminal"; GroupDescription: "Command line:"; Flags: unchecked
 
 [InstallDelete]
 ; An upgrade must not leave the previous version's libraries behind:
@@ -75,6 +78,7 @@ Type: filesandordirs; Name: "{app}\tk"
 Type: filesandordirs; Name: "{app}\PIL"
 Type: filesandordirs; Name: "{app}\cryptography"
 Type: filesandordirs; Name: "{app}\customtkinter"
+Type: filesandordirs; Name: "{app}\cli"
 ; Nor the program and shortcuts of the name before SecretSpace. An upgrade
 ; keeps the folder it was installed in, even if that folder has the old name.
 Type: files; Name: "{app}\PassMan.exe"
@@ -83,12 +87,16 @@ Type: files; Name: "{autodesktop}\PassMan.lnk"
 
 [Files]
 Source: "..\build\installer\SecretSpace.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\installer\SecretSpace-CLI.dist\*"; DestDir: "{app}\cli"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "installed"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\SecretSpace"; Filename: "{app}\SecretSpace.exe"
 Name: "{autodesktop}\SecretSpace"; Filename: "{app}\SecretSpace.exe"; Tasks: desktopicon
+
+[Registry]
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}\cli"; Tasks: clipath; Check: NotOnPath
 
 [Run]
 Filename: "{app}\SecretSpace.exe"; Description: "Start SecretSpace now"; Flags: nowait postinstall skipifsilent
@@ -136,6 +144,67 @@ begin
     Result := Dir
   else
     Result := '';
+end;
+
+{ Where the command line's folder is in the user's PATH, 0 = nowhere. }
+function PathPosition(Path: String): Integer;
+begin
+  Result := Pos(';' + Lowercase(ExpandConstant('{app}\cli')) + ';',
+                ';' + Lowercase(Path) + ';');
+end;
+
+function NotOnPath: Boolean;
+var
+  Path: String;
+begin
+  Result := not RegQueryStringValue(HKCU, 'Environment', 'Path', Path)
+            or (PathPosition(Path) = 0);
+end;
+
+procedure RemoveFromPath;
+var
+  Path, Mine: String;
+  At: Integer;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', Path) then
+    Exit;
+  At := PathPosition(Path);
+  if At = 0 then
+    Exit;
+  Mine := ExpandConstant('{app}\cli');
+  { With the semicolon before it; the first entry has one after it. }
+  if At > 1 then
+    Delete(Path, At - 1, Length(Mine) + 1)
+  else
+    Delete(Path, 1, Length(Mine) + 1);
+  RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Path);
+end;
+
+{ An unlock session of the command line is a running program: its files
+  could not be replaced. }
+procedure EndSessions;
+var
+  Code: Integer;
+  Exe: String;
+begin
+  Exe := ExpandConstant('{app}\cli\secretspace-cli.exe');
+  if FileExists(Exe) then
+    Exec(Exe, 'lock', '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  EndSessions;
+  Result := '';
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    EndSessions;
+    RemoveFromPath;
+  end;
 end;
 
 procedure InitializeWizard;

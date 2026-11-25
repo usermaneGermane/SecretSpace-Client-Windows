@@ -203,6 +203,8 @@ def test_a_late_failure_after_lock_asks_nothing(monkeypatch):
 class FakeWindow:
     _sync_after_unlock = gui.PasswordManagerGUI._sync_after_unlock
     lock_vault = gui.PasswordManagerGUI.lock_vault
+    _release_account = gui.PasswordManagerGUI._release_account
+    _holding = False
 
     def __init__(self, on):
         self.root = FakeRoot()

@@ -53,9 +53,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $app = "$env:LOCALAPPDATA\Programs\SecretSpace"
           Start-Process -Wait .\SecretSpace-Client-Installer.exe -ArgumentList `
-            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER'
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/TASKS="clipath"'
           foreach ($f in 'SecretSpace.exe', 'installed', 'LICENSE.txt',
-                         'SecretSpace-logo.png', 'Manrope-Regular.ttf') {
+                         'SecretSpace-logo.png', 'Manrope-Regular.ttf',
+                         'cli\secretspace-cli.exe') {
             if (-not (Test-Path "$app\$f")) { throw "not installed: $f" }
           }
 
@@ -67,6 +68,11 @@ jobs:
           "SecretSpace ran for 15 s: $($p.MainWindowTitle)"
           Stop-Process -Id $p.Id -Force
 
+          python builder\tests\installed_cli.py "$app\cli\secretspace-cli.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'the command line does not work' }
+          $path = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if (";$path;" -notlike "*;$app\cli;*") { throw "not on PATH: $path" }
+
           # The uninstaller copies itself to %TEMP% and exits at once, so
           # wait for the program to be gone instead.
           Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES'
@@ -75,6 +81,9 @@ jobs:
             Start-Sleep 1
           }
           if (Test-Path "$app\SecretSpace.exe") { throw "not uninstalled" }
+          $path = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if (";$path;" -like "*;$app\cli;*") { throw "still on PATH: $path" }
+          if (Test-Path "$app\cli") { throw "cli not uninstalled" }
           "installed, started, uninstalled"
 
       - uses: actions/upload-artifact@v4

@@ -87,3 +87,28 @@ def settle(data: dict, arrived) -> int:
     for entry_id in done:
         vault.purge_account(data, entry_id)
     return len(done)
+
+
+def arrived_in(account, known):
+    """
+    ``arrived`` for :func:`settle`: is the copy on the account's server (in
+    the state last agreed with it) or, without a server, on disk? Only the
+    vaults in ``known`` count.
+    """
+    synced = {}
+
+    def arrived(vault_id, entry_id):
+        if vault_id not in known:
+            return False
+        if vault_id not in synced:
+            file = account.vault_file(vault_id)
+            try:
+                data = file.load_base() if account.server else \
+                    file.load() if file.has_file else None
+            except Exception:
+                data = None
+            synced[vault_id] = {a["id"] for a in
+                                (data or {}).get("accounts", [])}
+        return entry_id in synced[vault_id]
+
+    return arrived

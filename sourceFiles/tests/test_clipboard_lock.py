@@ -22,6 +22,8 @@ class FakeApp:
     """Just enough of PasswordManagerGUI for lock_vault to run."""
 
     lock_vault = gui.PasswordManagerGUI.lock_vault
+    _release_account = gui.PasswordManagerGUI._release_account
+    _holding = False
 
     def __init__(self):
         self.root = FakeRoot()
