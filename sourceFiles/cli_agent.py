@@ -86,11 +86,9 @@ def start(account, minutes: int) -> float:
 
 def _command() -> list:
     """This program again, as the agent."""
-    program = vault.frozen_dir()
-    if program:
-        here = os.path.dirname(os.path.abspath(
-            __file__ if "__compiled__" in globals() else sys.executable))
-        return [os.path.join(here, "secretspace-cli.exe"), AGENT_ARGUMENT]
+    if "__compiled__" in globals():     # Nuitka: beside the exe (see vault)
+        return [os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "secretspace-cli.exe"), AGENT_ARGUMENT]
     # -I, like the installed program: only the folders already in use.
     return [sys.executable, "-I", "-c",
             f"import sys; sys.path[:0] = {[p for p in sys.path if p]!r}; "

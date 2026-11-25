@@ -87,6 +87,14 @@ def test_a_lock_file_is_not_an_account():
 
 
 # --- the app -----------------------------------------------------------------
+def test_locking_the_app_lets_go(monkeypatch):
+    from test_sync_on_unlock import FakeWindow
+    w = FakeWindow(False)
+    w._hold, w._holding = account_lock.take("alice"), True
+    w.lock_vault()
+    assert elsewhere(TRY) == "free"
+
+
 class Window:
     _hold = gui.PasswordManagerGUI._hold
     _holding = gui.PasswordManagerGUI._holding
