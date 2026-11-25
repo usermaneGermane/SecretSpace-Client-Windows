@@ -14,6 +14,7 @@ and an offline attack on the master password, nothing more.
 """
 
 import json
+import re
 import ssl
 import hashlib
 import urllib.error
@@ -21,6 +22,7 @@ import urllib.parse
 import urllib.request
 
 import vault
+import version
 from crypto_utils import encrypt, decrypt
 from sync import merge_vaults, resolve, merged_vault
 
@@ -221,6 +223,20 @@ def set_sync_on_unlock(vault_data: dict, on: bool) -> None:
 # ==============================
 # Transport
 # ==============================
+#: What this app is, told to the server with every request (9c).
+CLIENT_HEADER = "X-SecretSpace-Client"
+
+
+def older(have: str, needed) -> bool:
+    """Is version ``have`` below ``needed``? False for anything that is not a
+    plain version: a server's odd answer must not lock anyone out."""
+    plain = re.compile(r"(\d{1,4})\.(\d{1,4})\.(\d{1,4})")
+    a, b = plain.match(have), plain.fullmatch(needed) \
+        if isinstance(needed, str) else None
+    return bool(a and b) and tuple(map(int, a.groups())) < \
+        tuple(map(int, b.groups()))
+
+
 class SyncClient:
     def __init__(self, url: str, token: str, ca_file: str = "",
                  timeout: int = DEFAULT_TIMEOUT):
@@ -245,6 +261,8 @@ class SyncClient:
             f"{self.url}{path}", method=method,
             data=json.dumps(body).encode("utf-8") if body is not None else None)
         request.add_header("Authorization", f"Bearer {self.token}")
+        request.add_header(CLIENT_HEADER,
+                           f"{version.PLATFORM}/{version.__version__}")
         if body is not None:
             request.add_header("Content-Type", "application/json")
         for key, value in (headers or {}).items():

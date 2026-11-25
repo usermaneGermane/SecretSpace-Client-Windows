@@ -35,6 +35,7 @@ import account_crypto
 import legacy_names
 import secret_store
 import vault
+import version
 from account_crypto import CryptoError
 
 ACCOUNTS_DIR_NAME = "accounts"
@@ -181,11 +182,15 @@ class VaultFile:
 
     def __init__(self, username: str, vault_id: bytes, key: bytes, name: str,
                  personal: bool, generation: int = 0, role: str = ROLE_OWNER,
-                 fmt: account_crypto.Format = account_crypto.NOW):
+                 fmt: account_crypto.Format = account_crypto.NOW,
+                 too_new: dict = None):
         # The format the vault has on the server and for its other members
         # (see Account.vault_format). The file on this device is always in
         # the current one.
         self.fmt = fmt
+        # Shared with the account: vault id -> the version that is needed,
+        # for the vaults this version may only read (vault.too_new).
+        self._too_new = {} if too_new is None else too_new
         self.id = vault_id
         self.hex = vault_id.hex()
         self.name = name
@@ -209,8 +214,16 @@ class VaultFile:
 
     @property
     def can_write(self) -> bool:
-        """May this account change the vault (owner or editor)?"""
-        return self.role != ROLE_READER
+        """May this account change the vault (owner or editor), and does
+        this version understand all of it?"""
+        return self.role != ROLE_READER and self.hex not in self._too_new
+
+    def _note_level(self, data: dict) -> None:
+        if vault.too_new(data):
+            self._too_new[self.hex] = vault.needed_version(data,
+                                                           version.PLATFORM)
+        else:
+            self._too_new.pop(self.hex, None)
 
     def encrypt(self, data: dict) -> str:
         """``data`` under this vault's key, as this device stores it."""
@@ -235,7 +248,9 @@ class VaultFile:
             if not os.path.exists(path):
                 continue
             try:
-                return self.decrypt(_read_text(path))
+                data = self.decrypt(_read_text(path))
+                self._note_level(data)
+                return data
             except (ValueError, OSError) as e:      # CryptoError is a ValueError
                 if first_error is None:
                     first_error = e
@@ -245,6 +260,7 @@ class VaultFile:
     def save(self, data: dict) -> None:
         vault._rotate_backup(self.path)
         _write_text(self.path, self.encrypt(data))
+        self._note_level(data)
 
     def load_base(self):
         """
@@ -304,6 +320,10 @@ class Account:
                                                 "vault key")
         # Keys of the further vaults, unwrapped once per unlock.
         self._vault_keys = {}
+        # Vaults changed by a newer SecretSpace (VaultFile): read-only here.
+        self._too_new = {}
+        # What the server last said its version is ("" = it does not say).
+        self.server_version = None
 
     @property
     def mode(self) -> str:
@@ -434,7 +454,19 @@ class Account:
         return role if role in ROLES else ROLE_OWNER
 
     def can_write(self, vault_id: str) -> bool:
-        return self.vault_role(vault_id) != ROLE_READER
+        return self.vault_role(vault_id) != ROLE_READER \
+            and not self.needs_newer_app(vault_id)
+
+    def needs_newer_app(self, vault_id: str) -> bool:
+        """Was this vault changed by a newer SecretSpace (vault.too_new), as
+        far as it was read here?"""
+        return (vault_id or self.personal_id) in self._too_new
+
+    def newer_app_text(self, vault_id: str) -> str:
+        """"SecretSpace 5.0 or newer", for a needs_newer_app vault."""
+        needed = self._too_new.get(vault_id or self.personal_id)
+        return f"SecretSpace {needed} or newer" if needed \
+            else "a newer SecretSpace"
 
     def vault_format(self, vault_id: str = None) -> account_crypto.Format:
         """
@@ -463,7 +495,7 @@ class Account:
         """The vault with this id (the personal one when None)."""
         if vault_id is None or vault_id == self.personal_id:
             return VaultFile(self.username, self.vault_id, self._vault_key,
-                             PERSONAL_NAME, True)
+                             PERSONAL_NAME, True, too_new=self._too_new)
         record = self._extra().get(vault_id)
         if record is None:
             raise KeyError(f"This account has no vault {vault_id}.")
@@ -476,7 +508,8 @@ class Account:
         return VaultFile(self.username, bytes.fromhex(vault_id), key,
                          record.get("name", ""), False,
                          int(record.get("key_generation", 0) or 0),
-                         self.vault_role(vault_id), self.vault_format(vault_id))
+                         self.vault_role(vault_id), self.vault_format(vault_id),
+                         self._too_new)
 
     def _name_taken(self, name: str, except_id: str = None) -> bool:
         wanted = name.lower()

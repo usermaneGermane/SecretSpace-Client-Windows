@@ -39,7 +39,7 @@ import json
 
 from vault import (is_archived, new_id, utc_now, snapshot, changed_fields,
                    add_revision, merge_history, history_signature,
-                   extra_key)
+                   extra_key, needed_level, NEEDS_KEY)
 
 #: What makes two versions of an entry "the same". ``id`` is identity rather
 #: than content, and ``updated_at`` is a note about when, not what -- comparing
@@ -51,7 +51,7 @@ CONTENT_FIELDS = ("site", "username", "password", "notes", "totp", "url",
 #: The top-level keys of a vault this version knows and looks after itself.
 #: Any other was written by a newer SecretSpace; see merge_extra.
 KNOWN_VAULT_KEYS = frozenset(("accounts", "sync", "changes", "base_origin",
-                              "archive_purge_days"))
+                              "archive_purge_days", NEEDS_KEY))
 
 #: Conflict resolutions.
 KEEP_LOCAL = "local"
@@ -213,6 +213,10 @@ def _plain(value) -> str:
     return json.dumps(value, sort_keys=True)
 
 
+def _needs(data) -> dict:
+    return {NEEDS_KEY: data[NEEDS_KEY]} if needed_level(data) else {}
+
+
 def merge_extra(base, local, remote) -> dict:
     """
     The top-level keys this version does not know, from both sides.
@@ -224,10 +228,13 @@ def merge_extra(base, local, remote) -> dict:
     """
     b, l, r = _extra_keys(base), _extra_keys(local), _extra_keys(remote)
     merged = {**r, **l}
+    # "Needs at least": the higher one, whoever has it. It is never lowered,
+    # nor lost to an app that does not know it.
+    needs = _needs(max(local or {}, remote or {}, key=needed_level))
     for key in set(l) & set(r):
         if key in b and _plain(l[key]) == _plain(b[key]):
             merged[key] = r[key]
-    return merged
+    return {**merged, **needs}
 
 
 def merge_vaults(base, local, remote) -> MergeResult:
@@ -251,8 +258,10 @@ def merge_vaults(base, local, remote) -> MergeResult:
              # The same for a newer version's top-level keys.
              "extra_in": 0, "extra_out": 0}
     extra = merge_extra(base, local, remote)
-    stats["extra_in"] = int(_plain(extra) != _plain(_extra_keys(local)))
-    stats["extra_out"] = int(_plain(extra) != _plain(_extra_keys(remote)))
+    stats["extra_in"] = int(_plain(extra) != _plain(
+        {**_extra_keys(local), **_needs(local or {})}))
+    stats["extra_out"] = int(_plain(extra) != _plain(
+        {**_extra_keys(remote), **_needs(remote or {})}))
 
     def take_remote(entry, was):
         """Record a remote entry landing locally, for the summary."""

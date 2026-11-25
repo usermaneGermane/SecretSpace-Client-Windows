@@ -60,6 +60,7 @@ def run_sync(app):
         app.load_vaults()               # vaults that just arrived, or left
         run = {"server": server, "changes": changes, "queue": list(vault_ids),
                "many": len(vault_ids) > 1, "updated": [], "summary": None,
+               "too_new": [],
                "account": account}
         _next_vault(app, run, attempt)
 
@@ -111,6 +112,9 @@ def _sync_step(app, run, attempt, vault_id, retry_allowed):
         if isinstance(error, sync_client.Conflict409) and retry_allowed:
             app.toast("The server moved on — merging again")
             return _sync_step(app, run, attempt, vault_id, retry_allowed=False)
+        if isinstance(error, account_sync.NeedsNewerApp):
+            run["too_new"].append(app.vault_name(vault_id))    # on with the rest
+            return _next_vault(app, run, attempt)
         _logout_in_background(run["server"])
         app.refresh_account_list()
         _finish(app, str(error), "error")
@@ -163,7 +167,8 @@ def _all_done(app, run):
     app.refresh_account_list()
     changes, updated = run["changes"], run["updated"]
     converted = run.get("converted") or []
-    if not run["many"] and not changes and not converted:
+    if not run["many"] and not changes and not converted \
+            and not run["too_new"]:
         # An account with only its personal vault: what phase 2 said.
         return _finish(app, run["summary"] or "Already up to date")
     parts = []
@@ -183,6 +188,11 @@ def _all_done(app, run):
     for name, role in changes.roles:
         parts.append(f"you are now {role} of “{name}”")
     kind = "info"
+    if run["too_new"]:
+        parts.append("except " + ", ".join(run["too_new"]) + ", changed by a "
+                     "newer SecretSpace: your own changes stay on this PC "
+                     "until you update")
+        kind = "warn"
     if changes.gone:
         parts.append("no longer on the server for you (deleted, or you were "
                      "removed), kept on this PC only: " +

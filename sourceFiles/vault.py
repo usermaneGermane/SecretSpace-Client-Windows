@@ -50,6 +50,17 @@ _KEY_FIELDS_BEFORE_URL = ("site", "username", "password", "notes", "totp")
 KNOWN_ENTRY_FIELDS = frozenset(("id", "site", "username", "password",
                                 "history") + OPTIONAL_FIELDS)
 
+#: How much of a vault's data this version understands. A version that adds
+#: something an older one would damage raises its own level and calls
+#: require_level on the vaults that use it; a version below that level opens
+#: such a vault read-only. (A number of its own, because the Windows and Linux
+#: versions do not line up.)
+DATA_LEVEL = 1
+
+#: The vault's top-level key saying so: {"level": 2, "windows": "5.0",
+#: "linux": "3.0"}, the versions being what the user is told.
+NEEDS_KEY = "needs_app"
+
 #: What a revision says about itself, beside the fields it records.
 REVISION_META = frozenset(("replaced_at", "changed", "by", "rid"))
 
@@ -445,6 +456,33 @@ def validate_vault(data) -> dict:
         clean.append(row)
     data["accounts"] = clean
     return data
+
+
+def needed_level(data) -> int:
+    """The level a vault asks for; 0 when it asks for nothing (or junk)."""
+    needs = data.get(NEEDS_KEY) if isinstance(data, dict) else None
+    level = needs.get("level") if isinstance(needs, dict) else None
+    return level if isinstance(level, int) and not isinstance(level, bool) \
+        and level > 0 else 0
+
+
+def too_new(data) -> bool:
+    """Was this vault changed by a version whose changes this one could
+    damage? Then it is read, never written."""
+    return needed_level(data) > DATA_LEVEL
+
+
+def needed_version(data, platform: str) -> str:
+    """"5.0" when the vault says which version of ``platform``, else ""."""
+    needs = data.get(NEEDS_KEY) if too_new(data) else None
+    text = str((needs or {}).get(platform, ""))
+    return text if re.fullmatch(r"\d{1,4}(\.\d{1,4}){0,2}", text) else ""
+
+
+def require_level(data: dict, level: int, **versions) -> None:
+    """Note that ``data`` needs at least ``level``. Never lowers it."""
+    if level > needed_level(data):
+        data[NEEDS_KEY] = dict(versions, level=level)
 
 
 # ==============================

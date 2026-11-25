@@ -312,6 +312,9 @@ def ask_secret_key(app, username):
 
 def import_dialog(app):
     """Where to import from: a 2.x vault (whole entries) or a CSV/JSON file."""
+    if not app.account.can_write(app.active_vault_id):
+        return app.toast(app.read_only_reason(vault_id=app.active_vault_id),
+                         "warn")
     top = app._modal("Import", 520, 560)
     shell = dialog_shell(top, "Import",
                          f"Bring logins into “{app.current_user}”. What you "
@@ -485,7 +488,11 @@ def _finish_import(app, parsed, path):
 def account_dialog(app, acc):
     editing = acc is not None
     if editing and not app.entry_writable(acc["id"]):
-        return app.read_only_notice()
+        return app.read_only_notice(acc["id"])
+    if not editing and not app.account.can_write(app.active_vault_id):
+        # Nowhere to save it: say so before anything is typed.
+        return app.toast(app.read_only_reason(vault_id=app.active_vault_id),
+                         "warn")
     title = "Edit entry" if editing else "Add an entry"
     subtitle = ("Update this login; the version it replaces is kept in its "
                 "history." if editing else "Store a new login in your vault.")
@@ -578,6 +585,11 @@ def account_dialog(app, acc):
     err = error_label(wrap, shell.text_width)
 
     def save():
+        # A sync may have made the vault read-only while this was open:
+        # keep the form, and what was typed, rather than lose it.
+        home = app._vault_id_of(acc["id"]) if editing else target["id"]
+        if not app.account.can_write(home):
+            err.configure(text=app.read_only_reason(vault_id=home)); return
         site = site_entry.get().strip()
         if not site:
             err.configure(text="Name is required."); return
@@ -628,7 +640,10 @@ def account_dialog(app, acc):
     # (Only vaults this account may change can take a new entry.)
     names = {app.vault_name(v): v for v in app.vaults
              if app.account.can_write(v)}
-    if not editing and len(names) > 1:
+    # A single one is shown too when it is not the personal vault (that one
+    # needs a newer SecretSpace): where the entry goes must not be a surprise.
+    if not editing and (len(names) > 1 or
+                        names and target["id"] != app.account.personal_id):
         picker = option_menu(
             shell.buttons, list(names),
             lambda label: target.update(id=names[label]), width=140)
@@ -809,6 +824,8 @@ def settings_dialog(app):
         where = server["url"]
         if server.get("ca_file"):
             where += "\nCertificate: " + os.path.basename(server["ca_file"])
+        if app.account.server_version:      # known once a sync has asked
+            where += f"\nSecretSpace Server {app.account.server_version}"
         app._ghost_button(
             setting_row(syn, "Synced with", where, hint, first=True),
             "Sync now", lambda: (top.destroy(), app.sync_now()), width=150).pack()
@@ -829,7 +846,7 @@ def settings_dialog(app):
         app._ghost_button(
             setting_row(syn, "Not on a server yet",
                         "Keep this account in step across your devices "
-                        "through your own SecretSpace Server (2.0 or newer).",
+                        "through your own SecretSpace Server (2.1 or newer).",
                         hint, first=True),
             "Set up…", lambda: (top.destroy(),
                                account_sync_ui.server_dialog(app)),

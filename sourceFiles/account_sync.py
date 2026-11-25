@@ -35,6 +35,7 @@ import accounts
 import changelog
 import sync_client
 import vault
+import version
 from account_crypto import CryptoError
 from sync import merge_vaults, resolve, merged_vault
 from sync_client import SyncClient, SyncError, Conflict409
@@ -66,6 +67,11 @@ FEATURE_FORMAT_2 = "format-2"
 MIN_SERVER = "2.1.0"
 
 
+class NeedsNewerApp(SyncError):
+    """This vault was changed by a newer SecretSpace, and there are changes
+    here that this version must not merge into it."""
+
+
 class LoginFailed(SyncError):
     """The server did not take this username + password + Secret Key."""
 
@@ -92,6 +98,7 @@ class AccountServer(SyncClient):
                  timeout: int = sync_client.DEFAULT_TIMEOUT):
         super().__init__(url, "", ca_file, timeout)
         self._features = None
+        self.version = ""               # the server's, once check_api ran
 
     @staticmethod
     def _http_error(e) -> SyncError:
@@ -110,6 +117,13 @@ class AccountServer(SyncClient):
     def check_api(self) -> None:
         health = self.health()
         self._features = list(health.get("features") or [])
+        self.version = str(health.get("version") or "")[:32]
+        needed = health.get("min_client")
+        needed = needed.get(version.PLATFORM) if isinstance(needed, dict) else ""
+        if sync_client.older(version.__version__, needed):
+            raise SyncError(f"This server needs SecretSpace {needed} or newer "
+                            "on this device. Update SecretSpace, then sync "
+                            "again. Nothing was changed.")
         if API_VERSION not in (health.get("api") or [1]) or \
                 FEATURE_FORMAT_2 not in self._features:
             raise SyncError("This server is too old for this SecretSpace: it "
@@ -359,6 +373,7 @@ def logged_in(account: accounts.Account, server: AccountServer = None) -> Accoun
     if account.login_key is None:
         raise SyncError("Lock and unlock the account once, then sync.")
     server.check_api()
+    account.server_version = server.version
     try:
         _login(server, account)
     except LoginFailed:
@@ -501,6 +516,15 @@ class AccountSync:
             changelog.lines_of(local_vault), self._remote_log)}
         self._log_in = merged != here            # lines to take from the server
         self._log_out = merged != there and blob is not None   # ... to give it
+        if vault.too_new(remote) or vault.too_new(local_vault):
+            # Only taken, as it is. With changes of this device's own it is
+            # left alone: they stay here until SecretSpace is updated.
+            if self.result.needs_push or self.first_push or self._log_out:
+                raise NeedsNewerApp(
+                    f"“{self.file.name}” was changed by a newer SecretSpace, "
+                    "and this PC has changes of its own in it. They stay on "
+                    "this PC: update SecretSpace, then sync again.")
+            self._reformat = False
         return self.result
 
     def has_work(self) -> bool:
@@ -860,6 +884,9 @@ def change_key(account: accounts.Account, server: AccountServer, vault_id: str,
         raise SyncError("This vault has changes here and on the server that "
                         "need your decision. Press Sync first, then try again.")
     merged = sync.commit(local_vault)
+    if vault.too_new(merged):
+        raise SyncError("This vault was changed by a newer SecretSpace. "
+                        "Update SecretSpace, then try again.")
     file = sync.file
     listing = server.members(vault_id)
     if int(listing.get("key_generation", 0) or 0) != file.generation:

@@ -12,7 +12,10 @@ has 0).
 
 import re
 
-__version__ = "4.6.0"
+__version__ = "4.7.0"
+
+#: Which app this is, for the server and for "needs at least" (9c).
+PLATFORM = "windows"
 
 #: The container an account's vaults are written in (account_crypto).
 VAULT_FORMAT = "SSV4"

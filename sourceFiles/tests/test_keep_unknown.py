@@ -184,7 +184,8 @@ def test_top_level_keys(base, local, remote, want, pull, push):
     assert result.needs_push is push and result.changed
 
 
-@pytest.mark.parametrize("key", sorted(sync.KNOWN_VAULT_KEYS - {"accounts"}))
+@pytest.mark.parametrize("key", sorted(sync.KNOWN_VAULT_KEYS
+                                        - {"accounts", vault.NEEDS_KEY}))
 def test_this_devices_own_settings_are_never_taken_from_the_server(key):
     result, out = merge(None, data(**{key: "mine"}), data(**{key: "theirs"}))
     assert out[key] == "mine" and not result.changed
@@ -196,7 +197,7 @@ def test_the_known_keys_are_the_ones_the_code_uses():
     import sync_client
     assert sync.KNOWN_VAULT_KEYS == {
         "accounts", sync_client.SETTINGS_KEY, changelog.CHANGES_KEY,
-        vault.BASE_ORIGIN_KEY, vault.ARCHIVE_PURGE_KEY}
+        vault.BASE_ORIGIN_KEY, vault.ARCHIVE_PURGE_KEY, vault.NEEDS_KEY}
 
 
 # --- the signed change log ---------------------------------------------------

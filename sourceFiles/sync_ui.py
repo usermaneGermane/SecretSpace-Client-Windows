@@ -570,7 +570,7 @@ def _archive_row(app, parent, index, entry, rebuild):
         check = getattr(app, "entry_writable", None)
         if check is None or check(entry["id"]):
             return False
-        app.read_only_notice()
+        app.read_only_notice(entry["id"])
         return True
 
     def restore():
