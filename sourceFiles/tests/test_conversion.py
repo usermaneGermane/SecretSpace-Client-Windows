@@ -86,7 +86,7 @@ class World:
         self._point_at_server(target)
 
     def start_server(self):
-        httpd = secretspace_server.ThreadingHTTPServer(
+        httpd = secretspace_server.SyncServer(
             ("127.0.0.1", 0), secretspace_server.Handler)
         httpd.store = secretspace_server.Store(os.path.join(self.root, "store"))
         httpd.token = FACTS["token"]

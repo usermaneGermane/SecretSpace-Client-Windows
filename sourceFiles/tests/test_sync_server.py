@@ -47,8 +47,8 @@ def fast_kdf(monkeypatch):
 
 @pytest.fixture
 def server(tmp_path):
-    """A real ThreadingHTTPServer on a free port, torn down after the test."""
-    httpd = secretspace_server.ThreadingHTTPServer(
+    """The real server on a free port, torn down after the test."""
+    httpd = secretspace_server.SyncServer(
         ("127.0.0.1", 0), secretspace_server.Handler)
     httpd.store = secretspace_server.Store(str(tmp_path / "store"))
     httpd.token = TOKEN
@@ -871,7 +871,7 @@ def test_moving_to_a_brand_new_server_uploads_the_vault(synced, tmp_path):
     """Same situation from the other side: a new, empty server."""
     pc1, _ = synced
     fresh_store = secretspace_server.Store(str(tmp_path / "new-store"))
-    httpd = secretspace_server.ThreadingHTTPServer(
+    httpd = secretspace_server.SyncServer(
         ("127.0.0.1", 0), secretspace_server.Handler)
     httpd.store, httpd.token = fresh_store, TOKEN
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -932,7 +932,7 @@ def test_a_live_entry_purged_elsewhere_is_put_to_the_user(synced):
 @contextlib.contextmanager
 def another_server(path):
     """A second, independent server -- the Ubuntu box beside the Windows one."""
-    httpd = secretspace_server.ThreadingHTTPServer(
+    httpd = secretspace_server.SyncServer(
         ("127.0.0.1", 0), secretspace_server.Handler)
     httpd.store = secretspace_server.Store(str(path))
     httpd.token = TOKEN
