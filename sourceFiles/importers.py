@@ -153,11 +153,15 @@ def parse_csv(path) -> ImportResult:
     with open(path, newline="", encoding="utf-8-sig") as f:
         sample = f.read(8192)
         f.seek(0)
+        # Only the delimiter is taken from the sniffer. Its other guesses are
+        # wrong on real exports: on a Chrome file it can decide quotes are not
+        # doubled and read "a""b" as a"b" (found by the Android parity test,
+        # 28 Nov 2026). Every exporter we read writes quotes the Excel way.
         try:
-            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+            delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t").delimiter
         except Exception:
-            dialect = csv.excel
-        rows = [r for r in csv.reader(f, dialect)
+            delimiter = ","
+        rows = [r for r in csv.reader(f, csv.excel, delimiter=delimiter)
                 if any(str(c).strip() for c in r)]
     if not rows:
         return ImportResult([], [])
