@@ -151,3 +151,29 @@ def test_named_header_is_used_even_if_the_sniffer_says_no(tmp_path, monkeypatch)
 def test_headerless_row_with_header_like_words_is_still_data(tmp_path):
     text = "github,username1,pass123\ngitlab,bob,pw\n"
     assert len(importers.parse_csv(write(tmp_path, "e.csv", text)).rows) == 2
+
+
+@pytest.mark.parametrize("text,delimiter", [
+    # Chrome as it really writes it: CRLF, a note over two lines, and a
+    # password holding both the delimiter and a quote (doubled). With no other
+    # doubled quote in the file the sniffer decided quotes were not doubled
+    # and read the password as  p,w"1"  (found 28 Nov 2026).
+    ('name,url,username,password,note\r\n'
+     'GitHub,https://github.com/login,alice,"p,w""1","two\nlines"\r\n'
+     'Mail,https://mail.example.com/,bob,m41l,\r\n', ","),
+    ('name;url;username;password;note\n'
+     'GitHub;https://github.com/login;alice;"p;w""1";"two\nlines"\n'
+     'Mail;https://mail.example.com/;bob;m41l;\n', ";"),
+    ('name\turl\tusername\tpassword\tnote\n'
+     'GitHub\thttps://github.com/login\talice\t"p\tw""1"\t"two\nlines"\n'
+     'Mail\thttps://mail.example.com/\tbob\tm41l\t\n', "\t"),
+])
+def test_a_quote_inside_a_password_survives(tmp_path, text, delimiter):
+    f = tmp_path / "e.csv"
+    f.write_bytes(text.encode("utf-8"))  # the bytes as the exporter wrote them
+    rows = importers.parse_csv(str(f)).rows
+    assert [(r.site, r.username, r.password) for r in rows] == [
+        ("GitHub", "alice", "p" + delimiter + 'w"1'),
+        ("Mail", "bob", "m41l"),
+    ]
+    assert rows[0].notes == "two\nlines"
